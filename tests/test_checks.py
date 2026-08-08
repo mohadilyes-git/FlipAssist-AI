@@ -512,3 +512,11 @@ def test_a_listing_never_suggests_paying_or_talking_elsewhere():
         problems(description="Apple iPhone 13 128GB, unlocked. Payment by bank transfer or PayPal friends and family.")
     assert "description contains a link, email, phone number, handle or long ID number" in \
         problems(description="Apple iPhone 13 128GB, unlocked. Message me on Facebook for more photos.")
+
+
+def test_a_parts_condition_can_come_a_few_words_after_it():
+    # Claude Haiku's real sentence from the first live run: backed by "screen perfect"
+    assert promises_in("The screen is in perfect condition.") == {"flawless screen": {"yes"}}
+    assert answer_for("iPhone 13 128GB Blue unlocked", "light scratch on the back, screen perfect",
+                      "Apple iPhone 13 128GB in Blue, unlocked. Light scratch on the back. "
+                      "The screen is in perfect condition.") == []

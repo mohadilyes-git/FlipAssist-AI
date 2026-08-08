@@ -246,7 +246,8 @@ def promises_in(text):
             if promise in LEVELS:
                 if set(part_words[i + 1:i + 2]) & FEATURES:
                     continue  # "excellent noise cancelling" describes the model
-                parts = sorted(CONDITION_PARTS & set(part_words[max(0, i - 2):i + 2]))
+                # the part can come a few words before: "the SCREEN is in perfect condition"
+                parts = sorted(CONDITION_PARTS & set(part_words[max(0, i - 4):i + 2]))
                 if parts:
                     promise = f"{promise} {parts[0]}"
             # a "no" after the claim may cover a whole list: "box and charger not included"
