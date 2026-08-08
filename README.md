@@ -2,7 +2,7 @@
 
 Drafts eBay listings and offer messages for a reseller. Plain code does everything it can. A small local AI model does only what code can't. A paid API model steps in only when the local answer fails a check, and a person approves every draft.
 
-> **Work in progress.** The plain-code half and its safety checks are built and tested. No AI model is connected yet.
+> **Work in progress.** The plain-code half, its safety checks and the AI listing drafter are built and tested. Next: the message drafter, the web app and measured results.
 
 ## What it does now
 
@@ -20,21 +20,23 @@ Drafts eBay listings and offer messages for a reseller. Plain code does everythi
 - **Checks an AI answer before it's used:**
   - the agreed shape and allowed values;
   - no numbers the inputs don't contain;
-  - no yes/no claims about the box, charger, cable, case, controller, game, screen protector, receipt, warranty or network lock that the inputs don't back up;
-  - condition claims (new, sealed, flawless, battery, marks) and the condition "New" only when the reseller's own notes back them;
-  - no contact details;
+  - no yes/no claims about the box, charger, cable, case, controller, dock, game, screen protector, receipt, warranty or network lock that the inputs don't back up, with the reseller's notes beating the seller's text;
+  - condition claims (new, sealed, working, flawless, battery, scratches and other marks) only when the reseller's own notes back them, and "For parts or not working" whenever the notes mention a fault;
+  - nothing that contradicts the item: another model, colour, storage size or edition;
+  - no prices, contact details or paying off the platform;
   - length limits.
+- **Drafts the rest with AI** (`python -m flip.draft`):
+  - Gemma 3 4B runs on the reseller's own machine through Ollama. It's asked only for what code couldn't fill: the colour (from that model's real colours, or "unsure"), the condition, a condition note and a description, held to an exact answer shape.
+  - The checks decide. An answer that fails gets one try on Claude Haiku. If that fails too, the item is marked "needs you".
+  - If the local model isn't running, nothing is sent to the API instead.
+  - A draft is "ready" only when nothing is missing.
+  - Every attempt goes into a private audit log with its tokens, seconds and cost.
 - **Scores the code** against a private test set of real items, with a scoring script.
 
 ## Planned
 
-- **Local model:** Gemma 3 4B via Ollama reads the photo and the notes. It gives only the colour (picked from the catalogue's list for that model), the condition, a condition note and a description.
-- **Fallback:** Claude Haiku tries again when a local answer fails a check. If that fails too, the item is marked "needs you".
 - **Message drafter:** code sets the offer price. The wording follows the reseller's own style, using a few similar past messages found with MiniLM embeddings in Chroma.
-- **Around both:**
-  - a cost meter (tokens, £, seconds per draft);
-  - an audit log;
-  - a web app (FastAPI + React) where a person approves each draft.
+- **A web app** (FastAPI + React) where a person approves each draft.
 - **Measured results on the test set:**
   - fields right for local, API and the switch;
   - cost per 100 listings;
@@ -45,8 +47,8 @@ Drafts eBay listings and offer messages for a reseller. Plain code does everythi
 | Field | Filled by |
 |---|---|
 | Model, storage, specs, title | Code, from `data/catalogue.json` |
-| Colour | Code if the text names it; otherwise the AI from the photo (planned) |
-| Condition, condition note, description | The AI (planned), then checked by code |
+| Colour | Code if the text names it; otherwise the AI from the photo |
+| Condition, condition note, description | The AI, then checked by code |
 | Offer price, profit | Code |
 
 ## Run it
@@ -58,6 +60,18 @@ python3.11 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 .venv/bin/pytest
 ```
+
+For the AI drafter, install [Ollama](https://ollama.com) and the local model (about 3.4 GB), and add an Anthropic API key for the fallback:
+
+```bash
+brew install ollama
+ollama serve              # leave this running in its own terminal
+ollama pull gemma3:4b
+cp .env.example .env      # then put your key in .env (never uploaded)
+.venv/bin/python -m flip.draft testset/items.example.json --mode local
+```
+
+`--mode local` uses only the local model, `--mode api` only Claude Haiku, and the default `auto` tries the local model first.
 
 ## The test set
 
@@ -84,3 +98,4 @@ Include a few items the catalogue doesn't have: the right answer for those is "n
 - `data/`: the catalogue and eBay's item conditions (facts, not code)
 - `tests/`: a test for every rule
 - `testset/`: the example format for the test set
+- `private/`: the audit log and anything else the app saves while it runs (never uploaded)
