@@ -11,6 +11,7 @@ from flip.catalogue import fill_from_catalogue, load_catalogue, load_conditions
 from flip.costs import cost_pence
 from flip.drafter import draft_listing
 from flip.prompts import answer_schema, listing_prompt
+from tests.fakes import FakeModel
 
 CATALOGUE = load_catalogue()
 CONDITIONS = load_conditions()
@@ -27,19 +28,6 @@ GOOD = {"colour": "Midnight", "condition_id": "3000",
         "description": "Apple iPhone 13 128GB in Midnight, unlocked, boxed. Light scratch on the back, "
                        "battery health 87%."}
 BAD = {**GOOD, "description": "Apple iPhone 13 128GB in Midnight, unlocked, boxed, with original charger."}
-
-
-class FakeModel:
-    """A pretend model: hands back prepared answers in order and remembers what it was asked."""
-
-    def __init__(self, name, *replies):
-        self.name, self.replies, self.asked = name, list(replies), []
-
-    def ask(self, system, user, photos, schema):
-        self.asked.append({"user": user, "photos": photos, "schema": schema})
-        reply = self.replies.pop(0)
-        return reply if isinstance(reply, Reply) else \
-            Reply(self.name, answer=reply, tokens_in=1500, tokens_out=300, seconds=2.0)
 
 
 class FakeClient:
