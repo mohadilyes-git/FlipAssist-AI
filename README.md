@@ -75,20 +75,21 @@ cp .env.example .env      # then put your key in .env (never uploaded)
 
 ## The test set
 
-Real items stay in `testset/private/`, which git never uploads: it holds other sellers' listing text and photos.
+Real items stay in `testset/private/`, which git never uploads: it holds other sellers' listing text and photos. The easiest way to fill it is a spreadsheet:
 
 ```bash
 mkdir -p testset/private/photos
-cp testset/items.example.json testset/private/items.json
+cp testset/items.example.csv testset/private/items.csv
 ```
 
-1. For each item, fill in:
+1. Open `testset/private/items.csv` in Numbers or Excel and fill one row per item:
    - the original title and description;
    - your notes;
-   - the photo paths;
+   - the photo file names (put the photos in `testset/private/photos/`; separate names with `;`);
    - the prices;
-   - the correct answer for every field.
-2. Run `.venv/bin/python -m flip.score` to see how often code alone gets each field right.
+   - the right answer for every field. Write a model the catalogue doesn't cover as `not in catalogue`.
+2. Save it as CSV and run `.venv/bin/python -m flip.testset`. It writes `items.json`, or tells you the row with a typo.
+3. Run `.venv/bin/python -m flip.score` to see how often code alone gets each field right, and `.venv/bin/python -m flip.draft` to draft them all.
 
 Include a few items the catalogue doesn't have: the right answer for those is "needs you".
 
