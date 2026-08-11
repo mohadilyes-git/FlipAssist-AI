@@ -8,6 +8,8 @@ what it says is true.
 """
 
 from flip.checks import UNSURE
+from flip.money import pounds
+from flip.style import without_prices
 
 SYSTEM = """You fill in the condition and description of one eBay UK listing for a reseller.
 
@@ -60,3 +62,42 @@ def listing_prompt(item, model, entry, photo_count):
         f"Photos attached: {photo_count}",
     ])
     return SYSTEM, user
+
+
+MESSAGE_SYSTEM = """You write one short message from a reseller to a seller on a marketplace, offering to buy their item.
+
+Rules:
+1. Offer exactly the price given, in whole pounds with a £ sign (for example £170). Write no other price, not even the asking price.
+2. Sound like the reseller: follow their style notes and write like their example messages. In the examples, £[OFFER] stands for whatever they offered that time.
+3. No contact details, links, or paying or dealing outside the platform. No flattery.
+4. British English."""
+
+MESSAGE_SCHEMA = {"type": "object", "properties": {"message": {"type": "string"}}, "required": ["message"],
+                  "additionalProperties": False}
+
+
+def offer_words(offer):
+    """£170, not £170.00: offers are whole pounds."""
+    return f"£{offer // 100:,}" if offer % 100 == 0 else pounds(offer)
+
+
+def message_prompt(listing, offer, style_lines, examples):
+    """The system prompt and the message about this listing. The asking price
+    is left out on purpose: code already set the offer, so the AI has no
+    second number to slip in."""
+    lines = [
+        "Listing:",
+        f"Title: {listing.get('title') or ''}",
+        f"Description: {listing.get('description') or ''}",
+        f"Marketplace: {listing.get('marketplace') or 'not given'}",
+        "",
+        f"Offer: {offer_words(offer)}",
+        "",
+        "Style notes:",
+        *(f"- {line}" for line in style_lines or ["(none yet)"]),
+        "",
+        "Their messages for similar listings:",
+        *([f'{n}. For "{e["listing_title"]}": {without_prices(e["my_message"])}' for n, e in enumerate(examples, 1)]
+          or ["(none yet)"]),
+    ]
+    return MESSAGE_SYSTEM, "\n".join(lines)
