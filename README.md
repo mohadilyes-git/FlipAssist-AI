@@ -2,7 +2,7 @@
 
 Drafts eBay listings and offer messages for a reseller. Plain code does everything it can. A small local AI model does only what code can't. A paid API model steps in only when the local answer fails a check, and a person approves every draft.
 
-> **Work in progress.** The plain-code half, its safety checks and the AI listing drafter are built and tested. Next: the message drafter, the web app and measured results.
+> **Work in progress.** The plain-code half, its safety checks, the AI listing drafter and the message drafter are built and tested. Next: an API for the app, a catalogue agent and measured results.
 
 ## What it does now
 
@@ -31,11 +31,15 @@ Drafts eBay listings and offer messages for a reseller. Plain code does everythi
   - If the local model isn't running, nothing is sent to the API instead.
   - A draft is "ready" only when nothing is missing.
   - Every attempt goes into a private audit log with its tokens, seconds and cost.
+- **Drafts offer messages in the reseller's own style** (`python -m flip.message`):
+  - Code sets the offer price (15% under asking by default, rounded to a tidy number). The AI never picks it.
+  - A style card worked out by code from the reseller's past messages: their usual greeting, length, questions, emojis and what they mention.
+  - The past messages for the most similar listings, found by meaning (MiniLM embeddings in a Chroma vector database, all on this machine), shown to the AI as examples with their old prices hidden.
+  - The same checks and fallback as listings: the exact offer and no other price, no invented numbers, no contact details, nothing off the platform.
 - **Scores the code** against a private test set of real items, with a scoring script.
 
 ## Planned
 
-- **Message drafter:** code sets the offer price. The wording follows the reseller's own style, using a few similar past messages found with MiniLM embeddings in Chroma.
 - **A web app** (FastAPI + React) where a person approves each draft.
 - **Measured results on the test set:**
   - fields right for local, API and the switch;
@@ -72,6 +76,13 @@ cp .env.example .env      # then put your key in .env (never uploaded)
 ```
 
 `--mode local` uses only the local model, `--mode api` only Claude Haiku, and the default `auto` tries the local model first.
+
+For messages, put your past messages in `testset/private/messages.csv` (`testset/messages.example.csv` shows the columns), then:
+
+```bash
+.venv/bin/python -m flip.message --learn
+.venv/bin/python -m flip.message "iPhone 13 128GB Midnight" --asking 220 --marketplace facebook
+```
 
 ## The test set
 
