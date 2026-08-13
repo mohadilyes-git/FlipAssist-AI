@@ -32,10 +32,22 @@ Drafts eBay listings and offer messages for a reseller. Plain code does everythi
   - A draft is "ready" only when nothing is missing.
   - Every attempt goes into a private audit log with its tokens, seconds and cost.
 - **Drafts offer messages in the reseller's own style** (`python -m flip.message`):
-  - Code sets the offer price (15% under asking by default, rounded to a tidy number). The AI never picks it.
+  - Three kinds of offer, each priced by code. The AI never picks a price.
+    - Lower: 15% under asking by default, rounded down to a tidy number.
+    - The asking price.
+    - More: asking plus 5%, rounded up to a tidy number and at least one step over.
+  - Code reads the listing for what's worth saying, in the seller's own words:
+    - a flaw ("broken back") is the reason for a lower offer, unless the seller says it's already priced in;
+    - at the asking price, the message says the reseller doesn't mind it;
+    - good condition with no flaw is the reason for paying more.
+  - If the reseller's past messages usually mention condition, that point goes in by itself. Otherwise the draft leaves it out and asks: *The listing says "Broken back". Mention it as the reason for your offer?*
   - A style card worked out by code from the reseller's past messages: their usual greeting, length, questions, emojis and what they mention.
   - The past messages for the most similar listings, found by meaning (MiniLM embeddings in a Chroma vector database, all on this machine), shown to the AI as examples with their old prices hidden.
-  - The same checks and fallback as listings: the exact offer and no other price, no invented numbers, no contact details, nothing off the platform.
+  - The same checks and fallback as listings, plus checks of their own:
+    - the exact offer and no other price;
+    - an offer over asking is said, never asked ("would you take £210?" reads like asking for a discount);
+    - the condition comes up only when it's meant to, and only as the listing says it. A question like "any scratches?" is fine;
+    - no invented numbers, no contact details, nothing off the platform.
 - **Scores the code** against a private test set of real items, with a scoring script.
 
 ## Planned
@@ -54,6 +66,7 @@ Drafts eBay listings and offer messages for a reseller. Plain code does everythi
 | Colour | Code if the text names it; otherwise the AI from the photo |
 | Condition, condition note, description | The AI, then checked by code |
 | Offer price, profit | Code |
+| What to say about the condition | Code reads it from the listing; the reseller's style or the reseller decides |
 
 ## Run it
 
@@ -82,7 +95,10 @@ For messages, put your past messages in `testset/private/messages.csv` (`testset
 ```bash
 .venv/bin/python -m flip.message --learn
 .venv/bin/python -m flip.message "iPhone 13 128GB Midnight" --asking 220 --marketplace facebook
+.venv/bin/python -m flip.message "iPhone 13 128GB" --asking 220 --description "Broken back" --offer asking --mention yes
 ```
+
+`--offer` picks `lower` (the default), `asking` or `more`. `--mention yes` or `no` answers the question about the listing's flaw or good condition; without it, the reseller's style decides.
 
 ## The test set
 
