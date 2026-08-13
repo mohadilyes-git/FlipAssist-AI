@@ -1,4 +1,4 @@
-"""Money in plain code: profit and the offer price. Every amount is whole pence
+"""Money in plain code: profit and the offer prices. Every amount is whole pence
 (£12.50 is 1250), because computers store 0.1 + 0.2 as 0.30000000000000004 and
 whole numbers never have that problem."""
 
@@ -55,3 +55,33 @@ def offer_price(asking, discount_percent=15):
     step = 500 if offer >= 2000 else 100
     rounded = offer - offer % step
     return rounded if rounded > 0 else offer
+
+
+OFFER_KINDS = ("lower", "asking", "more")
+
+
+def price_step(price):
+    """Prices land on numbers people say: whole pounds under £60, £5 steps
+    under £1,000, £10 steps from £1,000."""
+    return 100 if price < 6000 else 500 if price < 100000 else 1000
+
+
+def more_price(asking, percent=5):
+    """Offering more than asking, to beat other buyers: the asking price plus
+    percent, rounded UP to a tidy number, and always at least one step over
+    the asking price. The same rule as AlertFlip's "pay more"."""
+    step = price_step(asking)
+    up = lambda pence: -(-pence // step) * step  # round up to the step
+    return max(up(asking + percent_of(asking, percent)), up(asking) + step)
+
+
+def offer_for(kind, asking, discount_percent=15, more_percent=5):
+    """The price for each kind of offer: "lower" than asking, the "asking"
+    price itself, or "more" than asking."""
+    if kind == "lower":
+        return offer_price(asking, discount_percent)
+    if kind == "more":
+        return more_price(asking, more_percent)
+    if kind == "asking":
+        return asking
+    raise ValueError(f"not a kind of offer: {kind!r} (lower, asking or more)")

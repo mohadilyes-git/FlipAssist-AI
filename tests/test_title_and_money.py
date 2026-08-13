@@ -1,7 +1,7 @@
 import pytest
 
 from flip.catalogue import fill_from_catalogue, load_catalogue
-from flip.money import offer_price, pounds, profit, to_pence
+from flip.money import more_price, offer_for, offer_price, pounds, profit, to_pence
 from flip.title import MAX_LENGTH, build_title
 
 CATALOGUE = load_catalogue()
@@ -61,6 +61,20 @@ def test_offer_price_rounds_down_to_tidy_numbers():
     assert offer_price(9500) == 8000                       # £95 -> £80.75 -> £80
     assert offer_price(1500) == 1200                       # £15 -> £12.75 -> £12
     assert offer_price(20000, discount_percent=10) == 18000
+
+
+def test_paying_more_rounds_up_to_tidy_numbers_at_least_one_step_over():
+    assert more_price(20000) == 21000    # £200 -> £210
+    assert more_price(5000) == 5300      # £50 -> £52.50 -> £53: whole pounds under £60
+    assert more_price(1000) == 1100      # £10 -> £10.50 -> £11
+    assert more_price(38000) == 40000    # £380 -> £399 -> £400: £5 steps under £1,000
+    assert more_price(120000) == 126000  # £1,200 -> £1,260: £10 steps from £1,000
+
+
+def test_each_kind_of_offer_has_its_price():
+    assert [offer_for(kind, 20000) for kind in ("lower", "asking", "more")] == [17000, 20000, 21000]
+    with pytest.raises(ValueError):
+        offer_for("cheeky", 20000)
 
 
 def test_silly_amounts_are_refused_not_crashed():

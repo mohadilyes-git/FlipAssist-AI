@@ -2,7 +2,8 @@
 
     .venv/bin/python -m flip.message --learn                       # store your past messages for search
     .venv/bin/python -m flip.message "iPhone 13 128GB Midnight" --asking 220 --marketplace facebook
-    .venv/bin/python -m flip.message "PS5 Slim disc" --asking 300 --mode local
+    .venv/bin/python -m flip.message "iPhone 13 128GB" --asking 220 --description "Broken back" --mention yes
+    .venv/bin/python -m flip.message "PS5 Slim disc" --asking 300 --offer more --mode local
 
 Your past messages live in testset/private/messages.csv (testset/messages.example.csv
 shows the columns). --learn reads them into private/chroma; both stay on this Mac.
@@ -17,6 +18,7 @@ from flip.attempts import MODES
 from flip.audit import AuditLog
 from flip.draft import load_env
 from flip.message_drafter import draft_message
+from flip.money import OFFER_KINDS
 from flip.retrieval import MessageIndex
 from flip.style import describe, load_messages, style_card
 
@@ -30,6 +32,11 @@ def main():
     parser.add_argument("--asking", help="the asking price in pounds, e.g. 220")
     parser.add_argument("--description", default="", help="the listing's description")
     parser.add_argument("--marketplace", default="", help="facebook, ebay, vinted, gumtree...")
+    parser.add_argument("--offer", choices=OFFER_KINDS, default="lower",
+                        help="lower than asking (the default), the asking price, or more")
+    parser.add_argument("--mention", choices=["yes", "no"],
+                        help="say what the listing gives this offer: its flaw, or its good condition "
+                             "(default: your style decides)")
     parser.add_argument("--discount", type=float, default=15, help="percent under the asking price (default 15)")
     parser.add_argument("--mode", choices=list(MODES), default="auto")
     parser.add_argument("--messages", default=str(MESSAGES), help="your past messages (CSV)")
@@ -38,12 +45,12 @@ def main():
     load_env()
 
     messages = load_messages(args.messages) if Path(args.messages).is_file() else []
-    card = describe(style_card(messages))
+    card = style_card(messages)
     index = MessageIndex()
     if args.learn:
         index.add(messages)
         print(f"{len(messages)} past messages stored for search (private/chroma, never uploaded)")
-        print("your style card:", *(f"  - {line}" for line in card or ["(no messages yet)"]), sep="\n")
+        print("your style card:", *(f"  - {line}" for line in describe(card) or ["(no messages yet)"]), sep="\n")
         return
     if not args.title or not args.asking:
         parser.error("give the listing's title and --asking price (or --learn)")
@@ -51,12 +58,19 @@ def main():
     listing = {"id": "cli", "title": args.title, "description": args.description, "asking_price": args.asking,
                "marketplace": args.marketplace}
     api = ApiModel() if os.environ.get("ANTHROPIC_API_KEY") else None
-    result = draft_message(listing, card, index, LocalModel(), api, args.mode, AuditLog(), args.discount)
+    mention = {"yes": True, "no": False}.get(args.mention)
+    result = draft_message(listing, card, index, LocalModel(), api, args.mode, AuditLog(), args.discount,
+                           kind=args.offer, mention=mention)
 
-    print(f"\n{result['status'].upper()}  offer {result['offer'] // 100:,} pounds"
+    print(f"\n{result['status'].upper()}  {result['kind']} offer {result['offer'] // 100:,} pounds"
           f"  (examples: {', '.join(result['examples']) or 'none yet'})")
     if result["answer"]:
         print(f"  {result['answer']['message']}")
+    if result["point"]:
+        print(f"  listing says: {' / '.join(result['point'])}"
+              f" ({'in the message' if result['mentioned'] else 'left out'})")
+    if result["ask"]:
+        print(f"  ? {result['ask']} (--mention yes)")
     for line in result["reasons"]:
         print(f"  ! {line}")
     for a in result["attempts"]:

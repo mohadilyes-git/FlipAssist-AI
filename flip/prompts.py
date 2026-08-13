@@ -9,6 +9,7 @@ what it says is true.
 
 from flip.checks import UNSURE
 from flip.money import pounds
+from flip.offers import quoted
 from flip.style import without_prices
 
 SYSTEM = """You fill in the condition and description of one eBay UK listing for a reseller.
@@ -68,9 +69,23 @@ MESSAGE_SYSTEM = """You write one short message from a reseller to a seller on a
 
 Rules:
 1. Offer exactly the price given, in whole pounds with a £ sign (for example £170). Write no other price, not even the asking price.
-2. Sound like the reseller: follow their style notes and write like their example messages. In the examples, £[OFFER] stands for whatever they offered that time.
-3. No contact details, links, or paying or dealing outside the platform. No flattery.
-4. British English."""
+2. Word the offer as the offer line says. The asking price or more is said plainly as what the reseller will pay ("I can pay £210"), never asked ("would you take £210?").
+3. Say about the item's condition only what the condition line says, in the listing's words. Never add a flaw, damage or praise of your own.
+4. Sound like the reseller: follow their style notes and write like their example messages. In the examples, £[OFFER] stands for whatever they offered that time.
+5. No contact details, links, or paying or dealing outside the platform. No flattery.
+6. British English."""
+
+# the offer line, for each kind of offer
+OFFER_LINES = {"lower": "{offer}, under their asking price",
+               "asking": "{offer}, their full asking price: say plainly that the reseller will pay it",
+               "more": "{offer}, more than their asking price, to beat other buyers: say plainly that the reseller "
+                       "can pay it, never as a question, and nothing pushy like \"to secure it\""}
+# the condition line, when the listing gives the offer something to say (flip.offers)
+CONDITION_LINES = {"lower": "give this flaw from the listing, once, plainly and politely, as the reason for the "
+                            "offer: {says}. Never say what a repair costs",
+                   "asking": "say once that the reseller doesn't mind this flaw from the listing: {says}",
+                   "more": "give this from the listing as the reason for paying more: {says}"}
+NO_CONDITION = "don't mention it"
 
 MESSAGE_SCHEMA = {"type": "object", "properties": {"message": {"type": "string"}}, "required": ["message"],
                   "additionalProperties": False}
@@ -81,17 +96,19 @@ def offer_words(offer):
     return f"£{offer // 100:,}" if offer % 100 == 0 else pounds(offer)
 
 
-def message_prompt(listing, offer, style_lines, examples):
-    """The system prompt and the message about this listing. The asking price
-    is left out on purpose: code already set the offer, so the AI has no
-    second number to slip in."""
+def message_prompt(listing, offer, style_lines, examples, kind="lower", point=None):
+    """The system prompt and the message about this listing. point is what the
+    listing gives this offer to say (flip.offers), passed only when the
+    message is to say it. The asking price never comes as a number of its
+    own: code already set the offer, so the AI has no second number to slip in."""
     lines = [
         "Listing:",
         f"Title: {listing.get('title') or ''}",
         f"Description: {listing.get('description') or ''}",
         f"Marketplace: {listing.get('marketplace') or 'not given'}",
         "",
-        f"Offer: {offer_words(offer)}",
+        f"Offer: {OFFER_LINES[kind].format(offer=offer_words(offer))}",
+        f"Condition: {CONDITION_LINES[kind].format(says=quoted(point)) if point else NO_CONDITION}",
         "",
         "Style notes:",
         *(f"- {line}" for line in style_lines or ["(none yet)"]),

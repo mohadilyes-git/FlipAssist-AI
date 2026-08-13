@@ -1,0 +1,94 @@
+"""What the listing gives each kind of offer to say, read by plain code from
+the seller's own words, and the check that holds a message to them."""
+
+from flip.offers import check_condition_talk, condition_said, point_for, read_listing
+
+BROKEN = "iPhone 13 128GB. Broken back but everything works, battery 86%."
+EXCELLENT = "iPhone 13 128GB. Excellent condition, boxed."
+LEFT_OUT = "the message talks about the condition, but this draft leaves that out"
+
+
+# ── reading the listing ─────────────────────────────────────────────────────
+
+def test_the_listing_is_read_in_the_sellers_own_words():
+    assert read_listing(BROKEN) == {"flaws": ["Broken back"], "good": [], "priced_in": False}
+    assert read_listing(EXCELLENT) == {"flaws": [], "good": ["Excellent condition"], "priced_in": False}
+    assert read_listing("Minor cosmetic damage on the corner, works perfectly")["flaws"] == \
+        ["Minor cosmetic damage on the corner"]
+    assert read_listing("Condition: good. Light scratch on the screen")["flaws"] == ["Light scratch on the screen"]
+
+
+def test_what_isnt_a_flaw_isnt_read_as_one():
+    for text in ("No scratches, no dents, fully working", "Red Dead Redemption 2 included", "Comes with a case"):
+        assert read_listing(text)["flaws"] == [], text
+
+
+def test_a_long_run_on_listing_is_quoted_around_the_flaw():
+    text = ("iphone 13 pro max 256gb unlocked to all networks battery health 86% small crack on the back camera "
+            "lens otherwise perfect working order")
+    assert read_listing(text)["flaws"] == ["small crack on the back camera lens"]
+
+
+def test_each_kind_of_offer_gets_its_own_point():
+    assert point_for("lower", BROKEN) == {"about": "flaw", "says": ["Broken back"]}
+    assert point_for("asking", BROKEN) == {"about": "flaw", "says": ["Broken back"]}
+    assert point_for("more", BROKEN) is None  # a flawed item is never praised
+    assert point_for("more", EXCELLENT) == {"about": "condition", "says": ["Excellent condition"]}
+    assert point_for("lower", EXCELLENT) is None and point_for("asking", EXCELLENT) is None
+
+
+def test_a_flaw_the_seller_priced_in_is_no_reason_to_offer_less():
+    for text in ("Cracked screen hence the price.", "The back glass is cracked, which is reflected in the price"):
+        assert read_listing(text)["priced_in"], text
+        assert point_for("lower", text) is None
+        assert point_for("asking", text)["about"] == "flaw"  # you can still say you don't mind it
+
+
+def test_dont_mind_isnt_read_as_no_flaw():
+    assert condition_said("I don't mind the scratches") == {"scratch"}
+    assert condition_said("not fussed about the broken back") == {"fault"}
+    assert condition_said("No scratches or dents") == set()
+    assert condition_said("It isn't in good condition") == set()
+
+
+# ── checking a message ──────────────────────────────────────────────────────
+
+def test_the_message_says_the_flaw_only_as_the_listing_does():
+    point = point_for("lower", BROKEN)
+    assert check_condition_talk("Hi mate, would you take £170 as the back is broken?", BROKEN, point, True) == []
+    assert check_condition_talk("Hi mate, the back is broken and the screen is scratched, would you take £170?",
+                                BROKEN, point, True) == \
+        ["the message says things about the condition the listing doesn't: scratch"]
+    assert check_condition_talk("Hi mate, would you take £170?", BROKEN, point, True) == \
+        ['the message leaves out what the listing says: "Broken back"']
+
+
+def test_at_the_asking_price_the_message_says_you_dont_mind_the_flaw():
+    point = point_for("asking", BROKEN)
+    for fine in ("Hi mate, I don't mind the broken back, happy to pay £220.",
+                 "Hi mate, I can pay £220, the broken back is no problem."):
+        assert check_condition_talk(fine, BROKEN, point, True, "asking") == [], fine
+    assert check_condition_talk("I can pay £220 for it. Broken back.", BROKEN, point, True, "asking") == \
+        ["the message names \"Broken back\" but doesn't say you don't mind it"]
+
+
+def test_a_draft_meant_to_leave_the_flaw_out_mustnt_slip_it_in():
+    point = point_for("lower", BROKEN)
+    assert check_condition_talk("Hi mate, would you take £170 given the broken back?", BROKEN, point, False) == \
+        [LEFT_OUT]
+    # asking about something else isn't saying it
+    assert check_condition_talk("Hi mate, any other marks? Would you take £170?", BROKEN, point, False) == []
+
+
+def test_asking_about_the_condition_is_always_fine():
+    assert check_condition_talk("Hi mate, any scratches? Would you take £170?", EXCELLENT, None, False) == []
+    assert check_condition_talk("Perfect, I can collect today.", EXCELLENT, None, False) == []
+
+
+def test_praise_is_held_to_the_listings_level():
+    point = point_for("more", EXCELLENT)
+    assert check_condition_talk("Hi mate, I can pay £210 as it's in excellent condition.", EXCELLENT, point, True) == []
+    assert check_condition_talk("Hi mate, I can pay £210 as it's in great condition.", EXCELLENT, point, True) == []
+    assert check_condition_talk("Hi mate, I can pay £210 as it's mint.", EXCELLENT, point, True) == [
+        'the message leaves out what the listing says: "Excellent condition"',
+        "the message says things about the condition the listing doesn't: flawless"]

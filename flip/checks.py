@@ -190,6 +190,12 @@ CONTACT_WORDS = re.compile(
 # checked with the spaces, dashes and brackets between digits removed
 PHONE = re.compile(r"(?:\+|00)44\d{9,11}|\b0[1-37]\d{8,9}\b")  # UK mobiles and landlines
 LONG_NUMBER = re.compile(r"\b\d{10,}\b")  # 10+ digits in a row: a phone number or an IMEI
+# a message's sentences cut into clauses: "Would you take £170, AS the back is
+# cracked?" asks one thing and states another
+CLAUSES = re.compile(r"[,;:]|\b(?:as|because|since|given|considering|seeing|with|due)\b", re.IGNORECASE)
+# a clause that starts with one of these, in a sentence that ends in "?", asks
+QUESTION_WORDS = {"any", "anything", "is", "are", "has", "have", "does", "do", "did", "how", "hows", "what",
+                  "whats", "was", "were", "can", "could", "would", "will", "and", "or"}
 
 ANSWER_FIELDS = {"colour", "condition_id", "condition_note", "description"}
 
@@ -260,6 +266,20 @@ def promises_in(text):
             negated = bool(NEGATIONS & set(part_words[max(0, i - 5):i])) or bool(NEGATED_AFTER & set(after[:2])) \
                 or any(w in ("not", "t") and nxt in INCLUDED for w, nxt in zip(after, after[1:]))
             found.setdefault(promise, set()).add("no" if negated else "yes")
+    return found
+
+
+def clauses(message):
+    """A message's clauses, each with whether it asks: "Would you take £170,
+    as the back is cracked?" -> [("Would you take £170", True),
+    (" the back is cracked?", False)]."""
+    found = []
+    for sentence in re.split(r"(?<=[.!?])\s+|\n+", message.strip()):
+        question = sentence.rstrip().endswith("?")
+        for clause in CLAUSES.split(sentence):
+            clause_words = words(clause)
+            if clause_words:
+                found.append((clause, question and clause_words[0] in QUESTION_WORDS))
     return found
 
 
@@ -562,14 +582,21 @@ def pence_or_none(amount):
         return None
 
 
-def check_message(message, offer, sources, asking=None):
+def prices_in(text):
+    """Every price the text states, in pence: "£170", "170 quid", "take 170"."""
+    return {pence_or_none(amount) for pattern in PRICES for amount in pattern.findall(text)}
+
+
+def check_message(message, offer, sources, asking=None, kind="lower"):
     """Every check on a drafted message to a seller. offer and asking are in pence.
 
     The only price it may state is the offer. The asking price may come up as
     a reference ("it's listed at £200", "the asking price is £200"); that's
     taken out before the prices are read, so a second "£200" can't hide behind
-    it, and the asking price can't come back as a bare "200". No claim check:
-    a message asks things ("does it come with the box?").
+    it, and the asking price can't come back as a bare "200". An offer of
+    "more" than asking is said, never asked: "would you take £210?" reads like
+    asking for a discount. No claim check here: a message asks things ("does
+    it come with the box?"); flip.offers checks what it says about condition.
     """
     problems = check_length("message", message, MAX_MESSAGE)
     if problems:
@@ -583,11 +610,13 @@ def check_message(message, offer, sources, asking=None):
         if refs and all(pence_or_none(m.group("a") or m.group("b") or m.group("c")) == asking for m in refs):
             for m in reversed(refs):
                 rest = rest[:m.start()] + " " + rest[m.end():]
-    prices = {pence_or_none(amount) for pattern in PRICES for amount in pattern.findall(rest)}
-    if prices != {offer}:
+    if prices_in(rest) != {offer}:
         problems.append(f"the message must offer exactly {pounds(offer)} and no other price")
     elif asking is not None and asking != offer and f"{(Decimal(asking) / 100).normalize():f}" in numbers_in(rest):
         problems.append("the message mentions the asking price again, as if offering it")
+    if kind == "more" and any(asks and offer in prices_in(clause) for clause, asks in clauses(message)):
+        problems.append("an offer over the asking price must be said, not asked: "
+                        "\"would you take\" reads like asking for a discount")
     problems += check_no_invented_numbers("message", message, f"{sources} {pounds(offer)}")
     problems += check_no_off_platform("message", message)
     problems += check_no_contact_details("message", message)

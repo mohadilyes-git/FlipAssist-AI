@@ -15,7 +15,9 @@ from collections import Counter
 EMOJI = re.compile("[\U0001F300-\U0001FAFF☀-➿]")
 GREETING_WORDS = {"hi", "hiya", "hello", "hey", "alright", "morning", "afternoon", "evening", "yo"}
 MENTIONS = {"collecting": r"\bcollect(?:ion|ing)?\b", "cash": r"\bcash\b", "today": r"\b(?:today|tonight|asap)\b",
-            "postage": r"\bpost(?:age|ed)?\b"}
+            "postage": r"\bpost(?:age|ed)?\b",
+            "condition": r"\b(?:condition|scratch\w*|crack\w*|dent(?:s|ed)?|scuff\w*|chip(?:s|ped)?|marks?|broken|"
+                         r"damage\w*|fault\w*|flaw\w*|wear|mint)\b"}
 SHARE = 0.4  # a habit is something at least 40% of your messages do
 OLD_PRICE = re.compile(r"£\s?\d[\d,]*(?:\.\d{2})?"
                        r"|\b\d[\d,]*(?:\.\d{2})?\s?(quid|pounds)\b"
