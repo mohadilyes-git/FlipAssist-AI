@@ -1,7 +1,9 @@
 """The drafter, tested with pretend models before any real AI runs: which model
 is asked, when the API is (and isn't) used, and when a draft is ready."""
 
+import io
 import json
+import urllib.request
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -165,6 +167,36 @@ def test_a_local_model_that_isnt_running_is_reported_as_unreachable():
     reply = LocalModel(url="http://127.0.0.1:9", timeout=2).ask("s", "u", [], {"type": "object"})
     assert (reply.answer, reply.reachable) == (None, False)
     assert "isn't running" in reply.error
+
+
+class FakeOllamaResponse(io.BytesIO):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def test_gemmas_curly_end_is_closed_instead_of_running_to_the_limit(monkeypatch):
+    # Gemma's real answer from a live run: it ended with ”} and then wrote "✉️ ✉️ ✉️" for 32 seconds
+    sent = {}
+
+    def fake_urlopen(request, timeout):
+        sent.update(json.loads(request.data))
+        content = '{\n"message": "Hi mate, I’d like to offer £185. Does it come with a charger?'
+        return FakeOllamaResponse(json.dumps({"message": {"content": content}, "done_reason": "stop"}).encode())
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    reply = LocalModel(max_tokens=300).ask("s", "u", [], {"type": "object"})
+    assert (reply.answer, reply.error) == ({"message": "Hi mate, I’d like to offer £185. Does it come with a charger?"}, "")
+    assert sent["options"]["num_predict"] == 300 and "”}" in sent["options"]["stop"]
+
+
+def test_a_complete_local_answer_is_left_alone():
+    from flip.ai import ollama_text
+    finished = {"message": {"content": '{"message": "Hi mate"}'}, "done_reason": "stop"}
+    assert ollama_text(finished) == '{"message": "Hi mate"}'
+    assert ollama_text({"message": {"content": '{"message": "Hi'}, "done_reason": "length"}) == '{"message": "Hi'
 
 
 def test_reading_the_models_answer():

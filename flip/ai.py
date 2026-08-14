@@ -15,6 +15,12 @@ from dataclasses import dataclass
 
 import anthropic
 
+# Gemma sometimes ends its JSON with a curly quote (”}) instead of a straight
+# one. JSON doesn't take ” as the end of the text, so it would write filler
+# ("✉️ ✉️ ✉️") until the token limit, half a minute later. It stops there
+# instead, and the text is closed for it (ollama_text)
+CURLY_ENDS = ["”}", "”\n}", "” }"]
+
 
 @dataclass
 class Reply:
@@ -25,6 +31,15 @@ class Reply:
     tokens_in: int = 0
     tokens_out: int = 0
     seconds: float = 0.0
+
+
+def ollama_text(data):
+    """The answer's text from Ollama's reply. If it stopped at a curly end, the
+    text is closed the way it should have been: "...cash.”} -> ...cash."}"""
+    text = data.get("message", {}).get("content", "")
+    if data.get("done_reason") == "stop" and not text.rstrip().endswith("}"):
+        text += '"}'
+    return text
 
 
 def parse_answer(text):
@@ -41,8 +56,8 @@ def parse_answer(text):
 class LocalModel:
     """Gemma 3 4B through Ollama on this Mac."""
 
-    def __init__(self, name="gemma3:4b", url="http://127.0.0.1:11434", timeout=300):
-        self.name, self.url, self.timeout = name, url, timeout
+    def __init__(self, name="gemma3:4b", url="http://127.0.0.1:11434", timeout=300, max_tokens=1000):
+        self.name, self.url, self.timeout, self.max_tokens = name, url, timeout, max_tokens
 
     def ask(self, system, user, photos, schema):
         body = {
@@ -52,7 +67,8 @@ class LocalModel:
             "keep_alive": "30m",  # stay loaded between items
             # Ollama's defaults are a random answer (temperature 1) and a short
             # memory (4,096 tokens). Same input, same answer; room for photos.
-            "options": {"temperature": 0, "seed": 42, "num_ctx": 8192, "num_predict": 1000},
+            "options": {"temperature": 0, "seed": 42, "num_ctx": 8192, "num_predict": self.max_tokens,
+                        "stop": CURLY_ENDS},
             "messages": [{"role": "system", "content": system},
                          {"role": "user", "content": user, "images": list(photos)}],
         }
@@ -75,7 +91,7 @@ class LocalModel:
         if data.get("done_reason") == "length":
             reply.error = "the answer was cut off"
             return reply
-        reply.answer, reply.error = parse_answer(data.get("message", {}).get("content", ""))
+        reply.answer, reply.error = parse_answer(ollama_text(data))
         return reply
 
 
