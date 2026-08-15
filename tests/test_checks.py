@@ -520,3 +520,98 @@ def test_a_parts_condition_can_come_a_few_words_after_it():
     assert answer_for("iPhone 13 128GB Blue unlocked", "light scratch on the back, screen perfect",
                       "Apple iPhone 13 128GB in Blue, unlocked. Light scratch on the back. "
                       "The screen is in perfect condition.") == []
+
+
+# ── longer messages: more words, nothing made up ───────────────────────────
+
+# the review agents' made-up stories: each one is something only you could know
+@pytest.mark.parametrize("story", [
+    "It's for my son's birthday.", "I've been looking for one for ages.", "My old PS5 broke last week.",
+    "I'm local so can collect.", "I live nearby.", "It'd be a Christmas present.", "It's for the wife.",
+    "It's for our son.", "It's for my lad.", "It's for my grandad.", "It's for my hubby.", "It's for my eldest.",
+    "It's for my little girl's birthday.", "It's my daughter's birthday next week.", "My son has been asking for one.",
+    "It's a present for her.", "It's for Christmas.", "I need it for work.", "It's for uni.", "Mine broke last week.",
+    "My phone was nicked.", "My old one's broken.", "My old PS5 Slim broke last week.",
+    "My iPhone 12 Pro Max died on me.", "I've been after one of these for ages.",
+    "I've been looking for a PS5 for ages.", "I've wanted one for ages.", "I'm a student so money is tight.",
+    "It's for personal use, not to resell.", "It's just for me, not for reselling.", "I'm based in Leeds.",
+    "I'm only round the corner.", "I'm just up the road.", "I'm around the corner.", "I'm near you.",
+    "We're local.", "I live locally.", "I live just round the corner.", "I work round the corner from you.",
+    "I'm only 5 minutes away.", "I'm literally round the corner.", "I'm moving next month.",
+])
+def test_a_made_up_story_about_you_fails(story):
+    message = f"Hi mate, would you take £170? {story}"
+    assert any(p.startswith("message makes up something about you") for p in
+               check_message(message, 17000, LISTING, asking=20000)), message
+
+
+@pytest.mark.parametrize("line", [
+    "Can collect whenever suits you.", "Happy to come to you for it.", "Would be great for my collection.",
+    "I know I'm not far off your price.", "I'm in no rush.", "I'm flexible on when I collect.",
+    "I'm around all day.", "Could you hold it for me until tonight?", "Thanks for the quick reply mate.",
+    "I can collect today, cash in hand mate.", "My best offer, cheers.", "Happy New Year!",
+])
+def test_ordinary_lines_arent_stories(line):
+    assert check_message(f"Hi mate, would you take £170? {line}", 17000, LISTING, asking=20000) == []
+
+
+def test_saying_the_listings_own_words_back_isnt_a_story():
+    listing = "PS5 disc edition, 2 controllers, £200. Unwanted Christmas present, boxed."
+    assert check_message("Hi mate, I see it was an unwanted Christmas present. Would you take £170?", 17000,
+                         listing, asking=20000) == []
+
+
+def test_the_offer_isnt_read_as_a_story_about_you():
+    assert check_message("Hi mate, £170 is my offer as it stopped working. Can collect today.", 17000,
+                         "PS5 disc edition, £200. Stopped working after an update.", asking=20000) == []
+
+
+@pytest.mark.parametrize("message", [
+    "Would you take £170? I can transfer the money to you straight away if you end it early.",
+    "Would you take £170 if you end the auction now?",
+])
+def test_asking_to_end_an_auction_early_is_off_the_platform(message):
+    assert "message suggests paying or dealing outside the platform" in \
+        check_message(message, 17000, LISTING, asking=20000)
+
+
+@pytest.mark.parametrize("message", ["Would you take it down to £170?", "Would you take £170? When does the auction end?"])
+def test_ordinary_haggling_isnt_off_the_platform(message):
+    assert check_message(message, 17000, LISTING, asking=20000) == []
+
+
+def test_a_message_never_says_the_item_comes_with_what_the_listing_doesnt():
+    message = ("Hi mate, would you take £170 as it comes with the charger and the original box? "
+               "It's unlocked too. Can collect today.")
+    assert check_message(message, 17000, "iPhone 13 128GB Blue. Good condition.", asking=20000) == \
+        ["the message says things the listing doesn't: box, charger, unlocked"]
+
+
+@pytest.mark.parametrize("message", [
+    "Does it come with a charger? Is it unlocked? Would you take £170?",
+    "Would you take £170? Happy to pay it if it comes with the box.",
+    "Would you take £170? No worries if there's no box or charger.",
+    "Would you take £170? Just in case, can I collect today?",
+])
+def test_asking_about_what_comes_with_it_is_fine(message):
+    assert check_message(message, 17000, "iPhone 13 128GB Blue. Good condition.", asking=20000) == []
+
+
+@pytest.mark.parametrize("message", ["Hi mate, would you be happy with £315?", "Are you OK with £315 for it?",
+                                     "Just wondering if you'd take £315?"])
+def test_an_offer_over_asking_in_any_question_fails(message):
+    assert "an offer over the asking price must be said, not asked: \"would you take\" reads like asking for a discount" \
+        in check_message(message, 31500, "PS5 Slim disc. Boxed.", asking=30000, kind="more")
+
+
+def test_a_no_counts_only_in_its_own_sentence():
+    from flip.checks import has_fault
+    assert has_fault("No box. Broken screen.")
+    assert not has_fault("No faults. Boxed.")
+
+
+def test_a_longer_message_needs_its_words():
+    short = "Hi mate, would you take £170?"
+    assert check_message(short, 17000, LISTING, asking=20000, min_words=23) == \
+        ["the message is 6 words, but a longer one needs at least 23"]
+    assert check_message(short, 17000, LISTING, asking=20000) == []

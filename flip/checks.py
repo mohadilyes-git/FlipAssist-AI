@@ -173,7 +173,11 @@ LISTING_PRICE = re.compile(r"\b(?:paid|rrp|retail|retails|retailed|cost|costs|bo
 # paying or dealing outside the platform: no buyer protection, and against eBay's rules
 OFF_PLATFORM = re.compile(r"\b(?:outside (?:of )?ebay|off ebay|end (?:the |your )?listing|friends (?:and|&) family|"
                           r"f ?& ?f|bank transfer|direct transfer|pay(?:ment)? by transfer|revolut|monzo|crypto|"
-                          r"bitcoin|western union|gift cards?)\b", re.IGNORECASE)
+                          r"bitcoin|western union|gift cards?|"
+                          # ending an auction early to sell outside it
+                          r"end (?:it|the auction|your auction|the listing|your listing) (?:early|now)|"
+                          r"ending (?:it|the auction|your auction|the listing|your listing)(?: early| now)?|"
+                          r"transfer (?:you )?the money)\b", re.IGNORECASE)
 
 LINK = re.compile(r"https?://|www\.|\b[\w-]+\.(?:com|co\.uk|uk|net|org|io)\b"
                   r"|\b[\w-]+\.(?:ly|gl|me|link|to|app|page|co)/\S*", re.IGNORECASE)  # short links: "bit.ly/..."
@@ -190,12 +194,53 @@ CONTACT_WORDS = re.compile(
 # checked with the spaces, dashes and brackets between digits removed
 PHONE = re.compile(r"(?:\+|00)44\d{9,11}|\b0[1-37]\d{8,9}\b")  # UK mobiles and landlines
 LONG_NUMBER = re.compile(r"\b\d{10,}\b")  # 10+ digits in a row: a phone number or an IMEI
+# a story about you that only you could know: who it's for, why you want it,
+# where you are, that you don't resell. Read on words(), so "I'm" is "i m" and
+# "it's" is "it". It catches the common shapes, not every story: a place name
+# ("I'm in Leeds") gets through, one more reason you approve every draft
+PEOPLE = (r"son|sons|daughter|daughters|wife|husband|hubby|partner|missus|girlfriend|boyfriend|fiance|fiancee|"
+          r"kids?|children|child|boy|girl|lad|lads|brother|sister|mum|mam|mom|dad|nan|nana|gran|granny|grandma|"
+          r"grandad|grandson|granddaughter|nephew|niece|cousin|auntie|aunt|uncle|eldest|youngest|little one|"
+          r"other half|family")
+STORY = re.compile(
+    r"\bfor (?:my|our)(?: \w+){0,2} (?:" + PEOPLE + r")\b|\bfor (?:my|our) (?:best |good )?(?:mate|friend|pal)s?\b"
+    r"|\bfor the (?:missus|wife|kids|little one|other half|family)\b"
+    r"|\b(?:my|our) (?:\w+ )?(?:" + PEOPLE + r"|mate|friend|pal) (?:has |is |s )?(?:been )?(?:asking|wanting|after)\b"
+    r"|\b(?:my|our|his|her) (?:\w+ ){0,2}(?:birthday|bday|anniversary)\b"
+    r"|\b(?:birthday|christmas|xmas|anniversary|wedding|graduation) (?:present|gift|pressie)\b"
+    r"|\bas a (?:present|gift)\b|\b(?:present|gift) for (?:her|him|my|our|the)\b"
+    r"|\bfor (?:christmas|xmas|uni|university|college|school|work)\b"
+    r"|\b(?:been|was|am|m) (?:looking|searching) for (?:one|this)\b"
+    r"|\b(?:been|was|am|m|ve) (?:looking|searching|after|wanting|wanted|hunting)(?: \w+){0,6} "
+    r"(?:ages|a while|weeks|months|years)\b"
+    r"|\bmine (?:\w+ )?(?:broke|broken|died|was stolen|got stolen|got nicked|was nicked|stopped working)\b"
+    # "my old PS5 Slim broke", but never "my OFFER as it stopped working"
+    r"|\bmy (?:old |last |current )?(?:(?!(?:offer|price|bid|best|final|as|it|that|this|the|a|and|but|so|for|with|"
+    r"given)\b)\w+ ){1,4}(?:s |is |was |has |got |just |has just )?"
+    r"(?:broke|broken|died|nicked|stolen|stopped working|packed in|packed up)\b"
+    r"|\b(?:i m|i am|im|we re|we are)(?: only| just| literally| really)? (?:local|nearby|close by|near you|"
+    r"close to you|(?:a)?round the corner|up the road|down the road|in the area|not far (?:from you|away)|"
+    r"based (?:in|near|locally)|\d+ (?:mins?|minutes?) (?:away|from you))\b"
+    r"|\bi (?:live|work)(?: \w+){0,2} (?:locally|nearby|near|close|round|around|in|down|up)\b"
+    r"|\bnot (?:a )?(?:reseller|dealer|trader|flipper)\b|\bnot (?:for |to )?(?:resell|reselling|resale|flip|flipping)\b"
+    r"|\b(?:personal|own) use\b|\bfor myself\b|\b(?:it|this) (?:is )?(?:just |only |purely )for me\b"
+    r"|\bmoney (?:is |s )?tight\b|\bon a (?:tight )?budget\b|\b(?:i m|i am) (?:a )?(?:student|skint|broke)\b"
+    r"|\bi (?:really )?need (?:it|one|this) for\b|\b(?:i m|i am|we re|we are) moving\b")
 # a message's sentences cut into clauses: "Would you take £170, AS the back is
 # cracked?" asks one thing and states another
-CLAUSES = re.compile(r"[,;:]|\b(?:as|because|since|given|considering|seeing|with|due)\b", re.IGNORECASE)
+CLAUSES = re.compile(r"[,;:]|\b(?:as|because|since|given|considering|seeing|with|due|though|although|now that|"
+                     r"knowing|bearing in mind|in light of|in view of|despite|to allow for|to account for|"
+                     r"to reflect)\b", re.IGNORECASE)
 # a clause that starts with one of these, in a sentence that ends in "?", asks
 QUESTION_WORDS = {"any", "anything", "is", "are", "has", "have", "does", "do", "did", "how", "hows", "what",
                   "whats", "was", "were", "can", "could", "would", "will", "and", "or"}
+# ...and so does one that asks in a roundabout way: "just wondering IF there are any marks"
+INDIRECT = re.compile(r"\b(?:wonder(?:ing)?|let me know|know|ask(?:ing)?|tell me|check(?:ing)?)\s+(?:if|whether)\b"
+                      r"|^\s*(?:if|whether)\b|\bwhether\b", re.IGNORECASE)
+# in a question, what follows one of these is said, not asked: "would you take £170 AS it comes boxed?"
+REASON = re.compile(r"\b(?:as|because|since|given|considering|seeing|due)\b", re.IGNORECASE)
+# ...and what follows one of these isn't said at all: "happy to pay it IF it comes with the box"
+IF_PART = re.compile(r"\b(?:if|whether|unless)\b[^,.;!?]*", re.IGNORECASE)
 
 ANSWER_FIELDS = {"colour", "condition_id", "condition_note", "description"}
 
@@ -279,8 +324,21 @@ def clauses(message):
         for clause in CLAUSES.split(sentence):
             clause_words = words(clause)
             if clause_words:
-                found.append((clause, question and clause_words[0] in QUESTION_WORDS))
+                found.append((clause, (question and clause_words[0] in QUESTION_WORDS) or bool(INDIRECT.search(clause))))
     return found
+
+
+def stated_parts(message):
+    """What a message states about the item, for its claims: the sentences that
+    don't ask, and in a question only the reason after "as", "because"...
+    Nothing after "if" or "whether" is stated: "happy to pay it if it comes
+    with the box". Unlike clauses(), "with" doesn't start a statement: "does it
+    come WITH a charger?" asks about the charger."""
+    text = re.sub(r"\b(?:just )?in case\b", " ", IF_PART.sub(" ", message.strip()), flags=re.IGNORECASE)
+    parts = []
+    for sentence in re.split(r"(?<=[.!?])\s+|\n+", text):
+        parts += REASON.split(sentence)[1:] if sentence.rstrip().endswith("?") else [sentence]
+    return parts
 
 
 def condition_figures(text):
@@ -313,10 +371,11 @@ def new_conditions_allowed(notes):
 
 def has_fault(notes):
     """True if your notes mention a fault: "face id broken", "stopped working",
-    "left joycon drift", "won't charge". "No faults" and "no drift" don't count."""
+    "left joycon drift", "won't charge". "No faults" and "no drift" don't count,
+    and a "no" counts only in its own sentence: "No box. Broken screen." is a fault."""
     if "no" in promises_in(notes).get("working", set()):
         return True
-    return bool(FAULTS.search(NOT_A_FAULT.sub(" ", " ".join(words(notes)))))
+    return any(FAULTS.search(NOT_A_FAULT.sub(" ", " ".join(words(part)))) for part in re.split(r"[.!?;\n]", notes))
 
 
 def mark_backing(promise, from_notes):
@@ -517,6 +576,30 @@ def check_no_contact_details(what, text):
     return []
 
 
+def check_no_story(what, text, sources=""):
+    """Nothing made up about you: who it's for ("for my son"), why you want it
+    ("my old one broke"), where you are ("I'm round the corner"), that you
+    don't resell. Only you know those. Echoing the listing is fine: "I see it
+    was an unwanted Christmas present"."""
+    listed = words(sources)
+    for found in STORY.finditer(" ".join(words(text))):
+        if not find_phrase(listed, found.group().split()):
+            return [f"{what} makes up something about you: \"{found.group()}\""]
+    return []
+
+
+def check_message_claims(message, sources):
+    """A message may say the item comes with a box, charger, warranty... or is
+    unlocked only when the listing says so. Asking is fine: "does it come with
+    the box?"."""
+    listed = promises_in(sources)
+    made_up = sorted({promise for part in stated_parts(message) for promise, saids in promises_in(part).items()
+                      if promise in PROMISES and "yes" in saids and "yes" not in listed.get(promise, set())})
+    if made_up:
+        return [f"the message says things the listing doesn't: {', '.join(made_up)}"]
+    return []
+
+
 # ── all checks for one AI answer ────────────────────────────────────────────
 
 def check_listing_answer(answer, item, catalogue, conditions, sources, notes):
@@ -587,7 +670,20 @@ def prices_in(text):
     return {pence_or_none(amount) for pattern in PRICES for amount in pattern.findall(text)}
 
 
-def check_message(message, offer, sources, asking=None, kind="lower"):
+def offer_asked(message, offer):
+    """True if the offer is in a question: "would you take £210?", and also
+    "would you be happy with £210?", where "with" starts a new clause of the
+    same question."""
+    for sentence in re.split(r"(?<=[.!?])\s+|\n+", message.strip()):
+        asking = False
+        for clause, asks in clauses(sentence):
+            asking = asking or asks
+            if asking and offer in prices_in(clause):
+                return True
+    return False
+
+
+def check_message(message, offer, sources, asking=None, kind="lower", min_words=0):
     """Every check on a drafted message to a seller. offer and asking are in pence.
 
     The only price it may state is the offer. The asking price may come up as
@@ -595,12 +691,16 @@ def check_message(message, offer, sources, asking=None, kind="lower"):
     taken out before the prices are read, so a second "£200" can't hide behind
     it, and the asking price can't come back as a bare "200". An offer of
     "more" than asking is said, never asked: "would you take £210?" reads like
-    asking for a discount. No claim check here: a message asks things ("does
-    it come with the box?"); flip.offers checks what it says about condition.
+    asking for a discount. A longer message has a minimum number of words, and
+    no message makes up a story about you. What it says comes with the item
+    (box, charger, unlocked...) must be in the listing; asking is fine ("does
+    it come with the box?"). flip.offers checks what it says about condition.
     """
     problems = check_length("message", message, MAX_MESSAGE)
     if problems:
         return problems
+    if len(message.split()) < min_words:
+        problems.append(f"the message is {len(message.split())} words, but a longer one needs at least {min_words}")
     message = re.sub(r"[’‘ʼ]", "'", message)
     rest = message
     if asking is not None:
@@ -614,10 +714,12 @@ def check_message(message, offer, sources, asking=None, kind="lower"):
         problems.append(f"the message must offer exactly {pounds(offer)} and no other price")
     elif asking is not None and asking != offer and f"{(Decimal(asking) / 100).normalize():f}" in numbers_in(rest):
         problems.append("the message mentions the asking price again, as if offering it")
-    if kind == "more" and any(asks and offer in prices_in(clause) for clause, asks in clauses(message)):
+    if kind == "more" and offer_asked(message, offer):
         problems.append("an offer over the asking price must be said, not asked: "
                         "\"would you take\" reads like asking for a discount")
     problems += check_no_invented_numbers("message", message, f"{sources} {pounds(offer)}")
     problems += check_no_off_platform("message", message)
     problems += check_no_contact_details("message", message)
+    problems += check_no_story("message", message, sources)
+    problems += check_message_claims(message, sources)
     return problems

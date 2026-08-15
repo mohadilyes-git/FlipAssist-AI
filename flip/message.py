@@ -4,6 +4,7 @@
     .venv/bin/python -m flip.message "iPhone 13 128GB Midnight" --asking 220 --marketplace facebook
     .venv/bin/python -m flip.message "iPhone 13 128GB" --asking 220 --description "Broken back" --mention yes
     .venv/bin/python -m flip.message "PS5 Slim disc" --asking 300 --offer more --mode local
+    .venv/bin/python -m flip.message "iPhone 13 128GB" --asking 220 --longer
 
 Your past messages live in testset/private/messages.csv (testset/messages.example.csv
 shows the columns). --learn reads them into private/chroma; both stay on this Mac.
@@ -17,7 +18,7 @@ from flip.ai import ApiModel, LocalModel
 from flip.attempts import MODES
 from flip.audit import AuditLog
 from flip.draft import load_env
-from flip.message_drafter import draft_message
+from flip.message_drafter import MESSAGE_TOKENS, draft_message
 from flip.money import OFFER_KINDS
 from flip.retrieval import MessageIndex
 from flip.style import describe, load_messages, style_card
@@ -37,6 +38,9 @@ def main():
     parser.add_argument("--mention", choices=["yes", "no"],
                         help="say what the listing gives this offer: its flaw, or its good condition "
                              "(default: your style decides)")
+    parser.add_argument("--longer", action="store_true",
+                        help="aim for about twice your usual length, 30 to 70 words (three quarters of the aim passes)")
+    parser.add_argument("--previous", help="the draft to make longer, as it was drafted (implies --longer)")
     parser.add_argument("--discount", type=float, default=15, help="percent under the asking price (default 15)")
     parser.add_argument("--mode", choices=list(MODES), default="auto")
     parser.add_argument("--messages", default=str(MESSAGES), help="your past messages (CSV)")
@@ -59,13 +63,20 @@ def main():
                "marketplace": args.marketplace}
     api = ApiModel() if os.environ.get("ANTHROPIC_API_KEY") else None
     mention = {"yes": True, "no": False}.get(args.mention)
-    result = draft_message(listing, card, index, LocalModel(), api, args.mode, AuditLog(), args.discount,
-                           kind=args.offer, mention=mention)
+    longer = args.longer or bool(args.previous)
+    result = draft_message(listing, card, index, LocalModel(max_tokens=MESSAGE_TOKENS), api, args.mode, AuditLog(),
+                           args.discount,
+                           kind=args.offer, mention=mention, length="longer" if longer else "usual",
+                           previous=args.previous)
 
     print(f"\n{result['status'].upper()}  {result['kind']} offer {result['offer'] // 100:,} pounds"
           f"  (examples: {', '.join(result['examples']) or 'none yet'})")
     if result["answer"]:
         print(f"  {result['answer']['message']}")
+    if result["words"]:
+        written = f"{len(result['answer']['message'].split())} words, " if result["answer"] else ""
+        print(f"  longer: {written}aiming for {result['words']}"
+              f"; questions it may ask: {' '.join(result['questions']) or 'none open'}")
     if result["point"]:
         print(f"  listing says: {' / '.join(result['point'])}"
               f" ({'in the message' if result['mentioned'] else 'left out'})")

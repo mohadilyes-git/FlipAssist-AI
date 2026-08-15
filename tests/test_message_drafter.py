@@ -6,7 +6,9 @@ or good condition goes in, and the checks decide."""
 from pathlib import Path
 
 from flip.ai import Reply
-from flip.message_drafter import draft_message
+import pytest
+
+from flip.message_drafter import draft_message, longer_words
 from flip.offers import point_for
 from flip.prompts import message_prompt
 from flip.retrieval import MessageIndex
@@ -20,6 +22,10 @@ LISTING = {"id": "l1", "title": "iPhone 13 128GB Blue unlocked", "description": 
 BROKEN = {**LISTING, "description": "Broken back but everything works."}
 GOOD = {"message": "Hi mate, is this still available? Would you take £170 cash? Can collect today."}
 WITH_FLAW = {"message": "Hi mate, would you take £170 as the back is broken? Can collect today."}
+LONG = {"message": "Hi mate, is this still available? I can do £170 cash and collect today or whenever suits you. "
+                   "What's the battery health? And does it come with a charger? Cheers"}
+LONG_WITH_FLAW = {"message": "Hi mate, is this still available? Would you take £170 as the back is broken? Can "
+                             "collect today or whenever suits you. Does it come with a charger and the box? Cheers"}
 # a reseller whose messages usually mention the condition
 TALKER = [{"my_message": "Hi mate, would you take £150 as the screen's cracked?"},
           {"my_message": "Hi mate, any scratches? Would you take £90?"}]
@@ -167,3 +173,93 @@ def test_a_flawed_item_is_never_praised_for_paying_more():
     assert result["attempts"][0]["problems"] == [
         "the message talks about the condition, but this draft leaves that out",
         "the message says things about the condition the listing doesn't: good"]
+
+
+# ── a longer message ────────────────────────────────────────────────────────
+
+def test_longer_is_about_twice_the_usual_at_least_30_words_and_at_most_70():
+    assert [longer_words(words) for words in (5, 12, 20, 35, 50)] == [30, 30, 40, 70, 70]
+
+
+def test_a_longer_draft_says_more_with_the_questions_the_listing_doesnt_answer():
+    local = FakeModel("gemma3:4b", LONG)
+    result = draft_message(BROKEN, style_card(PAST), local=local, length="longer")
+    assert (result["status"], result["length"], result["words"]) == ("ready", "longer", 30)  # usual 12 -> 30
+    assert result["questions"] == ["What's the battery health?", "Does it come with a charger?",
+                                   "Does it come with the box?"]
+    user = local.asked[0]["user"]
+    assert "Length: about 30 words, longer than usual" in user
+    assert "What's the battery health? Does it come with a charger? Does it come with the box?" in user
+    assert "About 30 words" in user and "About 12 words" not in user  # the usual length gives way
+
+
+def test_a_longer_draft_that_isnt_longer_gets_one_try_on_the_api():
+    result = draft_message(LISTING, style_card(PAST), local=FakeModel("gemma3:4b", GOOD),
+                           api=FakeModel("claude-haiku-5-5", LONG), length="longer")
+    assert result["attempts"][0]["problems"] == ["the message is 14 words, but a longer one needs at least 23"]
+    assert result["status"] == "ready"
+
+
+def test_a_longer_draft_can_start_from_the_one_on_screen():
+    on_screen = "Hi mate, is this still available? Would you take £170 cash? Can collect today or tomorrow, whenever."
+    local = FakeModel("gemma3:4b", {"message": LONG["message"] + " Could collect tomorrow evening too if easier."})
+    result = draft_message(LISTING, style_card(PAST), local=local, length="longer", previous=on_screen)
+    assert result["words"] == 34  # its 17 words, not the style's 12: twice that
+    assert result["status"] == "ready"
+    assert "Their previous draft, to make longer (keep its wording and everything it says): " + on_screen \
+        in local.asked[0]["user"]
+
+
+def test_longer_means_longer_than_the_draft_on_screen():
+    on_screen = " ".join(["word"] * 60)  # 60 words: aim 70, and fewer than 61 isn't longer
+    result = draft_message(LISTING, style_card(PAST), local=FakeModel("gemma3:4b", LONG), length="longer",
+                           previous=on_screen)
+    assert result["attempts"][0]["problems"][0] == "the message is 30 words, but a longer one needs at least 61"
+    # a draft already at the longest asks no AI at all
+    longest = draft_message(LISTING, local=FakeModel("gemma3:4b"), length="longer", previous=" ".join(["word"] * 70))
+    assert (longest["status"], longest["reasons"], longest["attempts"]) == \
+        ("needs you", ["the draft is already as long as a message goes (70 words)"], [])
+
+
+def test_a_blank_draft_on_screen_counts_as_none():
+    local = FakeModel("gemma3:4b", LONG)
+    result = draft_message(LISTING, style_card(PAST), local=local, length="longer", previous="   ")
+    assert result["words"] == 30 and "previous draft" not in local.asked[0]["user"]
+
+
+def test_a_longer_draft_for_a_listing_the_catalogue_doesnt_know_asks_the_general_questions():
+    for title in ("PS5 console", "Samsung fridge freezer", ""):
+        listing = {**LISTING, "title": title, "description": "Selling as upgraded."}
+        result = draft_message(listing, style_card(PAST), local=FakeModel("gemma3:4b", LONG), length="longer")
+        assert result["questions"] == ["Any marks or scratches?", "Does it come with the box?"], title
+
+
+def test_a_longer_draft_mustnt_ask_what_the_listing_already_says():
+    asks_again = {"message": "Hi mate, is this still available? I can do £170 cash and collect today or whenever "
+                             "suits you. Is it unlocked? Does it come with the box? Cheers"}
+    result = draft_message(LISTING, style_card(PAST), local=FakeModel("gemma3:4b", asks_again),
+                           api=FakeModel("claude-haiku-5-5", LONG), length="longer")
+    assert result["attempts"][0]["problems"] == ["the message asks what the listing already says: box, unlocked"]
+    assert result["status"] == "ready"
+
+
+def test_the_draft_on_screen_settles_the_flaw_the_way_it_was_drafted():
+    kept = draft_message(BROKEN, style_card(PAST), local=FakeModel("gemma3:4b", LONG_WITH_FLAW),
+                         length="longer", previous=WITH_FLAW["message"])
+    assert (kept["status"], kept["mentioned"], kept["ask"]) == ("ready", True, None)
+    left = draft_message(BROKEN, style_card(PAST), local=FakeModel("gemma3:4b", LONG),
+                         length="longer", previous=GOOD["message"])
+    assert (left["status"], left["mentioned"]) == ("ready", False)
+    assert left["ask"] == 'The listing says "Broken back". Mention it as the reason for your offer?'
+
+
+def test_a_usual_draft_ignores_a_previous_one_and_asks_nothing_extra():
+    local = FakeModel("gemma3:4b", GOOD)
+    result = draft_message(LISTING, style_card(PAST), local=local, previous="anything")
+    assert (result["words"], result["questions"]) == (None, [])
+    assert "Length:" not in local.asked[0]["user"] and "previous draft" not in local.asked[0]["user"]
+
+
+def test_an_unknown_length_is_refused():
+    with pytest.raises(ValueError):
+        draft_message(LISTING, length="essay")

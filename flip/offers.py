@@ -9,16 +9,17 @@ Code reads the seller's own words about the item's condition:
 
 Your style decides whether that point goes in by itself: it does if your past
 messages usually mention condition. If they don't, the draft leaves it out and
-asks you. Either way the check holds the message to the listing: it talks
-about the condition only when it's meant to, says only what the listing says,
-and then must say the point. Asking about the condition is always fine ("any
-scratches?").
+asks you. (When a draft is made longer, the draft on screen decides instead.)
+Either way the check holds the message to the listing: it talks about the
+condition only when it's meant to, says only what the listing says, and then
+must say the point, not ask it. Asking about the condition is otherwise fine
+("any scratches?"), but not to bring up the point the draft leaves out.
 """
 
 import re
 
 from flip.catalogue import words
-from flip.checks import LEVELS, MARKS, NEGATIONS, clauses, has_fault, promises_in
+from flip.checks import LEVELS, MARKS, NEGATIONS, NEW_SEALED, clauses, has_fault, prices_in, promises_in
 
 # the seller says the price already allows for the flaw: a lower offer mustn't use it again
 PRICED_IN = re.compile(r"\b(?:hence (?:the |why )?(?:the |low |cheap )?price|priced accordingly|priced to reflect|"
@@ -26,7 +27,9 @@ PRICED_IN = re.compile(r"\b(?:hence (?:the |why )?(?:the |low |cheap )?price|pri
                        r"why it (?:is )?(?:so )?cheap|hence (?:so )?cheap)\b")
 # good condition in so many words: below "excellent" and "flawless", which the checks already read
 GOOD = re.compile(r"\b(?:good|great|nice|lovely|decent|fab|fantastic|brilliant|top) condition\b"
-                  r"|\bcondition (?:is )?(?:very |really )?(?:good|great|nice|lovely)\b")
+                  r"|\bcondition (?:is )?(?:very |really )?(?:good|great|nice|lovely)\b"
+                  r"|\b(?:good|great|decent|lovely|nice|mint) nick\b|\b(?:great|good) shape\b|\bwell looked after\b"
+                  r"|\b(?:barely|hardly) used\b|\b(?:not|isn t) a (?:mark|scratch|scuff|dent) on it\b")
 # damage the checks' mark words don't cover: "cosmetic damage", "smashed screen"
 DAMAGE = re.compile(r"\b(?:damage|damaged|smashed|shattered|bent|torn|ripped|stained|faded|peeling)\b")
 GOOD_LEVELS = ["good", "excellent", "flawless"]  # each one backs the ones before it
@@ -39,6 +42,12 @@ ATTITUDE = re.compile(r"\b(?:don'?t|do not|doesn'?t|does not)\s+(?:mind|bother m
 DONT_MIND = re.compile(r"\b(?:don'?t|do not) mind\b|\bnot (?:too |that |really |at all )?(?:bothered|fussed|worried)\b"
                        r"|\bno (?:problem|bother|issue|worries)\b|\b(?:fine|happy|ok|okay|alright) with\b|\beven with\b"
                        r"|\bdespite\b|\bregardless of\b|\bdoesn'?t (?:bother|matter)\b", re.IGNORECASE)
+# in the offer's own question, what follows these isn't said: "would you take
+# £170 IF the screen's cracked?", "would you take £170 AND IS the back broken?"
+HYPOTHETICAL = re.compile(r"\b(?:if|whether|unless)\b.*|\band (?:is|are|does|do|did|has|have|any|can|could|would|will)\b.*",
+                          re.IGNORECASE)
+# "a time that works for you" isn't a claim that the item works
+WORKS_FOR = re.compile(r"\bwork(?:s|ing)? (?:for|with) (?:you|me|us)\b", re.IGNORECASE)
 # a listing read one part at a time: sentences, and what follows "but", "which"...
 LISTING_PARTS = re.compile(r"[,.;!?\n()]|\s[-–—]\s|\b(?:but|which|though|although|otherwise|however|hence)\b",
                            re.IGNORECASE)
@@ -49,9 +58,13 @@ ASK = {"lower": "Mention it as the reason for your offer?",
 
 
 def unnegated(pattern, text):
-    """True if the pattern is in the text without a "no" or "not" just before it."""
-    joined = " ".join(words(text))
-    return any(not NEGATIONS & set(joined[:m.start()].split()[-3:]) for m in pattern.finditer(joined))
+    """True if the pattern is in the text without a "no" or "not" just before
+    it, in the same sentence: "No box. Smashed screen." is still smashed."""
+    for part in re.split(r"[.!?;\n]", text):
+        joined = " ".join(words(part))
+        if any(not NEGATIONS & set(joined[:m.start()].split()[-3:]) for m in pattern.finditer(joined)):
+            return True
+    return False
 
 
 def condition_said(text):
@@ -128,6 +141,29 @@ def question_for(kind, point):
 
 # ── checking a message ──────────────────────────────────────────────────────
 
+def said_in(message, offer=None):
+    """The clauses of a message that say something: its statements, and the
+    question that makes the offer, where the reason often sits ("would you
+    take £170 to allow for the broken back?"), up to an "if" or a second
+    question."""
+    found = []
+    for clause, asks in clauses(message):
+        if asks and offer is not None and offer in prices_in(clause):
+            clause = HYPOTHETICAL.sub("", clause)
+        elif asks:
+            continue
+        if len(words(clause)) > 1:
+            found.append(clause)
+    return found
+
+
+def says_point(text, point):
+    """Whether a text says the point, in the listing's words or a general word
+    for them ("the damage" for "broken back")."""
+    point_kinds = condition_said(". ".join(point["says"]))
+    return any(backed(kind, point_kinds) for kind in condition_said(text))
+
+
 def backed(kind, listed):
     """Whether what a listing says backs one thing a message says about the
     condition. A general word backs a particular one: the listing's "marks"
@@ -142,28 +178,41 @@ def backed(kind, listed):
     return kind in listed
 
 
-def check_condition_talk(message, listing_text, point, mention, kind="lower"):
+def check_condition_talk(message, listing_text, point, mention, kind="lower", offer=None):
     """A message talks about the item's condition only when this draft is
     meant to (there's a point, and it's mentioned), says only what the listing
-    does, and then must say the point: at the asking price, that you don't
-    mind it. Questions don't count as talking about it: "any scratches?"
-    claims nothing. A one-word clause ("Perfect,") isn't about the item."""
+    does, and then must say the point, not ask it ("does it have a broken
+    back?" reads as if you hadn't read the listing): at the asking price, that
+    you don't mind it. It never calls a faulty item working, or anything new
+    or sealed that the listing doesn't. Questions don't count as talking about
+    it ("any scratches?" claims nothing), but the question that makes the offer
+    (offer, in pence) does: "would you take £170 for the scratched one?". A
+    one-word clause ("Perfect,") isn't about the item."""
     if not isinstance(message, str) or not message.strip():
         return []  # check_message reports that
     message = re.sub(r"[’‘ʼ]", "'", message)
-    stated = set().union(*(condition_said(clause) for clause, asks in clauses(message)
-                           if not asks and len(words(clause)) > 1))
-    point_kinds = condition_said(". ".join(point["says"])) if point else set()
-    says_point = any(backed(kind, point_kinds) for kind in condition_said(message))
+    statements = said_in(message, offer)
+    stated = set().union(*map(condition_said, statements))
+    said_point = bool(point) and says_point(message, point)
     problems = []
     if point and mention:
-        if not says_point:
+        if not said_point:
             problems.append(f"the message leaves out what the listing says: {quoted(point)}")
+        elif not says_point(". ".join(statements), point):
+            problems.append(f"the message asks about {quoted(point)} instead of saying it")
         elif kind == "asking" and not DONT_MIND.search(message):
             problems.append(f"the message names {quoted(point)} but doesn't say you don't mind it")
-    elif stated or says_point:
+    elif stated or said_point:
         problems.append("the message talks about the condition, but this draft leaves that out")
-    unbacked = sorted(kind for kind in stated if not backed(kind, condition_said(listing_text)))
+    listed = condition_said(listing_text)
+    unbacked = {claim for claim in stated if not backed(claim, listed)}
+    said = WORKS_FOR.sub(" ", ". ".join(statements))
+    if "yes" in promises_in(said).get("working", set()) and has_fault(listing_text) \
+            and "yes" not in promises_in(listing_text).get("working", set()):
+        unbacked.add("working")
+    if NEW_SEALED.search(" ".join(words(said))) and not NEW_SEALED.search(" ".join(words(listing_text))):
+        unbacked.add("new")
+    unbacked = sorted(unbacked)
     if unbacked:
         problems.append(f"the message says things about the condition the listing doesn't: {', '.join(unbacked)}")
     return problems

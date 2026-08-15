@@ -65,12 +65,13 @@ def style_card(messages):
     return card
 
 
-def describe(card):
-    """The style card as short lines for the AI (and for you to check)."""
+def describe(card, words=None):
+    """The style card as short lines for the AI (and for you to check). words
+    takes the place of your usual length, for a longer message."""
     if not card:
         return []
     lines = [f'Opens with "{card["greeting"]}"'] if card.get("greeting") else []
-    lines += [f"About {card['words']} words",
+    lines += [f"About {words or card['words']} words",
               f"Usually asks {card['questions']} question{'' if card['questions'] == 1 else 's'}",
               "Uses emojis" if card["emoji"] else "No emojis"]
     if card["mentions"]:

@@ -1,6 +1,8 @@
 """What the listing gives each kind of offer to say, read by plain code from
 the seller's own words, and the check that holds a message to them."""
 
+import pytest
+
 from flip.offers import check_condition_talk, condition_said, point_for, read_listing
 
 BROKEN = "iPhone 13 128GB. Broken back but everything works, battery 86%."
@@ -44,6 +46,10 @@ def test_a_flaw_the_seller_priced_in_is_no_reason_to_offer_less():
         assert point_for("asking", text)["about"] == "flaw"  # you can still say you don't mind it
 
 
+def test_a_no_in_one_sentence_doesnt_hide_a_flaw_in_the_next():
+    assert read_listing("No box. Smashed screen.")["flaws"] == ["Smashed screen"]
+
+
 def test_dont_mind_isnt_read_as_no_flaw():
     assert condition_said("I don't mind the scratches") == {"scratch"}
     assert condition_said("not fussed about the broken back") == {"fault"}
@@ -61,6 +67,10 @@ def test_the_message_says_the_flaw_only_as_the_listing_does():
         ["the message says things about the condition the listing doesn't: scratch"]
     assert check_condition_talk("Hi mate, would you take £170?", BROKEN, point, True) == \
         ['the message leaves out what the listing says: "Broken back"']
+    # Gemma's real draft: it asks about the flaw the listing already states
+    assert check_condition_talk("Hi mate, I'm interested in buying this iPhone 13. Can I pay £185? Does this have a "
+                                "broken back?", BROKEN, point, True) == \
+        ['the message asks about "Broken back" instead of saying it']
 
 
 def test_at_the_asking_price_the_message_says_you_dont_mind_the_flaw():
@@ -70,6 +80,61 @@ def test_at_the_asking_price_the_message_says_you_dont_mind_the_flaw():
         assert check_condition_talk(fine, BROKEN, point, True, "asking") == [], fine
     assert check_condition_talk("I can pay £220 for it. Broken back.", BROKEN, point, True, "asking") == \
         ["the message names \"Broken back\" but doesn't say you don't mind it"]
+
+
+@pytest.mark.parametrize("message", [
+    "Hi mate, would you take £170 to allow for the broken back?",
+    "Hi mate, would you take £170 to account for the broken back?",
+    "Hi mate, would you take £170 in light of the broken back?",
+    "Hi mate, would you take £170 for it so I can fix the broken back?",
+    "Hi mate, would you take £170 for the phone that has the broken back?",
+    "Hi mate, would you take £170 as the back's broken?",
+])
+def test_the_flaw_given_inside_the_offer_question_counts_as_said(message):
+    assert check_condition_talk(message, BROKEN, point_for("lower", BROKEN), True, offer=17000) == [], message
+
+
+@pytest.mark.parametrize("message", [
+    "Hi mate, would you take £170 for it even though the screen is cracked?",
+    "Hi mate, would you take £170 for the scratched one?",
+    "Hi mate, would you take £170 now that the battery is faulty?",
+])
+def test_a_made_up_flaw_inside_the_offer_question_fails(message):
+    problems = check_condition_talk(message, EXCELLENT, None, False, offer=17000)
+    assert any(p.startswith("the message says things about the condition the listing doesn't") for p in problems), \
+        message
+
+
+@pytest.mark.parametrize("listing, message, claim", [
+    ("Faulty, won't turn on. Spares or repairs.", "Hi mate, would you take £170? Good to see it's in full working order.",
+     "working"),
+    ("Selling as I've upgraded.", "Hi mate, would you take £170? I see it's brand new and still sealed.", "new"),
+    ("Selling as I've upgraded.", "Hi mate, would you take £170? It looks in great nick and well looked after.",
+     "good"),
+])
+def test_a_paraphrased_condition_claim_is_held_to_the_listing(listing, message, claim):
+    assert f"the message says things about the condition the listing doesn't: {claim}" in \
+        check_condition_talk(message, listing, None, False, offer=17000)
+
+
+def test_praise_in_other_words_still_counts_as_praise():
+    assert point_for("more", "PS5 Slim. Great nick, boxed.") == {"about": "condition", "says": ["Great nick"]}
+    assert check_condition_talk("Hi mate, I can pay £400 as it looks in great nick.", BROKEN, None, False,
+                                "more", 40000)[0] == LEFT_OUT  # never praise a flawed item
+
+
+def test_a_time_that_works_for_you_isnt_a_claim_the_item_works():
+    assert check_condition_talk("Hi mate, would you take £170? Let me know a time that works for you.",
+                                "Faulty, won't turn on.", None, False, offer=17000) == []
+
+
+@pytest.mark.parametrize("message", [
+    "Hi mate, would you take £170? Just wondering if there are any marks or scratches?",
+    "Hi mate, would you take £170? I was wondering if it has any marks or scratches?",
+    "Hi mate, would you take £170? Let me know if there are any marks or scratches.",
+])
+def test_asking_in_a_roundabout_way_is_still_asking(message):
+    assert check_condition_talk(message, "Selling as I've upgraded.", None, False, offer=17000) == []
 
 
 def test_a_draft_meant_to_leave_the_flaw_out_mustnt_slip_it_in():

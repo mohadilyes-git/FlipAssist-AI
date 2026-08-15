@@ -1,0 +1,20 @@
+{
+  "about": "Questions a longer message may ask the seller, by category, most useful first. Each is asked only when the listing doesn't already answer it: 'unless' lists what answers it, as the claims the checks read (box, charger, cable, controller, battery, unlocked...), plus 'condition' for anything the listing says about the item's condition. No iCloud question: in a first message it reads as distrust.",
+  "phones": [
+    {"ask": "What's the battery health?", "unless": ["battery"]},
+    {"ask": "Is it unlocked?", "unless": ["unlocked"]},
+    {"ask": "Does it come with a charger?", "unless": ["charger", "cable"]}
+  ],
+  "consoles": [
+    {"ask": "Does it come with a controller?", "unless": ["controller"]},
+    {"ask": "Are all the cables included?", "unless": ["cable"]}
+  ],
+  "headphones": [
+    {"ask": "How's the battery life?", "unless": ["battery"]},
+    {"ask": "Does it come with a charging cable?", "unless": ["cable", "charger"]}
+  ],
+  "any": [
+    {"ask": "Any marks or scratches?", "unless": ["condition"]},
+    {"ask": "Does it come with the box?", "unless": ["box"]}
+  ]
+}

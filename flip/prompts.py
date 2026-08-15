@@ -73,7 +73,8 @@ Rules:
 3. Say about the item's condition only what the condition line says, in the listing's words. Never add a flaw, damage or praise of your own.
 4. Sound like the reseller: follow their style notes and write like their example messages. In the examples, £[OFFER] stands for whatever they offered that time.
 5. No contact details, links, or paying or dealing outside the platform. No flattery.
-6. British English."""
+6. Never make up anything about the reseller: who it's for, why they want it, or where they live.
+7. British English."""
 
 # the offer line, for each kind of offer
 OFFER_LINES = {"lower": "{offer}, under their asking price",
@@ -86,6 +87,12 @@ CONDITION_LINES = {"lower": "give this flaw from the listing, once, plainly and 
                    "asking": "say once that the reseller doesn't mind this flaw from the listing: {says}",
                    "more": "give this from the listing as the reason for paying more: {says}"}
 NO_CONDITION = "don't mention it"
+# a longer message says more only with what code allows: the reseller's usual
+# points and questions the listing doesn't answer (flip.questions)
+LONGER = "Length: about {words} words, longer than usual. Keep their greeting and tone, and say more only with " \
+         "their usual points{questions}"
+LONGER_QUESTIONS = " and these questions the listing doesn't answer: {asks}"
+PREVIOUS = "Their previous draft, to make longer (keep its wording and everything it says): {previous}"
 
 MESSAGE_SCHEMA = {"type": "object", "properties": {"message": {"type": "string"}}, "required": ["message"],
                   "additionalProperties": False}
@@ -96,11 +103,21 @@ def offer_words(offer):
     return f"£{offer // 100:,}" if offer % 100 == 0 else pounds(offer)
 
 
-def message_prompt(listing, offer, style_lines, examples, kind="lower", point=None):
+def longer_lines(longer):
+    """The length line for a longer message, and the draft it starts from, if any."""
+    asks = " ".join(longer["questions"])
+    lines = [LONGER.format(words=longer["words"], questions=LONGER_QUESTIONS.format(asks=asks) if asks else "")]
+    if longer.get("previous"):
+        lines.append(PREVIOUS.format(previous=longer["previous"]))
+    return lines
+
+
+def message_prompt(listing, offer, style_lines, examples, kind="lower", point=None, longer=None):
     """The system prompt and the message about this listing. point is what the
     listing gives this offer to say (flip.offers), passed only when the
-    message is to say it. The asking price never comes as a number of its
-    own: code already set the offer, so the AI has no second number to slip in."""
+    message is to say it. longer, for a longer message: {"words", "questions",
+    "previous"}. The asking price never comes as a number of its own: code
+    already set the offer, so the AI has no second number to slip in."""
     lines = [
         "Listing:",
         f"Title: {listing.get('title') or ''}",
@@ -109,6 +126,7 @@ def message_prompt(listing, offer, style_lines, examples, kind="lower", point=No
         "",
         f"Offer: {OFFER_LINES[kind].format(offer=offer_words(offer))}",
         f"Condition: {CONDITION_LINES[kind].format(says=quoted(point)) if point else NO_CONDITION}",
+        *(longer_lines(longer) if longer else []),
         "",
         "Style notes:",
         *(f"- {line}" for line in style_lines or ["(none yet)"]),
