@@ -29,6 +29,7 @@ Drafts eBay listings and offer messages for a reseller. Plain code does everythi
   - Gemma 3 4B runs on the reseller's own machine through Ollama. It's asked only for what code couldn't fill: the colour (from that model's real colours, or "unsure"), the condition, a condition note and a description, held to an exact answer shape.
   - The checks decide. An answer that fails gets one try on Claude Haiku. If that fails too, the item is marked "needs you".
   - If the local model isn't running, nothing is sent to the API instead.
+  - If Gemma ends its answer with a curly quote (”), it's stopped there and the answer closed, instead of running on for half a minute.
   - A draft is "ready" only when nothing is missing.
   - Every attempt goes into a private audit log with its tokens, seconds and cost.
 - **Drafts offer messages in the reseller's own style** (`python -m flip.message`):
@@ -41,12 +42,16 @@ Drafts eBay listings and offer messages for a reseller. Plain code does everythi
     - at the asking price, the message says the reseller doesn't mind it;
     - good condition with no flaw is the reason for paying more.
   - If the reseller's past messages usually mention condition, that point goes in by itself. Otherwise the draft leaves it out and asks: *The listing says "Broken back". Mention it as the reason for your offer?*
+  - A longer message on request. It aims for about twice the reseller's usual length, between 30 and 70 words; three quarters of the aim passes, and it's never shorter than the draft it starts from. It says more only with their usual points and the questions the listing doesn't answer (battery health, unlocked, charger, box and so on, kept in `data/questions.json`). It can start from the draft on screen and keep its wording.
   - A style card worked out by code from the reseller's past messages: their usual greeting, length, questions, emojis and what they mention.
   - The past messages for the most similar listings, found by meaning (MiniLM embeddings in a Chroma vector database, all on this machine), shown to the AI as examples with their old prices hidden.
   - The same checks and fallback as listings, plus checks of their own:
     - the exact offer and no other price;
     - an offer over asking is said, never asked ("would you take £210?" reads like asking for a discount);
-    - the condition comes up only when it's meant to, and only as the listing says it. A question like "any scratches?" is fine;
+    - the condition comes up only when it's meant to, and only as the listing says it: never a flaw it doesn't mention, never "working" for a faulty item. A question like "any scratches?" is fine;
+    - nothing said to come with the item (box, charger, unlocked and so on) that the listing doesn't say, and no question the listing already answers;
+    - a longer message has enough words;
+    - no made-up story about the reseller in the common shapes: who it's for, why they want it, where they are, that they don't resell. A place name ("I'm in Leeds") still gets through;
     - no invented numbers, no contact details, nothing off the platform.
 - **Scores the code** against a private test set of real items, with a scoring script.
 
@@ -98,7 +103,7 @@ For messages, put your past messages in `testset/private/messages.csv` (`testset
 .venv/bin/python -m flip.message "iPhone 13 128GB" --asking 220 --description "Broken back" --offer asking --mention yes
 ```
 
-`--offer` picks `lower` (the default), `asking` or `more`. `--mention yes` or `no` answers the question about the listing's flaw or good condition; without it, the reseller's style decides.
+`--offer` picks `lower` (the default), `asking` or `more`. `--longer` makes it about twice the usual length; `--previous "..."` makes that draft longer instead. `--mention yes` or `no` answers the question about the listing's flaw or good condition; without it, the reseller's style decides.
 
 ## The test set
 
@@ -123,7 +128,7 @@ Include a few items the catalogue doesn't have: the right answer for those is "n
 ## Folders
 
 - `flip/`: the code
-- `data/`: the catalogue and eBay's item conditions (facts, not code)
+- `data/`: the catalogue, eBay's item conditions and the questions a message may ask (facts, not code)
 - `tests/`: a test for every rule
 - `testset/`: the example format for the test set
 - `private/`: the audit log and anything else the app saves while it runs (never uploaded)
