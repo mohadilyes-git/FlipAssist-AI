@@ -37,23 +37,69 @@ Drafts eBay listings and offer messages for a reseller. Plain code does everythi
     - Lower: 15% under asking by default, rounded down to a tidy number.
     - The asking price.
     - More: asking plus 5%, rounded up to a tidy number and at least one step over.
-  - Code reads the listing for what's worth saying, in the seller's own words:
+  - **The listing is read by AI, held to the seller's own words by code.** Gemma reads the flaws, where to collect and whether the seller takes offers; Haiku gets one try when Gemma's reading fails a check. Code then:
+    - keeps only quotes that are in the listing word for word (capitals, punctuation, apostrophes and hyphens aside), so a flaw can't be made up;
+    - judges each quote in the seller's own sentence. A flaw the seller denies ("black spots" from "*No* black spots on the screen") fails the reading. Praise ("works perfectly"), what's not wrong ("scratch free", "doesn't affect use"), the sale ("smoke free home") and asides ("see pics") aren't flaws;
+    - keeps every flaw code finds by itself: AI can add a flaw, never take one away, and a fragment ("Screen" of "Screen cracked") doesn't replace it;
+    - takes "no offers" only in words that say it ("price is firm"), and never from a listing that takes offers ("open to offers", "offers over £400") or only limits them ("no offers under £250").
+
+    With no model, or none that passes, code reads the listing alone. Sellers' words code has no list for ("black dot on the screen", "hinge is stiff") are then missed.
+  - **"No offers" never changes the offer.** The reseller still picks lower, asking or more; the draft carries a note with the seller's words to show under the message.
+  - What's worth saying with each offer, in the seller's own words:
     - a flaw ("broken back") is the reason for a lower offer, unless the seller says it's already priced in;
     - at the asking price, the message says the reseller doesn't mind it;
     - good condition with no flaw is the reason for paying more.
   - If the reseller's past messages usually mention condition, that point goes in by itself. Otherwise the draft leaves it out and asks: *The listing says "Broken back". Mention it as the reason for your offer?*
   - A longer message on request. It aims for about twice the reseller's usual length, between 30 and 70 words; three quarters of the aim passes, and it's never shorter than the draft it starts from. It says more only with their usual points and the questions the listing doesn't answer (battery health, unlocked, charger, box and so on, kept in `data/questions.json`). It can start from the draft on screen and keep its wording.
-  - A style card worked out by code from the reseller's past messages: their usual greeting, length, questions, emojis and what they mention.
-  - The past messages for the most similar listings, found by meaning (MiniLM embeddings in a Chroma vector database, all on this machine), shown to the AI as examples with their old prices hidden.
+  - A style card worked out by code from the reseller's past messages: their usual greeting, length, questions, emojis and what they mention, plus their phrasebook (the opener, offer and closing they've written in at least two messages).
+  - **Who writes:**
+    - If the reseller's messages repeat, or there are none yet, code writes the message with no AI. It uses their own sentences with the new price, the seller's words for the flaw, and the open questions. A habit is a sentence in at least two messages that names no item and carries no second price. If the seller's words don't fit a sentence it knows ("I dropped it and cracked the back"), or the draft fails a check, the AI writes instead.
+    - If their messages vary, the AI writes. It's shown the past messages for the most similar listings, found by meaning (MiniLM embeddings in a Chroma vector database, all on this machine), with their old prices hidden.
+    - The pickup place from the listing goes in ("Can collect from Leeds LS6 today") only when the reseller's own messages talk about collecting.
   - The same checks and fallback as listings, plus checks of their own:
     - the exact offer and no other price;
     - an offer over asking is said, never asked ("would you take £210?" reads like asking for a discount);
     - the condition comes up only when it's meant to, and only as the listing says it: never a flaw it doesn't mention, never "working" for a faulty item. A question like "any scratches?" is fine;
     - nothing said to come with the item (box, charger, unlocked and so on) that the listing doesn't say, and no question the listing already answers;
     - a longer message has enough words;
+    - no promise about collecting, cash or posting that the reseller's own messages don't make ("I can arrange collection quickly" was the AI's most common invention). A "games collection" or a "Collector's Edition" isn't a promise;
+    - a reason about the item uses only the listing's words ("given the stiff hinge" fails on a listing that doesn't say it), and no other model is named;
+    - the asking price is never misquoted, and a lower offer never offers more in words ("if not I can pay the full asking price");
     - no made-up story about the reseller in the common shapes: who it's for, why they want it, where they are, that they don't resell. A place name ("I'm in Leeds") still gets through;
     - no invented numbers, no contact details, nothing off the platform.
 - **Scores the code** against a private test set of real items, with a scoring script.
+
+## Measured so far
+
+Two tests from 18 Aug 2026, both on made-up listings, so the real numbers wait for the test set.
+
+**Writing offer messages: code vs AI.** The same listings and offers went through the same checks for 3 resellers. One had no past messages, one's messages all repeat (`testset/messages.example.csv`), and one wrote chatty messages that all differ (made up). 9 Claude judges then ranked 723 drafts blind, without knowing how each was written.
+
+| Reseller | Judged best: the AI's draft | Fine to send as is: code / AI |
+|---|---|---|
+| No past messages | 3% | 95% / 35% |
+| Messages that repeat | 12% | 65% / 49% |
+| Chatty, all different | 50% | 100% / 63% (usual length) |
+
+Code's draft took about 5 ms and cost nothing. The AI's took a median of 3.7 seconds. Gemma passed the checks first time in only half the cases, and Haiku fixed the rest for 2.4p across 252 drafts.
+
+The judges' main complaints about the AI's drafts:
+- a bare "I can pay £340" with no greeting;
+- copying the listing back at the seller;
+- promising collection or cash the reseller never offered.
+
+So code writes unless the reseller's messages vary. All three judges agreed on the best draft in 205 of 241 cases. AI judges tend to favour AI writing, which, if anything, counts against code here.
+
+**Reading the listing: code vs AI.** On 24 short descriptions:
+
+| | Code | Gemma, Haiku backup, code checks |
+|---|---|---|
+| Flaws found | 10 of 17 | 17 of 17 |
+| Clean listings given a flaw | 0 of 7 | 0 of 7 |
+| Pickup place | none | 3 of 4 (the 4th, "meet halfway", isn't a place) |
+| "No offers" | the usual words only | 1 of 1, never wrong |
+
+Without the checks, Gemma claimed flaws on 2 clean listings and said "no offers" on 21 that never did. The reader needed Haiku once in 24 tries, for 0.005p in total.
 
 ## Planned
 
@@ -71,7 +117,9 @@ Drafts eBay listings and offer messages for a reseller. Plain code does everythi
 | Colour | Code if the text names it; otherwise the AI from the photo |
 | Condition, condition note, description | The AI, then checked by code |
 | Offer price, profit | Code |
-| What to say about the condition | Code reads it from the listing; the reseller's style or the reseller decides |
+| The listing's flaws, pickup place, "no offers" | The AI, held word for word to the listing by code |
+| What to say about the condition | Code picks it from that reading; the reseller's style or the reseller decides |
+| The offer message's wording | Code, from the reseller's own sentences; the AI only when their messages vary |
 
 ## Run it
 
@@ -103,7 +151,7 @@ For messages, put your past messages in `testset/private/messages.csv` (`testset
 .venv/bin/python -m flip.message "iPhone 13 128GB" --asking 220 --description "Broken back" --offer asking --mention yes
 ```
 
-`--offer` picks `lower` (the default), `asking` or `more`. `--longer` makes it about twice the usual length; `--previous "..."` makes that draft longer instead. `--mention yes` or `no` answers the question about the listing's flaw or good condition; without it, the reseller's style decides.
+`--offer` picks `lower` (the default), `asking` or `more`. `--longer` makes it about twice the usual length; `--previous "..."` makes that draft longer instead. `--mention yes` or `no` answers the question about the listing's flaw or good condition; without it, the reseller's style decides. `--writer template` or `ai` overrides who writes; the default lets the reseller's past messages decide.
 
 ## The test set
 
