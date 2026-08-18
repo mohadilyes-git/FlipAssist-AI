@@ -56,3 +56,18 @@ def test_a_message_doesnt_ask_what_the_listing_already_says():
     # what's open, a reason, and a fair follow-up about condition are all fine
     assert check_no_answered_questions("Would you take £170 as it's boxed? Does it come with a charger? Any other "
                                        "marks?", listing) == []
+
+
+def test_all_accessories_answers_what_comes_with_it():
+    assert open_questions("Nintendo Switch OLED. Mint condition, boxed with all accessories.", "consoles") == []
+
+
+def test_a_flaw_only_ai_found_answers_the_marks_question():
+    text = "iPhone 13 128GB Blue unlocked. Black dot on the screen. Battery 88%. Boxed with charger."
+    assert open_questions(text, "phones") == ["Any marks or scratches?"]
+    assert open_questions(text, "phones", flaws=["Black dot on the screen"]) == []
+
+
+def test_not_all_the_accessories_answers_nothing():
+    assert "Does it come with a charger?" in open_questions(
+        "iPhone 13 128GB. Good condition. Doesn't come with all the accessories.", "phones")

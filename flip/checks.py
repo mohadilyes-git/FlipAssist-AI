@@ -127,13 +127,14 @@ NEW_PROBLEMS = {"1000": "condition is New, but your notes don't say it's brand n
                 "1500": "condition is Opened - never used, but your notes don't say it's unused"}
 # a fault in your notes means the item is "For parts or not working", and no
 # draft may call it fully working. "No faults", "no drift" aren't faults
-FAULTS = re.compile(r"\b(?:not working|broken|drift|drifting|faulty|fault|faults|glitch\w*|for parts|spares|"
+FAULTS = re.compile(r"\b(?:not working|broken|drift|drifts|drifting|faulty|fault|faults|glitch\w*|for parts|spares|"
                     r"dead pixels?|(?:is|totally|completely|went|now) dead|dead (?:battery|phone|console|unit|on arrival)|"
                     r"battery (?:is )?dead|"
                     r"won t (?:turn on|switch on|charge|connect|pair|boot)|doesn t (?:turn on|charge|connect|pair)|"
                     r"not charging|no sound|no power)\b")
 NOT_A_FAULT = re.compile(r"\b(?:no|not|never|without)\s+(?:been\s+)?(?:any\s+)?(?:\w+\s+)?"
-                         r"(?:broken|drift\w*|faults?|faulty|glitch\w*|dead pixels?|issues?|problems?)\b")
+                         r"(?:broken|drift\w*|faults?|faulty|glitch\w*|dead pixels?|issues?|problems?|spares|repairs|"
+                         r"parts)\b")
 FOR_PARTS = "7000"
 PERCENT = re.compile(r"(\d+(?:\.\d+)?)\s?(?:%|per ?cent\b)", re.IGNORECASE)
 # a battery health written without a % sign: "battery health 86"
@@ -228,6 +229,39 @@ STORY = re.compile(
     r"|\bi (?:really )?need (?:it|one|this) for\b|\b(?:i m|i am|we re|we are) moving\b")
 # a message's sentences cut into clauses: "Would you take £170, AS the back is
 # cracked?" asks one thing and states another
+# how you'll buy: a message may promise it only the way your own messages do (check_no_unasked_promises).
+# Collecting is something you'll do ("can collect today", "come and get it"), not a word in a name
+# ("Collector's Edition", "your games collection")
+PROMISES_ABOUT_YOU = {
+    "collecting": re.compile(
+        r"\b(?:(?:can|could|will|i'?ll|happy to|able to|ready to|free to|want to|like to|gladly)\s+"
+        r"(?:come\s+(?:and\s+)?)?(?:collect|pick)\w*"
+        r"|collect(?:ing|ed)?\s+(?:it|them|this|these|today|tonight|tomorrow|whenever|asap|later|now|any ?time|"
+        r"this (?:week|weekend|evening|morning|afternoon)|at|from|in person)"
+        r"|on collection|arrange (?:a |the )?collection|collection (?:is|would be|today|tonight|tomorrow|whenever|asap)"
+        r"|pick(?:ing)?\s+(?:it|them|this|these)\s+up|pick ?up\s+(?:today|tonight|tomorrow|whenever|asap|later|at|from)"
+        r"|come\s+(?:and\s+)?(?:get|grab|collect)|grab\s+(?:it|them)|swing\s+by|(?:drop|nip|pop|come)\s+(?:by|over|round)"
+        r"|come to you)\b", re.IGNORECASE),
+    "cash": re.compile(r"\bcash\b|\bpay in person\b", re.IGNORECASE),
+    "postage": re.compile(r"\b(?:postage|post(?:ed)?\s+(?:it|them|out|to me)|posting it|ship(?:ping|ped)?|"
+                          r"deliver(?:y|ed)?|courier)\b", re.IGNORECASE)}
+# a question even without its question mark: "would you take £210 x"
+ASKS_YOU = re.compile(r"\b(?:would|could|will|can)\s+(?:you|u)\b", re.IGNORECASE)
+# a second, higher offer in words: "if not I can pay the full asking price", "could go a bit higher"
+SECOND_OFFER = re.compile(r"\b(?:(?:the |your )?full asking(?: price)?|pay (?:the |your )?asking(?: price)?|"
+                          r"(?:go|pay|offer|stretch|come up)\s+(?:a (?:bit|little) |slightly )?(?:higher|more|up)|"
+                          r"meet (?:you |me )?(?:in the )?middle|split the difference|"
+                          r"if not,? (?:i|i'?d|i'?ll|would|could|how about|what about)\b)", re.IGNORECASE)
+# "can't collect" isn't a promise
+NOT_PROMISED = re.compile(r"\b(?:can'?t|cannot|can not|won'?t|unable to|not|no|never|couldn'?t)\s+(?:\w+\s+){0,2}$",
+                          re.IGNORECASE)
+# a question tagged onto a promise doesn't make it a question: "I can collect today, does that work?"
+TAG_QUESTION = re.compile(r",?\s*(?:does that (?:work|suit(?: you)?|sound (?:ok|okay|good|alright))|"
+                          r"is that (?:ok|okay|alright|fine|good)|if that'?s (?:ok|okay|alright|fine)|"
+                          r"would that (?:work|be (?:ok|okay|alright|fine))|ok|okay|alright|yeah)\s*\?$", re.IGNORECASE)
+# what can come after a sentence's own end: an emoji, a kiss, "..."
+SIGN_OFF = re.compile(r"(?:\s*(?:[\U0001F300-\U0001FAFF☀-➿\U0001F3FB-\U0001F3FF\ufe0f\u200d]+|\bx{1,3}\b|\.{2,}|…))+\s*$",
+                      re.IGNORECASE)
 CLAUSES = re.compile(r"[,;:]|\b(?:as|because|since|given|considering|seeing|with|due|though|although|now that|"
                      r"knowing|bearing in mind|in light of|in view of|despite|to allow for|to account for|"
                      r"to reflect)\b", re.IGNORECASE)
@@ -314,13 +348,21 @@ def promises_in(text):
     return found
 
 
+def ends_asking(sentence):
+    """Whether a sentence asks: it ends in a question mark once a sign-off
+    after it is set aside ("Would you take £210?😊"), or it's a "would you"
+    question left without one ("Would you take £210 x", "...£210...")."""
+    sentence = SIGN_OFF.sub("", sentence).rstrip()
+    return sentence.endswith("?") or not sentence.endswith((".", "!")) and bool(ASKS_YOU.search(sentence))
+
+
 def clauses(message):
     """A message's clauses, each with whether it asks: "Would you take £170,
     as the back is cracked?" -> [("Would you take £170", True),
     (" the back is cracked?", False)]."""
     found = []
     for sentence in re.split(r"(?<=[.!?])\s+|\n+", message.strip()):
-        question = sentence.rstrip().endswith("?")
+        question = ends_asking(sentence)
         for clause in CLAUSES.split(sentence):
             clause_words = words(clause)
             if clause_words:
@@ -337,7 +379,7 @@ def stated_parts(message):
     text = re.sub(r"\b(?:just )?in case\b", " ", IF_PART.sub(" ", message.strip()), flags=re.IGNORECASE)
     parts = []
     for sentence in re.split(r"(?<=[.!?])\s+|\n+", text):
-        parts += REASON.split(sentence)[1:] if sentence.rstrip().endswith("?") else [sentence]
+        parts += REASON.split(sentence)[1:] if ends_asking(sentence) else [sentence]
     return parts
 
 
@@ -600,6 +642,36 @@ def check_message_claims(message, sources):
     return []
 
 
+def promised_in(text):
+    """How a text says you'll buy: the habits ("collecting", "cash",
+    "postage") it promises in a sentence that isn't a plain question. The
+    offer's own sentence counts even as a question ("would you take £185
+    cash?" offers cash), and so does a promise with a question tagged on ("I
+    can collect today, does that work?"). "Could I collect?" asks, and "can't
+    collect" doesn't promise."""
+    found = set()
+    for sentence in re.split(r"(?<=[.!?])\s+|\n+", text.strip()):
+        sentence = TAG_QUESTION.sub(".", SIGN_OFF.sub("", sentence))
+        if sentence.endswith("?") and not prices_in(sentence):
+            continue
+        for habit, pattern in PROMISES_ABOUT_YOU.items():
+            if any(not NOT_PROMISED.search(sentence[:m.start()]) for m in pattern.finditer(sentence)):
+                found.add(habit)
+    return found
+
+
+def check_no_unasked_promises(message, allowed):
+    """A message says how you'll buy (collecting, cash, posting) only the way
+    your own messages do. allowed: what your messages promise (promised_in on
+    them), from your style card and the example messages. With no past
+    messages nothing is: "I can arrange collection quickly" would be the AI's
+    promise, not yours."""
+    promised = sorted(promised_in(message) - set(allowed))
+    if promised:
+        return [f"the message promises {', '.join(promised)}, which your own messages don't"]
+    return []
+
+
 # ── all checks for one AI answer ────────────────────────────────────────────
 
 def check_listing_answer(answer, item, catalogue, conditions, sources, notes):
@@ -707,7 +779,12 @@ def check_message(message, offer, sources, asking=None, kind="lower", min_words=
         # an offer verb counts only in the same sentence: "Would you take £170? It's £200 on the listing"
         refs = [m for m in ASKING_MENTION.finditer(message)
                 if not set(re.split(r"[.?!]", message[:m.start()])[-1].lower().split()[-3:]) & OFFER_VERBS]
-        if refs and all(pence_or_none(m.group("a") or m.group("b") or m.group("c")) == asking for m in refs):
+        said = [pence_or_none(m.group("a") or m.group("b") or m.group("c")) for m in refs]
+        wrong = [amount for amount in said if amount != asking]
+        if wrong:  # "I know you're asking £170" on a £200 listing
+            problems.append(f"the message gives the asking price as {pounds(wrong[0]) if wrong[0] else 'a price'}, "
+                            f"but it's {pounds(asking)}")
+        elif refs:
             for m in reversed(refs):
                 rest = rest[:m.start()] + " " + rest[m.end():]
     if prices_in(rest) != {offer}:
@@ -717,6 +794,10 @@ def check_message(message, offer, sources, asking=None, kind="lower", min_words=
     if kind == "more" and offer_asked(message, offer):
         problems.append("an offer over the asking price must be said, not asked: "
                         "\"would you take\" reads like asking for a discount")
+    second = SECOND_OFFER.search(message)
+    if kind == "lower" and second and not NOT_PROMISED.search(message[:second.start()]):
+        said = re.split(r"(?<=[.!?])\s", message[second.start():])[0]
+        problems.append(f"a lower offer can't offer more as well: \"{said.strip()}\"")
     problems += check_no_invented_numbers("message", message, f"{sources} {pounds(offer)}")
     problems += check_no_off_platform("message", message)
     problems += check_no_contact_details("message", message)

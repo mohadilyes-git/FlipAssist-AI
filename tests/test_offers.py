@@ -3,7 +3,7 @@ the seller's own words, and the check that holds a message to them."""
 
 import pytest
 
-from flip.offers import check_condition_talk, condition_said, point_for, read_listing
+from flip.offers import check_condition_talk, check_reasons, condition_said, point_for, read_listing, says_point
 
 BROKEN = "iPhone 13 128GB. Broken back but everything works, battery 86%."
 EXCELLENT = "iPhone 13 128GB. Excellent condition, boxed."
@@ -157,3 +157,45 @@ def test_praise_is_held_to_the_listings_level():
     assert check_condition_talk("Hi mate, I can pay £210 as it's mint.", EXCELLENT, point, True) == [
         'the message leaves out what the listing says: "Excellent condition"',
         "the message says things about the condition the listing doesn't: flawless"]
+
+
+def test_the_flaws_flip_reader_found_take_the_place_of_codes_own():
+    text = "iPhone 13. Black dot on the screen, doesn't affect use."
+    assert point_for("lower", text) is None  # code has no word for a dot
+    assert point_for("lower", text, ["Black dot on the screen"]) == {"about": "flaw", "says": ["Black dot on the screen"]}
+    assert point_for("more", "iPhone 13. Great condition. Black dot on the screen.", ["Black dot on the screen"]) is None
+
+
+@pytest.mark.parametrize("message, said", [
+    ("Would you take £185, given the black dot on the screen?", True),
+    ("Would you take £185 given the black dot?", True),  # most of its words
+    ("Would you take £185 given the dot?", False),  # one word of three isn't saying it
+    ("Would you take £185?", False),
+    ("Would you take £185 given the black screen?", False),  # its words in another order say something else
+    ("Would you take £185 as the screen is black?", False),
+])
+def test_a_flaw_code_has_no_word_for_is_said_with_most_of_its_words(message, said):
+    assert says_point(message, {"about": "flaw", "says": ["Black dot on the screen"]}) is said
+
+
+def test_the_condition_check_holds_a_message_to_a_flaw_only_ai_found():
+    text = "iPhone 13. Black dot on the screen, doesn't affect use."
+    point = point_for("lower", text, ["Black dot on the screen"])
+    assert check_condition_talk("Would you take £185, given the black dot on the screen?", text, point, True) == []
+    assert check_condition_talk("Would you take £185?", text, point, True) == \
+        ['the message leaves out what the listing says: "Black dot on the screen"']
+    assert check_condition_talk("Does it have a black dot on the screen? Would you take £185?", text, point, True,
+                                offer=18500) == ['the message asks about "Black dot on the screen" instead of saying it']
+
+
+@pytest.mark.parametrize("message, problems", [
+    ("Hi mate, would you take £170 given the black dot on the screen? Can collect today.", []),
+    ("Hi mate, would you take £170 given the black dot on the screen and the stiff hinge?",
+     ["the message gives a reason the listing doesn't: stiff, hinge"]),
+    ("Would you take £170 given the black dot and the screen burn?",
+     ["the message gives a reason the listing doesn't: burn"]),
+    ("Would you take £170 as I can collect today?", []),  # a reason about you, not the item
+    ("I can pay £220. I don't mind the black dot on the screen as long as everything works.", []),
+])
+def test_a_reason_about_the_item_uses_the_listings_words(message, problems):
+    assert check_reasons(message, "iPhone 13. Black dot on the screen, doesn't affect use. Battery 88%.") == problems

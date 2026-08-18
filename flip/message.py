@@ -5,6 +5,7 @@
     .venv/bin/python -m flip.message "iPhone 13 128GB" --asking 220 --description "Broken back" --mention yes
     .venv/bin/python -m flip.message "PS5 Slim disc" --asking 300 --offer more --mode local
     .venv/bin/python -m flip.message "iPhone 13 128GB" --asking 220 --longer
+    .venv/bin/python -m flip.message "iPhone 13 128GB" --asking 220 --description "Black dot on the screen" --writer ai
 
 Your past messages live in testset/private/messages.csv (testset/messages.example.csv
 shows the columns). --learn reads them into private/chroma; both stay on this Mac.
@@ -18,7 +19,8 @@ from flip.ai import ApiModel, LocalModel
 from flip.attempts import MODES
 from flip.audit import AuditLog
 from flip.draft import load_env
-from flip.message_drafter import MESSAGE_TOKENS, draft_message
+from flip.message_drafter import MESSAGE_TOKENS, WRITERS, draft_message
+from flip.reader import read_listing_with_ai
 from flip.money import OFFER_KINDS
 from flip.retrieval import MessageIndex
 from flip.style import describe, load_messages, style_card
@@ -42,6 +44,8 @@ def main():
                         help="aim for about twice your usual length, 30 to 70 words (three quarters of the aim passes)")
     parser.add_argument("--previous", help="the draft to make longer, as it was drafted (implies --longer)")
     parser.add_argument("--discount", type=float, default=15, help="percent under the asking price (default 15)")
+    parser.add_argument("--writer", choices=WRITERS, default="auto",
+                        help="who writes: your past messages decide (auto, the default), template (no AI) or ai")
     parser.add_argument("--mode", choices=list(MODES), default="auto")
     parser.add_argument("--messages", default=str(MESSAGES), help="your past messages (CSV)")
     parser.add_argument("--learn", action="store_true", help="store your past messages for search, then stop")
@@ -62,17 +66,28 @@ def main():
     listing = {"id": "cli", "title": args.title, "description": args.description, "asking_price": args.asking,
                "marketplace": args.marketplace}
     api = ApiModel() if os.environ.get("ANTHROPIC_API_KEY") else None
+    local, log = LocalModel(max_tokens=MESSAGE_TOKENS), AuditLog()
+    reading = read_listing_with_ai(listing, local, api, args.mode, log)
     mention = {"yes": True, "no": False}.get(args.mention)
     longer = args.longer or bool(args.previous)
-    result = draft_message(listing, card, index, LocalModel(max_tokens=MESSAGE_TOKENS), api, args.mode, AuditLog(),
-                           args.discount,
+    result = draft_message(listing, card, index, local, api, args.mode, log, args.discount,
                            kind=args.offer, mention=mention, length="longer" if longer else "usual",
-                           previous=args.previous)
+                           previous=args.previous, reading=reading, writer=args.writer)
+
+    tried = " then ".join(f"{a['model']} ({'passed' if not a['problems'] else 'failed: ' + ' | '.join(a['problems'])})"
+                          for a in reading["attempts"])
+    print(f"\nlisting read by {reading['read_by']}" + (f": {tried}" if tried else "")
+          + "".join(f"\n  ! {line}" for line in reading["reasons"]))
+    print(f"  flaws: {' / '.join(reading['flaws']) or 'none'}; pickup: {reading['pickup'] or 'not said'}"
+          f"; no offers: {reading['no_offers'] or 'not said'}")
 
     print(f"\n{result['status'].upper()}  {result['kind']} offer {result['offer'] // 100:,} pounds"
           f"  (examples: {', '.join(result['examples']) or 'none yet'})")
     if result["answer"]:
         print(f"  {result['answer']['message']}")
+        print(f"  (written by {result['writer']})")
+    if result["note"]:
+        print(f"  note: {result['note']}")
     if result["words"]:
         written = f"{len(result['answer']['message'].split())} words, " if result["answer"] else ""
         print(f"  longer: {written}aiming for {result['words']}"

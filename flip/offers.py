@@ -52,6 +52,29 @@ WORKS_FOR = re.compile(r"\bwork(?:s|ing)? (?:for|with) (?:you|me|us)\b", re.IGNO
 LISTING_PARTS = re.compile(r"[,.;!?\n()]|\s[-–—]\s|\b(?:but|which|though|although|otherwise|however|hence)\b",
                            re.IGNORECASE)
 MAX_QUOTE = 8  # words of the seller's to show: enough to recognise, short enough to read
+# words that don't say which flaw it is: "a bit of", "on the"
+SMALL_WORDS = {"a", "an", "the", "on", "in", "of", "to", "at", "it", "is", "its", "has", "have", "with", "and",
+               "from", "bit", "some", "slight", "slightly", "small", "little", "very", "quite", "few", "s"}
+# where a message gives its reason about the item: "given the dent", "as it's boxed", "I don't mind the scratch"
+REASON_SAID = re.compile(r"\b(?:given|because|since|considering|seeing as|due to|despite|taking into account|"
+                         r"in light of|bearing in mind|allowing for|to allow for|to account for|to reflect|"
+                         r"as(?= (?:the|it|its|it's|there|they|they're)\b)|(?:don'?t|do not) mind)\s+(?P<reason>[^?]*)",
+                         re.IGNORECASE)
+# where the reason ends: a sentence, an emoji, "so I can pay...", "as long as...", a new question
+REASON_END = re.compile(r"[.!?;\n]|[\U0001F300-\U0001FAFF☀-➿]|,?\s+so\b|\bas long as\b|\bwhich\b"
+                        r"|,\s*(?=(?:and |but )?(?:i|can|cash|let|thanks|happy)\b)"
+                        r"|\s(?=(?:Does|Is|Are|Can|Could|Would|Will|What|How|Any|Let|Thanks|Cheers|Happy)\b)")
+# words a reason may use whatever the listing says
+REASON_FILLER = SMALL_WORDS | {"it", "its", "s", "is", "are", "be", "been", "in", "condition", "listing", "listed",
+                               "said", "says", "mentioned", "described", "description", "you", "your", "item", "this",
+                               "that", "there", "which", "why", "so", "offer", "offering", "price", "asking", "under",
+                               "below", "less", "lower", "everything", "still", "all", "as", "t", "don", "doesn",
+                               "isn", "know", "see", "noticed", "notice", "noting", "account", "into", "taking",
+                               "allow", "for", "reflect", "photos", "pics", "pictures", "one", "being", "got",
+                               "they", "re", "them", "also", "too", "though", "but", "or", "just", "really", "then",
+                               "sold", "already", "mentions", "great", "hear", "fine", "by", "me", "state", "phone",
+                               "console", "device", "handset", "unit", "product", "thing", "works", "working", "ok",
+                               "okay", "happy", "glad", "good"}
 ASK = {"lower": "Mention it as the reason for your offer?",
        "asking": "Say you don't mind it?",
        "more": "Give that as the reason you're paying more?"}
@@ -115,11 +138,14 @@ def read_listing(text):
     return found
 
 
-def point_for(kind, text):
+def point_for(kind, text, flaws=None):
     """What's worth saying with this kind of offer, read from the listing
     (title and description), or None: {"about": "flaw" or "condition",
-    "says": up to two parts of the listing, in the seller's words}."""
+    "says": up to two parts of the listing, in the seller's words}. flaws:
+    the listing's flaws as flip.reader read them, in place of code's own."""
     read = read_listing(text)
+    if flaws is not None:
+        read["flaws"] = list(flaws)
     if read["flaws"] and (kind == "asking" or (kind == "lower" and not read["priced_in"])):
         about, says = "flaw", read["flaws"]
     elif kind == "more" and read["good"] and not read["flaws"]:
@@ -159,9 +185,56 @@ def said_in(message, offer=None):
 
 def says_point(text, point):
     """Whether a text says the point, in the listing's words or a general word
-    for them ("the damage" for "broken back")."""
+    for them ("the damage" for "broken back"). A flaw code has no word for
+    ("black dot on the screen", read by flip.reader) is said when most of its
+    words are: "the black dot"."""
     point_kinds = condition_said(". ".join(point["says"]))
-    return any(backed(kind, point_kinds) for kind in condition_said(text))
+    if any(backed(kind, point_kinds) for kind in condition_said(text)):
+        return True
+    return any(not condition_said(part) and mostly_said(part, text) for part in point["says"])
+
+
+def key_words(text):
+    """The words that carry a phrase's meaning, cut to 5 letters so "drifts"
+    and "drift", "crackles" and "crackling" match."""
+    return {w[:5] for w in words(text) if w not in SMALL_WORDS and not w.isdigit()}
+
+
+def key_sequence(text):
+    """A text's key words in order (key_words, kept as a list)."""
+    return [w[:5] for w in words(text) if w not in SMALL_WORDS and not w.isdigit()]
+
+
+def mostly_said(part, text):
+    """A part is said when two of its key words that sit next to each other
+    in it sit next to each other in the text too ("the black dot" says "Black
+    dot on the screen", "the black screen" doesn't), or, for a part of one
+    key word, when that word is there."""
+    keys, said = key_sequence(part), key_sequence(text)
+    if len(keys) == 1:
+        return keys[0] in said
+    pairs = set(zip(said, said[1:]))
+    return any(pair in pairs for pair in zip(keys, keys[1:]))
+
+
+def check_reasons(message, listing_text):
+    """The reason a message gives about the item ("given the stiff hinge",
+    "as it's in excellent condition", "I don't mind the dent") uses only the
+    listing's words, so the AI can't add a flaw code has no word for. Words
+    code knows are check_condition_talk's, and reasons about you ("as I can
+    collect today") are the other checks' business."""
+    listed = {w[:5] for w in words(listing_text)}
+    unbacked = []
+    for m in REASON_SAID.finditer(re.sub(r"[’‘ʼ]", "'", message)):
+        clause = REASON_END.split(m.group("reason"))[0]
+        if re.match(r"\s*(?:i|i'?m|i'?d|i'?ll|we|my)\b", clause, re.IGNORECASE):
+            continue
+        # words code knows ("mint", "scratched") are check_condition_talk's: reported once, there
+        unbacked += [w for w in words(clause) if w not in REASON_FILLER and not w.isdigit() and w[:5] not in listed
+                     and not condition_said(w)]
+    if unbacked:
+        return [f"the message gives a reason the listing doesn't: {', '.join(dict.fromkeys(unbacked))}"]
+    return []
 
 
 def backed(kind, listed):
@@ -215,4 +288,4 @@ def check_condition_talk(message, listing_text, point, mention, kind="lower", of
     unbacked = sorted(unbacked)
     if unbacked:
         problems.append(f"the message says things about the condition the listing doesn't: {', '.join(unbacked)}")
-    return problems
+    return problems + check_reasons(message, listing_text)

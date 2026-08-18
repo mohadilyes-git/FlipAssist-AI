@@ -4,7 +4,8 @@ one good and many bad, each bad one failing for the right reason."""
 import pytest
 
 from flip.catalogue import fill_from_catalogue, load_catalogue, load_conditions
-from flip.checks import check_listing_answer, check_message, numbers_in, promises_in, sources_text
+from flip.checks import (check_listing_answer, check_message, check_no_unasked_promises, has_fault, numbers_in,
+                         offer_asked, promised_in, promises_in, sources_text)
 
 CATALOGUE = load_catalogue()
 CONDITIONS = load_conditions()
@@ -615,3 +616,62 @@ def test_a_longer_message_needs_its_words():
     assert check_message(short, 17000, LISTING, asking=20000, min_words=23) == \
         ["the message is 6 words, but a longer one needs at least 23"]
     assert check_message(short, 17000, LISTING, asking=20000) == []
+
+
+def test_a_controller_that_drifts_is_a_fault_like_one_that_drifted():
+    assert has_fault("Left joycon drifts") and has_fault("drifting") and not has_fault("no drift")
+
+
+@pytest.mark.parametrize("message, allowed, problems", [
+    ("Hi, I can pay £190. Let me know and I can arrange collection quickly.", set(),
+     ["the message promises collecting, which your own messages don't"]),
+    ("Hi, would you take £185 cash?", {"collecting"}, ["the message promises cash, which your own messages don't"]),
+    ("Hi mate, would you take £185 cash? Can collect today.", {"collecting", "cash"}, []),
+    ("Hi, would you take £185? Could I collect today?", set(), []),  # asking isn't promising
+    ("Hi, would you take £185? Happy to pay for postage.", {"cash"},
+     ["the message promises postage, which your own messages don't"]),
+    ("Hi, saw your post. Would you take £185?", set(), []),  # the listing, not posting it
+])
+def test_a_message_promises_how_youll_buy_only_the_way_your_messages_do(message, allowed, problems):
+    assert check_no_unasked_promises(message, allowed) == problems
+
+
+@pytest.mark.parametrize("message, promised", [
+    ("Hi, would you take £170? I can arrange collection quickly, does that work?", {"collecting"}),  # a tag question
+    ("Hi, would you take £170? If that works I can collect today and pay cash.", {"collecting", "cash"}),
+    ("Hi, would you take 170 cash on collection?", {"collecting", "cash"}),  # the offer's own sentence, no £
+    ("Hi, would you take £170? I'll come and get it tonight.", {"collecting"}),
+    ("Hi, would you take £170? Happy to cover shipping.", {"postage"}),
+    ("Can pick it up today.", {"collecting"}),
+    ("Can pop round tonight.", {"collecting"}),
+    ("Hi, would you take £170 for the whole collection?", set()),  # a collection is a thing, not collecting
+    ("Hi, would you take £170 for your Pokemon card collection?", set()),
+    ("Hi, would you take £170, or is it collection only?", set()),
+    ("I'm interested in your Zelda Collector's Edition. Would you take £50?", set()),
+    ("Hi, would you take £170? Could I collect today?", set()),  # asking, not promising
+    ("Can't collect sorry, could you post it?", set()),
+    ("Saw your post, would you take £170?", set()),
+])
+def test_what_a_message_promises_about_how_youll_buy(message, promised):
+    assert promised_in(message) == promised
+
+
+def test_not_for_parts_isnt_a_fault():
+    assert not has_fault("Fully working, not spares or repairs.") and not has_fault("Not for parts.")
+    assert has_fault("Spares or repairs.")
+
+
+def test_the_asking_price_cant_be_misquoted_and_a_lower_offer_cant_offer_more():
+    sources = "iPhone 13. Good condition."
+    assert check_message("Hi mate, I know you're asking £170 but would you take £170 cash?", 17000, sources, 20000) \
+        == ["the message gives the asking price as £170.00, but it's £200.00"]
+    assert check_message("Hiya, would you take £170? If not I can pay the full asking price", 17000, sources, 20000) \
+        == ['a lower offer can\'t offer more as well: "If not I can pay the full asking price"']
+    assert check_message("Hiya, would you take £170? Could go a bit higher if needed", 17000, sources, 20000)
+    assert check_message("Hiya, would you take £170? I can't go higher than that", 17000, sources, 20000) == []
+
+
+@pytest.mark.parametrize("message", ["Hi mate, would you take £210?😊", "Hi mate, would you take £210 x",
+                                     "Hi mate, would you take £210..."])
+def test_an_offer_is_asked_whatever_comes_after_it(message):
+    assert offer_asked(message, 21000)

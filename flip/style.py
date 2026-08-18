@@ -5,12 +5,17 @@ no AI:
    open with, how long they are, emojis, and what you usually mention.
 2. Your old prices hidden as [OFFER], so an example shows how you word an
    offer without handing the AI a number to copy.
+3. Your phrasebook: the opener, offer and closing sentences you use again and
+   again, which flip.writer turns into a whole message with no AI.
 """
 
 import csv
 import re
 import statistics
 from collections import Counter
+
+from flip.catalogue import words
+from flip.checks import promised_in
 
 EMOJI = re.compile("[\U0001F300-\U0001FAFF☀-➿]")
 GREETING_WORDS = {"hi", "hiya", "hello", "hey", "alright", "morning", "afternoon", "evening", "yo"}
@@ -19,9 +24,17 @@ MENTIONS = {"collecting": r"\bcollect(?:ion|ing)?\b", "cash": r"\bcash\b", "toda
             "condition": r"\b(?:condition|scratch\w*|crack\w*|dent(?:s|ed)?|scuff\w*|chip(?:s|ped)?|marks?|broken|"
                          r"damage\w*|fault\w*|flaw\w*|wear|mint)\b"}
 SHARE = 0.4  # a habit is something at least 40% of your messages do
-OLD_PRICE = re.compile(r"£\s?\d[\d,]*(?:\.\d{2})?"
-                       r"|\b\d[\d,]*(?:\.\d{2})?\s?(quid|pounds)\b"
-                       r"|\b(take|do|accept|consider|offer|pay|stretch to|go to|let it go for)\s+\d[\d,]*(?:\.\d{2})?\b",
+HABIT = 2  # a sentence in at least 2 of your messages is one you'd write again
+SENTENCES = re.compile(r"(?<=[.!?])\s+")
+# one whole emoji, its skin tone and joins included: "👍🏽" is one, and a lone "🏽" is none
+WHOLE_EMOJI = re.compile("[\U0001F300-\U0001F3FA\U0001F400-\U0001FAFF☀-➿]"
+                         "(?:[\U0001F3FB-\U0001F3FF]|\ufe0f|\u200d[\U0001F300-\U0001FAFF☀-➿])*")
+# title words that don't name the item
+TITLE_FILLER = {"with", "and", "for", "the", "of", "in", "on", "to", "or", "plus", "new", "used"}
+AMOUNT = r"(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{2})?"  # a comma only between thousands: "£185, cash" keeps its comma
+OLD_PRICE = re.compile(rf"£\s?{AMOUNT}"
+                       rf"|\b{AMOUNT}\s?(quid|pounds)\b"
+                       rf"|\b(take|do|accept|consider|offer|pay|stretch to|go to|let it go for)\s+{AMOUNT}\b",
                        re.IGNORECASE)
 
 
@@ -62,7 +75,37 @@ def style_card(messages):
     greeting, times = Counter(opening(t) for t in texts).most_common(1)[0]
     if greeting and times / len(texts) >= SHARE:
         card["greeting"] = greeting
+    card["phrases"] = phrasebook([m for m in messages if m.get("my_message")])
+    card["promises"] = sorted(set().union(*(promised_in(t) for t in texts)))
     return card
+
+
+def phrasebook(messages):
+    """The sentences you write around an offer, with old prices hidden: your
+    opener ("Hi mate, is this still available?"), how you word the offer
+    ("Would you take £[OFFER] cash?") and your closing ("Can collect today."),
+    each the one you use most if it's in at least HABIT messages, else None
+    ("" when that's nothing: most of your messages start with the offer).
+    Plus the emoji you use most, or "". Only messages with one price count,
+    so the price in a habit is always the offer, and a sentence that names
+    its own item ("is the iPhone still available?") is never a habit."""
+    openers, offers, closings, emoji = Counter(), Counter(), Counter(), Counter()
+    for m in messages:
+        if len(OLD_PRICE.findall(m["my_message"])) != 1:
+            continue
+        text = without_prices(m["my_message"])
+        emoji.update(WHOLE_EMOJI.findall(text))
+        item = {w for w in words(m.get("listing_title") or "") if w not in TITLE_FILLER}
+        names_item = lambda sentence: bool(item & set(words(sentence)))
+        sentences = [s.strip() for s in SENTENCES.split(text.strip()) if s.strip()]
+        at = next(i for i, s in enumerate(sentences) if "[OFFER]" in s)
+        opener, offer, closing = " ".join(sentences[:at]), sentences[at], " ".join(sentences[at + 1:])
+        for counts, sentence in ((openers, opener), (offers, offer), (closings, closing)):
+            if not names_item(sentence):
+                counts[sentence] += 1
+    habit = lambda counts: next((text for text, n in counts.most_common() if n >= HABIT), None)
+    return {"opener": habit(openers), "offer": habit(offers), "closing": habit(closings),
+            "emoji": emoji.most_common(1)[0][0] if emoji else ""}
 
 
 def describe(card, words=None):
