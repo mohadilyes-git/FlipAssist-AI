@@ -29,6 +29,9 @@ SENTENCES = re.compile(r"(?<=[.!?])\s+")
 # one whole emoji, its skin tone and joins included: "👍🏽" is one, and a lone "🏽" is none
 WHOLE_EMOJI = re.compile("[\U0001F300-\U0001F3FA\U0001F400-\U0001FAFF☀-➿]"
                          "(?:[\U0001F3FB-\U0001F3FF]|\ufe0f|\u200d[\U0001F300-\U0001FAFF☀-➿])*")
+# the asking price said back, which isn't an offer: "still available at £220?", "you're asking £220"
+ASKING_SAID = re.compile(r"\b(?:available (?:at|for)|asking|listed (?:at|for)|price (?:is|of)|priced at)\s+£",
+                         re.IGNORECASE)
 # title words that don't name the item
 TITLE_FILLER = {"with", "and", "for", "the", "of", "in", "on", "to", "or", "plus", "new", "used"}
 AMOUNT = r"(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{2})?"  # a comma only between thousands: "£185, cash" keeps its comma
@@ -91,8 +94,8 @@ def phrasebook(messages):
     its own item ("is the iPhone still available?") is never a habit."""
     openers, offers, closings, emoji = Counter(), Counter(), Counter(), Counter()
     for m in messages:
-        if len(OLD_PRICE.findall(m["my_message"])) != 1:
-            continue
+        if len(OLD_PRICE.findall(m["my_message"])) != 1 or ASKING_SAID.search(m["my_message"]):
+            continue  # one price, the offer: not "still available at £220?" or "you're asking £220"
         text = without_prices(m["my_message"])
         emoji.update(WHOLE_EMOJI.findall(text))
         item = {w for w in words(m.get("listing_title") or "") if w not in TITLE_FILLER}

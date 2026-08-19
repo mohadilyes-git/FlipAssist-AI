@@ -55,7 +55,7 @@ def answered(text, flaws=None):
         found.add("condition")
     for pattern, answers in ALSO_ANSWERS:
         for m in pattern.finditer(text.lower()):
-            sentence = re.split(r"[.!?;\n]", text.lower()[:m.start()])[-1]
+            sentence = re.split(r"[.!?;,\n]", text.lower()[:m.start()])[-1]  # its own clause
             if not NEGATED_BEFORE.search(sentence):  # "doesn't come with all the accessories" answers nothing
                 found |= answers
     return found

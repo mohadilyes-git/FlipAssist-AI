@@ -71,3 +71,7 @@ def test_a_flaw_only_ai_found_answers_the_marks_question():
 def test_not_all_the_accessories_answers_nothing():
     assert "Does it come with a charger?" in open_questions(
         "iPhone 13 128GB. Good condition. Doesn't come with all the accessories.", "phones")
+
+
+def test_a_no_in_another_clause_doesnt_cancel_phone_only():
+    assert "Does it come with a charger?" not in open_questions("iPhone 13 128GB. No box, phone only.", "phones")

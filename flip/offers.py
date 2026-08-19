@@ -18,8 +18,9 @@ must say the point, not ask it. Asking about the condition is otherwise fine
 
 import re
 
-from flip.catalogue import words
-from flip.checks import LEVELS, MARKS, NEGATIONS, NEW_SEALED, clauses, has_fault, prices_in, promises_in
+from flip.catalogue import contains, words
+from flip.checks import (LEVELS, MARKS, NEGATIONS, NEW_SEALED, PROBLEM, clauses, has_fault, prices_in,
+                         promises_in, stated_parts)
 
 # the seller says the price already allows for the flaw: a lower offer mustn't use it again
 PRICED_IN = re.compile(r"\b(?:hence (?:the |why )?(?:the |low |cheap )?price|priced accordingly|priced to reflect|"
@@ -58,7 +59,8 @@ SMALL_WORDS = {"a", "an", "the", "on", "in", "of", "to", "at", "it", "is", "its"
 # where a message gives its reason about the item: "given the dent", "as it's boxed", "I don't mind the scratch"
 REASON_SAID = re.compile(r"\b(?:given|because|since|considering|seeing as|due to|despite|taking into account|"
                          r"in light of|bearing in mind|allowing for|to allow for|to account for|to reflect|"
-                         r"as(?= (?:the|it|its|it's|there|they|they're)\b)|(?:don'?t|do not) mind)\s+(?P<reason>[^?]*)",
+                         r"as(?= (?:the|it|its|it's|there|they|they're)\b)|(?:what )?with(?= the\b)|(?:don'?t|do not) mind)"
+                         r"\s+(?P<reason>[^?]*)",
                          re.IGNORECASE)
 # where the reason ends: a sentence, an emoji, "so I can pay...", "as long as...", a new question
 REASON_END = re.compile(r"[.!?;\n]|[\U0001F300-\U0001FAFF☀-➿]|,?\s+so\b|\bas long as\b|\bwhich\b"
@@ -218,23 +220,40 @@ def mostly_said(part, text):
 
 
 def check_reasons(message, listing_text):
-    """The reason a message gives about the item ("given the stiff hinge",
-    "as it's in excellent condition", "I don't mind the dent") uses only the
-    listing's words, so the AI can't add a flaw code has no word for. Words
-    code knows are check_condition_talk's, and reasons about you ("as I can
-    collect today") are the other checks' business."""
+    """What a message says about the item uses only the listing's words for
+    what's wrong with it: "given the stiff hinge" or "Shame about the stiff
+    hinge." fails on a listing that doesn't say "stiff". Only words that say
+    something's wrong count (flip.checks.PROBLEM), so a reason about you or
+    the sale ("as it's cash", "because it's over my budget") is fine, and
+    questions are fine. Words code knows ("scratched") are
+    check_condition_talk's, reported there. A message also never copies the
+    seller's own story ("I dropped it and cracked the back")."""
     listed = {w[:5] for w in words(listing_text)}
-    unbacked = []
-    for m in REASON_SAID.finditer(re.sub(r"[’‘ʼ]", "'", message)):
-        clause = REASON_END.split(m.group("reason"))[0]
-        if re.match(r"\s*(?:i|i'?m|i'?d|i'?ll|we|my)\b", clause, re.IGNORECASE):
+    message = re.sub(r"[’‘ʼ]", "'", message)
+    said = stated_parts(message) + [m.group("reason") for m in REASON_SAID.finditer(message)]
+    unbacked = [m.group() for part in said for m in PROBLEM.finditer(part)
+                if not condition_said(m.group()) and not {w[:5] for w in words(m.group())} <= listed
+                and not re.search(r"\b(?:no|not|never|without|zero)\s+(?:\w+\s+)?$", part[:m.start()], re.IGNORECASE)]
+    problems = [f"the message says what's wrong with it in words the listing doesn't: "
+                f"{', '.join(dict.fromkeys(w.lower() for w in unbacked))}"] if unbacked else []
+    story = copied_story(message, listing_text)
+    if story:
+        problems.append(f"the message copies the seller's own story: \"{story}\"")
+    return problems
+
+
+def copied_story(message, listing_text, run=4):
+    """Words the seller wrote about themselves ("I dropped it and cracked the
+    back") that a message repeats, at least run words of it in a row."""
+    message_words = words(message)
+    for sentence in re.split(r"(?<=[.!?])\s+|\n+", listing_text):
+        if not re.search(r"\b(?:I|I'?ve|I'?m|[Mm]y|[Ww]e|[Oo]ur)\b", sentence):
             continue
-        # words code knows ("mint", "scratched") are check_condition_talk's: reported once, there
-        unbacked += [w for w in words(clause) if w not in REASON_FILLER and not w.isdigit() and w[:5] not in listed
-                     and not condition_said(w)]
-    if unbacked:
-        return [f"the message gives a reason the listing doesn't: {', '.join(dict.fromkeys(unbacked))}"]
-    return []
+        told = words(sentence)
+        for start in range(len(told) - run + 1):
+            if contains(message_words, told[start:start + run]):
+                return " ".join(told[start:start + run])
+    return ""
 
 
 def backed(kind, listed):

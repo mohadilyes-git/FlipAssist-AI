@@ -78,7 +78,7 @@ def test_no_offers_must_be_words_that_say_it(words):
     ("Buyer agrees to pay full asking price. Cracked back.", "Buyer agrees to pay full asking price", []),
     ("No box. Small dent on the corner.", "No box", []),
     ("Screen is perfect. Battery health 90%.", "Screen", []),  # one word code doesn't know
-    ("Faulty HDMI port, no picture.", "Faulty HDMI port, no picture", ["Faulty HDMI port"]),
+    ("Faulty HDMI port, no picture.", "Faulty HDMI port, no picture", ["Faulty HDMI port", "no picture"]),
 ])
 def test_only_what_says_something_is_wrong_in_its_sentence_is_a_flaw(text, quote, flaws):
     assert flaws_in(quote, f"iPhone 13. {text}") == flaws
@@ -200,4 +200,68 @@ def test_the_model_reads_only_the_title_and_description():
     ("PS5. Collection only, non-negotiable. Offers welcome.", ""),  # it takes offers after all
 ])
 def test_code_alone_reads_no_offers_only_when_the_listing_means_it(text, said):
+    assert code_reading(text)["no_offers"] == said
+
+
+# ── after the re-check of 18 Aug ────────────────────────────────────────────
+
+@pytest.mark.parametrize("text, quote, flaws", [
+    ("Black dot on the screen doesn't affect use.", "Black dot on the screen", ["Black dot on the screen"]),  # no comma
+    ("No charger and the hinge is a bit stiff.", "the hinge is a bit stiff", ["the hinge is a bit stiff"]),
+    ("Battery health 88%, black dot on the screen", "Battery health 88%, black dot on the screen",
+     ["black dot on the screen"]),  # a fact before the flaw isn't a flaw
+    ("Unlocked to all networks. Comes with box and charger. Cracked back.",
+     "Unlocked to all networks. Comes with box and charger. Cracked back.", ["Cracked back"]),
+    ("Screen is perfect.", "Screen is perfect", []),
+    ("Camera works perfectly.", "Camera works perfectly", []),
+    ("Selling as no longer needed has a black dot on the screen.", "has a black dot on the screen",
+     ["has a black dot on the screen"]),
+    ("I dropped it and cracked the back.", "I dropped it and cracked the back", ["cracked the back"]),
+    ("Faulty HDMI port, no picture.", "Faulty HDMI port, no picture", ["Faulty HDMI port", "no picture"]),
+])
+def test_a_flaw_says_something_is_wrong_in_its_own_clause(text, quote, flaws):
+    assert flaws_in(quote, f"iPhone 13. {text}") == flaws
+
+
+@pytest.mark.parametrize("text, quote", [
+    ("There aren't any black spots on the screen.", "black spots on the screen"),
+    ("Screen is free from screen burn and ghost touch.", "screen burn"),
+    ("Haven't had any problems with the battery draining.", "battery draining"),
+    ("Screen burn: none", "Screen burn"),
+    ("Hinge isn't loose at all.", "Hinge isn't loose at all"),
+])
+def test_a_flaw_the_seller_denies_any_way_is_denied(text, quote):
+    assert flaws_in(quote, f"iPhone 13. {text}") == []
+
+
+def test_codes_own_flaws_are_judged_too_and_the_more_precise_words_win():
+    assert code_reading("iPhone. Screen is perfect, no screen burn or dead pixels.")["flaws"] == []
+    read = lambda quote, text: reading_from({"flaws": [quote], "pickup": "", "no_offers": ""}, text, "g")["flaws"]
+    assert read("cracked back", "iPhone. Good condition apart from cracked back.") == ["cracked back"]
+
+
+@pytest.mark.parametrize("quote", ["None", "N/A", "Collection in person", "Collection from mine", "Collection from work",
+                                   "Collection from 5pm", "Collection preferred", "Collection anytime",
+                                   "Collection only Monday-Friday", "Collection Mon-Fri", "Collection Sat/Sun only"])
+def test_a_day_a_time_or_a_word_isnt_a_place(quote):
+    assert place(quote) == ""
+
+
+def test_a_place_ends_where_the_time_starts_and_hyphens_count_both_ways():
+    assert place("Pick up from Leeds city centre after work") == "Leeds city centre"
+    assert in_listing("Stoke on Trent", "Collection from Stoke-on-Trent")
+    assert in_listing("Newcastle-upon-Tyne", "Collection from Newcastle upon Tyne")
+
+
+@pytest.mark.parametrize("text, said", [
+    ("PS5. Great condition. No offers, no time wasters please.", "No offers"),
+    ("PS5. Good condition. Price is firm. No time wasters.", "Price is firm"),
+    ("PS5. Not taking any offers.", "Not taking any offers"),
+    ("PS5. No swaps or offers.", "No swaps or offers"),
+    ("PS5. Price isn't negotiable.", "Price isn't negotiable"),
+    ("PS5. Price: firm.", "Price: firm"),
+    ("PS5. Offers: no.", "Offers: no"),
+    ("PS5. £200 or nearest offer.", ""),
+])
+def test_no_offers_in_more_of_the_ways_sellers_say_it(text, said):
     assert code_reading(text)["no_offers"] == said

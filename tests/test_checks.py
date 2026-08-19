@@ -675,3 +675,32 @@ def test_the_asking_price_cant_be_misquoted_and_a_lower_offer_cant_offer_more():
                                      "Hi mate, would you take £210..."])
 def test_an_offer_is_asked_whatever_comes_after_it(message):
     assert offer_asked(message, 21000)
+
+
+@pytest.mark.parametrize("message, problem", [
+    ("Hi mate, would you take £170? If not, I understand.", False),
+    ("Hi mate, best I can go up to is £170 cash if that works?", False),
+    ("Hi, would you take £170? Can pay up front today.", False),
+    ("Hi, would you take £170? Sorry, I wouldn't be able to go higher.", False),
+    ("Hiya, would you take £170? Could go a bit higher if needed", True),
+    ("Hiya, would you take £170? If not I can pay the full asking price", True),
+])
+def test_a_second_offer_is_caught_and_a_polite_closing_isnt(message, problem):
+    found = [p for p in check_message(message, 17000, "iPhone 13. Good.", 20000) if "offer more" in p]
+    assert bool(found) is problem
+
+
+@pytest.mark.parametrize("message, promised", [
+    ("I'd collect.", {"collecting"}), ("Happy to do collection.", {"collecting"}),
+    ("Collection works for me.", {"collecting"}), ("I'd be collecting.", {"collecting"}),
+    ("Happy to travel to you.", {"collecting"}), ("I don't mind collecting.", {"collecting"}),
+    ("Hiya, would you take £170 posted?", {"postage"}), ("Hiya, would you take £170 sent tracked?", {"postage"}),
+    ("Hiya, would you take £170? I can arrange collection quickly, does that work for you?", {"collecting"}),
+    ("Hi, would you take £170 or is it postage only?", set()),  # asks about the sale
+])
+def test_more_ways_of_promising_how_youll_buy(message, promised):
+    assert promised_in(message) == promised
+
+
+def test_no_power_for_spares_is_still_a_fault():
+    assert has_fault("No power, spares or repairs.") and has_fault("No sound, spares or repairs.")

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from flip.style import load_messages, phrasebook, style_card
-from flip.writer import as_statement, flaw_phrase, flaw_words, good_words, make_longer, merge_questions, repeats, \
+from flip.writer import as_statement, collecting_from, flaw_phrase, flaw_words, good_words, make_longer, merge_questions, repeats, \
     with_reason, write_offer
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -181,3 +181,34 @@ def test_making_a_draft_longer_never_breaks_the_greeting_or_asks_twice():
     again = make_longer(once, ["What's the battery health?", "Does it come with a charger?",
                                "Does it come with the box?"], 0, "iPhone 13")
     assert again == once
+
+
+@pytest.mark.parametrize("part, phrase", [
+    ("Face ID not working", "the Face ID not working"),  # "ID" isn't "I"
+    ("Faulty", "that it's faulty"),
+    ("Slightly scratched", "that it's slightly scratched"),
+    ("Cracked and scratched", "that it's cracked and scratched"),
+    ("iPhone 13 128GB cracked screen", "the cracked screen"),  # a flaw from the title, without the title
+    ("Selling for parts", "that it's sold for parts"),
+    ("Sold as spares", "that it's sold as spares"),
+    ("cracked the back", None),  # a deed: the AI words it
+])
+def test_more_of_the_sellers_wordings(part, phrase):
+    assert flaw_phrase(part) == phrase
+
+
+def test_the_place_goes_after_collect_it():
+    assert collecting_from("Can collect it today.", "Leeds LS6") == "Can collect it from Leeds LS6 today."
+
+
+def test_a_question_the_draft_already_asks_isnt_asked_again_in_a_merged_one():
+    longer = make_longer("Hi, would you take £170? Does it come with a charger? Thanks.",
+                         ["What's the battery health?", "Does it come with a charger?", "Does it come with the box?"],
+                         0, "iPhone 13")
+    assert longer.count("charger") == 1 and "Does it come with the box?" in longer
+
+
+def test_less_than_youre_asking_isnt_said_with_an_offer_over_asking():
+    card = style_card([{"my_message": "Hi mate, would you take £170? I know it's less than you're asking."},
+                       {"my_message": "Hi mate, would you take £90? I know it's less than you're asking."}])
+    assert write_offer(card, "more", 21000, item="PS5") == "Hi mate, I can pay £210."

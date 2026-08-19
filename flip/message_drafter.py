@@ -36,7 +36,7 @@ from flip.money import offer_for, to_pence
 from flip.offers import check_condition_talk, point_for, question_for, says_point
 from flip.prompts import MESSAGE_SCHEMA, message_prompt
 from flip.questions import check_no_answered_questions, open_questions
-from flip.reader import code_reading
+from flip.reader import code_reading, in_listing
 from flip.retrieval import listing_text
 from flip.style import describe
 from flip.writer import make_longer, repeats, write_offer
@@ -48,11 +48,19 @@ LONGEST = 70  # still well inside the 500-character limit
 # local model that runs on stops in seconds, not half a minute
 MESSAGE_TOKENS = 300
 WRITERS = ("auto", "template", "ai")
-# what a raw listing title adds that isn't the item: "*BARGAIN*", "FREE DELIVERY", "excellent condition boxed"
+# what a raw listing title adds that isn't the item: "*BARGAIN*", "FREE DELIVERY", "excellent condition boxed".
+# The title is cut where the first of these starts, so a name keeps every word of its own ("Pokemon Go Plus")
 TITLE_CUT = re.compile(r"\s+[-–|]\s+|[*|(\[,]")
-TITLE_NOISE = re.compile(r"(?:excellent|good|great|mint|perfect|immaculate|used|new|boxed|unboxed|condition|bargain|"
-                         r"cheap|free|delivery|postage|p&p|collection|collect|only|sale|rare|genuine|original|working|"
-                         r"fully|tested|wow|look|ono|ovno|quick|must|go|bnib|bnwt|sealed)", re.IGNORECASE)
+TITLE_NOISE = re.compile(r"\s*\b(?:brand new|like new|as new|never used|hardly used|barely used|used once|unused|"
+                         r"(?:in )?(?:excellent|good|great|mint|perfect|immaculate|fab)(?: condition)?|boxed|unboxed|"
+                         r"bnib|bnwt|sealed|bargain|cheap|free (?:delivery|postage|p&p)|collection only|must go|"
+                         r"quick sale|ono|ovno|rare|genuine|fully working|working|tested)\b.*$", re.IGNORECASE)
+LEADING_NOISE = re.compile(r"^(?:brand new|new|boxed|genuine|rare)\s+", re.IGNORECASE)
+MAX_NAME = 8  # words
+# where a message says it'll collect: "Can collect from Bradford today"
+COLLECT_FROM = re.compile(r"\b(?:collect|pick (?:it |them )?up|meet)\s+(?:it\s+|them\s+)?(?:from|in|at|near)\s+"
+                          r"((?:[A-Z][\w'-]*|[A-Z]{1,2}\d[A-Z\d]?(?:\s*\d[A-Z]{2})?)(?:\s+(?:[A-Z0-9][\w'-]*|city centre|"
+                          r"town centre|upon|on|under))*)")
 
 
 def longer_words(base):
@@ -67,8 +75,18 @@ def item_name(model_id, title):
     model = next((m for m in load_catalogue() if m["id"] == model_id), None)
     if model:
         return re.sub(r"\s*\(.*?\)", "", model["model"]).strip()
-    kept = [w for w in TITLE_CUT.split(title.strip())[0].split() if not TITLE_NOISE.fullmatch(w.strip("!.*"))]
-    return " ".join(kept[:5]) or "item"
+    name = TITLE_NOISE.sub("", LEADING_NOISE.sub("", TITLE_CUT.split(title.strip())[0])).strip()
+    return " ".join(name.split()[:MAX_NAME]) or "item"
+
+
+def picked(kind, asking, offer):
+    """The price you picked, if it fits the kind of offer: under asking for
+    lower, the asking price itself, or over it for more."""
+    if offer <= 0 or kind == "lower" and offer >= asking or kind == "more" and offer <= asking \
+            or kind == "asking" and offer != asking:
+        name = {"lower": "a lower offer", "asking": "an offer of the asking price", "more": "an offer over asking"}
+        raise ValueError(f"£{offer / 100:,.2f} isn't {name.get(kind, 'that kind of offer')} on a £{asking / 100:,.2f} listing")
+    return offer
 
 
 def habits(card, examples):
@@ -80,7 +98,7 @@ def habits(card, examples):
 
 def draft_message(listing, card=None, index=None, local=None, api=None, mode="auto", log=None,
                   discount_percent=15, leave_out=None, kind="lower", mention=None, length="usual", previous=None,
-                  reading=None, writer="auto"):
+                  reading=None, writer="auto", offer=None):
     """Draft one offer message. listing has a title, description, asking_price
     (pounds, as written) and marketplace. card is your style card
     (flip.style.style_card) and index a MessageIndex of your past messages;
@@ -91,7 +109,10 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     draft on screen to make longer, as the drafter wrote it; it's kept and
     added to, and it settles the mention the way it was drafted. reading: the
     listing as flip.reader read it; None reads it with code alone. writer:
-    "auto" (your past messages decide), "template" (no AI) or "ai"."""
+    "auto" (your past messages decide), "template" (no AI) or "ai". offer:
+    the price you picked (pence), say on a slider, in place of the one code
+    starts from; it must fit the kind: under asking for lower, the asking
+    price itself, or over it for more."""
     if length not in ("usual", "longer"):
         raise ValueError(f"not a length: {length!r} (usual or longer)")
     if writer not in WRITERS:
@@ -99,7 +120,7 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     card = card or {}
     previous = (previous or "").strip() if length == "longer" else ""
     asking = to_pence(listing["asking_price"])
-    offer = offer_for(kind, asking, discount_percent)
+    offer = picked(kind, asking, offer) if offer is not None else offer_for(kind, asking, discount_percent)
     title = listing.get("title") or ""
     sources = f"{title}. {listing.get('description') or ''}"
     reading = reading or code_reading(sources)
@@ -146,8 +167,12 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
             check_condition_talk(message, sources, point, mention, kind, offer)
         if isinstance(message, str):
             problems += check_no_answered_questions(message, sources) + check_no_unasked_promises(message, allowed)
-            if model and names_other_model(words(message), model, catalogue):
+            sentences = re.split(r"(?<=[.!?])\s+|\n+", message)
+            if model and any(names_other_model(words(sentence), model, catalogue) for sentence in sentences):
                 problems.append("the message names a different item from the listing's")
+            made_up = [m.group(1) for m in COLLECT_FROM.finditer(message) if not in_listing(m.group(1), sources)]
+            if made_up:
+                problems.append(f"the message says it'll collect from a place the listing doesn't: {', '.join(made_up)}")
         return problems
 
     if writer == "template" or writer == "auto" and (not card or repeats(card)):

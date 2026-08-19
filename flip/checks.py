@@ -133,8 +133,8 @@ FAULTS = re.compile(r"\b(?:not working|broken|drift|drifts|drifting|faulty|fault
                     r"won t (?:turn on|switch on|charge|connect|pair|boot)|doesn t (?:turn on|charge|connect|pair)|"
                     r"not charging|no sound|no power)\b")
 NOT_A_FAULT = re.compile(r"\b(?:no|not|never|without)\s+(?:been\s+)?(?:any\s+)?(?:\w+\s+)?"
-                         r"(?:broken|drift\w*|faults?|faulty|glitch\w*|dead pixels?|issues?|problems?|spares|repairs|"
-                         r"parts)\b")
+                         r"(?:broken|drift\w*|faults?|faulty|glitch\w*|dead pixels?|issues?|problems?)\b"
+                         r"|\bnot\s+(?:for\s+)?(?:spares|repairs|parts)\b")
 FOR_PARTS = "7000"
 PERCENT = re.compile(r"(\d+(?:\.\d+)?)\s?(?:%|per ?cent\b)", re.IGNORECASE)
 # a battery health written without a % sign: "battery health 86"
@@ -229,6 +229,22 @@ STORY = re.compile(
     r"|\bi (?:really )?need (?:it|one|this) for\b|\b(?:i m|i am|we re|we are) moving\b")
 # a message's sentences cut into clauses: "Would you take £170, AS the back is
 # cracked?" asks one thing and states another
+# words that say something is wrong with an item, whatever the words around them: a flaw the AI reads must
+# have one (flip.reader), and a message may use one only if the listing does (flip.offers.check_reasons)
+PROBLEM = re.compile(
+    r"\b(?:crack\w*|scratch\w*|scuff\w*|dent\w*|chip|chips|chipped|marks?|marked|broke|broken|smash\w*|shatter\w*|"
+    r"damage\w*|fault\w*|dead|burn|burns|burnt|burned|burn-in|dot|dots|spots?|lines?|pixels?|stiff|loose|wobbl\w*|"
+    r"rattl\w*|crackl\w*|buzz\w*|squeak\w*|drift\w*|drain\w*|laggy|lags|lagging|freez\w*|overheat\w*|"
+    r"glitch\w*|flicker\w*|ghost\w*|stuck|sticky|sticks|bent|warp\w*|torn|rip|ripped|stain\w*|faded|fading|"
+    r"yellow(?:ed|ing)|discolou?r\w*|worn|wear|tear|tears|peel\w*|missing|issues?|problems?|not working|"
+    r"doesn'?t (?:work|charge|turn|connect|hold|stay)|won'?t (?:work|charge|turn|connect|hold|stay)|"
+    r"not (?:charging|holding|turning|connecting|pairing)|needs? (?:replacing|a new|repair\w*|fixing)|"
+    r"replaced|replacement|repaired|spares|for parts|cosmetic|blemish\w*|imperfection\w*|cloudy|hazy|bleed\w*|"
+    r"bubbl\w*|weak|noisy|noise|smell\w*|locked|blacklisted|bad|poor|cracking|"
+    r"(?:isn'?t|is not|not) (?:perfect|great|good|the best|mint|working properly)|"
+    r"no (?:sound|power|picture|signal|display|image|wifi|charge|charging|service|audio|video|bluetooth))\b",
+    re.IGNORECASE)
+
 # how you'll buy: a message may promise it only the way your own messages do (check_no_unasked_promises).
 # Collecting is something you'll do ("can collect today", "come and get it"), not a word in a name
 # ("Collector's Edition", "your games collection")
@@ -241,24 +257,33 @@ PROMISES_ABOUT_YOU = {
         r"|on collection|arrange (?:a |the )?collection|collection (?:is|would be|today|tonight|tomorrow|whenever|asap)"
         r"|pick(?:ing)?\s+(?:it|them|this|these)\s+up|pick ?up\s+(?:today|tonight|tomorrow|whenever|asap|later|at|from)"
         r"|come\s+(?:and\s+)?(?:get|grab|collect)|grab\s+(?:it|them)|swing\s+by|(?:drop|nip|pop|come)\s+(?:by|over|round)"
-        r"|come to you)\b", re.IGNORECASE),
+        r"|come to you|travel to you|be there|i'?d (?:be )?collect\w*|be collecting|(?:do|does|doing) collection"
+        r"|collection (?:works|suits|is fine|is no problem|is easy|is ok)|collecting (?:is|works|would be)"
+        r"|on (?:pick ?up|pickup)|(?:mind|happy|fine|okay|ok|glad)\s+(?:with\s+)?(?:collecting|collection))\b",
+        re.IGNORECASE),
     "cash": re.compile(r"\bcash\b|\bpay in person\b", re.IGNORECASE),
     "postage": re.compile(r"\b(?:postage|post(?:ed)?\s+(?:it|them|out|to me)|posting it|ship(?:ping|ped)?|"
-                          r"deliver(?:y|ed)?|courier)\b", re.IGNORECASE)}
+                          r"deliver(?:y|ed)?|courier|posted|sen[dt] (?:it )?(?:tracked|recorded|signed)|"
+                          r"send it)\b", re.IGNORECASE)}
 # a question even without its question mark: "would you take £210 x"
 ASKS_YOU = re.compile(r"\b(?:would|could|will|can)\s+(?:you|u)\b", re.IGNORECASE)
 # a second, higher offer in words: "if not I can pay the full asking price", "could go a bit higher"
-SECOND_OFFER = re.compile(r"\b(?:(?:the |your )?full asking(?: price)?|pay (?:the |your )?asking(?: price)?|"
-                          r"(?:go|pay|offer|stretch|come up)\s+(?:a (?:bit|little) |slightly )?(?:higher|more|up)|"
-                          r"meet (?:you |me )?(?:in the )?middle|split the difference|"
-                          r"if not,? (?:i|i'?d|i'?ll|would|could|how about|what about)\b)", re.IGNORECASE)
+SECOND_OFFER = re.compile(
+    r"\b(?:(?:the |your )?full asking(?: price)?|pay (?:the |your )?asking(?: price)?"
+    r"|(?:go|pay|offer|stretch|come up)\s+(?:a (?:bit|little) |slightly )?(?:higher|more)\b(?! than)"
+    r"|meet (?:you |me )?(?:in the )?middle|split the difference"
+    r"|if not,? i(?:'d| could| can| would| will|'ll)?\s+(?:do|pay|go|offer|take|meet|stretch|split)"
+    r"|if not,? (?:would you (?:take|do|accept|consider)|how about|what about))\b", re.IGNORECASE)
 # "can't collect" isn't a promise
-NOT_PROMISED = re.compile(r"\b(?:can'?t|cannot|can not|won'?t|unable to|not|no|never|couldn'?t)\s+(?:\w+\s+){0,2}$",
-                          re.IGNORECASE)
+NOT_PROMISED = re.compile(r"\b(?:can'?t|cannot|can not|won'?t|wouldn'?t|shouldn'?t|unable to|not|no|never|"
+                          r"couldn'?t)\s+(?:\w+\s+){0,3}$", re.IGNORECASE)
 # a question tagged onto a promise doesn't make it a question: "I can collect today, does that work?"
 TAG_QUESTION = re.compile(r",?\s*(?:does that (?:work|suit(?: you)?|sound (?:ok|okay|good|alright))|"
                           r"is that (?:ok|okay|alright|fine|good)|if that'?s (?:ok|okay|alright|fine)|"
-                          r"would that (?:work|be (?:ok|okay|alright|fine))|ok|okay|alright|yeah)\s*\?$", re.IGNORECASE)
+                          r"would that (?:work|be (?:ok|okay|alright|fine))|ok|okay|alright|yeah)"
+                          r"(?: (?:for|with) you)?\s*\?$", re.IGNORECASE)
+# "would you take £170, or is it postage only?" asks about the sale, it doesn't promise
+ONLY_QUESTION = re.compile(r",?\s+or is (?:it|that)\b.*$", re.IGNORECASE)
 # what can come after a sentence's own end: an emoji, a kiss, "..."
 SIGN_OFF = re.compile(r"(?:\s*(?:[\U0001F300-\U0001FAFF☀-➿\U0001F3FB-\U0001F3FF\ufe0f\u200d]+|\bx{1,3}\b|\.{2,}|…))+\s*$",
                       re.IGNORECASE)
@@ -654,6 +679,7 @@ def promised_in(text):
         sentence = TAG_QUESTION.sub(".", SIGN_OFF.sub("", sentence))
         if sentence.endswith("?") and not prices_in(sentence):
             continue
+        sentence = ONLY_QUESTION.sub("", sentence)
         for habit, pattern in PROMISES_ABOUT_YOU.items():
             if any(not NOT_PROMISED.search(sentence[:m.start()]) for m in pattern.finditer(sentence)):
                 found.add(habit)

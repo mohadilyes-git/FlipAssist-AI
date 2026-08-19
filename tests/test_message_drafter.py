@@ -383,8 +383,8 @@ def test_words_the_writer_cant_say_go_to_the_ai():
     told = {**LISTING, "description": "I dropped it and cracked the back."}
     local = FakeModel("gemma3:4b", {"message": "Hi mate, would you take £170 given the cracked back? Can collect today."})
     result = draft_message(told, style_card(PAST), local=local, mention=True)
-    assert result["attempts"][0]["problems"] == [
-        "there's no plain wording for what the listing says: I dropped it and cracked the back"]
+    assert result["point"] == ["cracked the back"]  # the seller's story, cut to the flaw
+    assert result["attempts"][0]["problems"] == ["there's no plain wording for what the listing says: cracked the back"]
     assert (result["status"], result["writer"]) == ("ready", "gemma3:4b")
 
 
@@ -404,3 +404,29 @@ def test_an_unknown_item_is_named_without_the_sellers_selling_words():
     assert item_name(None, "Bose QC45 headphones *BARGAIN*") == "Bose QC45 headphones"
     assert item_name(None, "Nintendo Switch Lite turquoise FREE DELIVERY") == "Nintendo Switch Lite turquoise"
     assert item_name(None, "Dyson V11 Absolute excellent condition boxed") == "Dyson V11 Absolute"
+
+
+
+def test_the_price_you_picked_is_the_price_drafted_and_must_fit_its_kind():
+    result = draft_message(LISTING, local=FakeModel("gemma3:4b"), offer=15000)
+    assert (result["offer"], result["answer"]["message"]) == (15000, "Hi, would you take £150 for it? Thanks.")
+    for kind, offer in [("lower", 21000), ("more", 19000), ("asking", 19000)]:
+        with pytest.raises(ValueError):
+            draft_message(LISTING, kind=kind, offer=offer)
+
+
+def test_a_message_never_collects_from_a_place_the_listing_doesnt_give():
+    local = FakeModel("gemma3:4b", {"message": "Hi mate, would you take £170 cash? Can collect from Bradford today."})
+    result = ai_draft(LISTING, style_card(PAST), local=local)
+    assert "the message says it'll collect from a place the listing doesn't: Bradford" in result["attempts"][0]["problems"]
+
+
+def test_another_models_name_is_read_one_sentence_at_a_time():
+    ok = FakeModel("gemma3:4b", {"message": "Hi mate, would you take £170 cash for the iPhone 13? Plus I can collect today."})
+    assert ai_draft(LISTING, style_card(PAST), local=ok)["status"] == "ready"
+
+
+def test_the_asking_price_said_back_is_never_a_habit():
+    said_back = [{"my_message": "Hi mate, is this still available at £220? Any room on price?"},
+                 {"my_message": "Hi mate, is this still available at £150? What's your lowest?"}]
+    assert style_card(said_back)["phrases"]["offer"] is None

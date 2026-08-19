@@ -15,7 +15,7 @@ back"), it writes nothing and the AI gets its turn.
 
 import re
 
-from flip.checks import ASKS_YOU, SIGN_OFF, ends_asking
+from flip.checks import ASKS_YOU, PROBLEM, SIGN_OFF, ends_asking
 from flip.prompts import offer_words
 from flip.style import opening
 
@@ -36,9 +36,16 @@ VERB_INSIDE = re.compile(r"\b(?:is|are|was|were|has|have|doesn'?t|don'?t|won'?t|
 # "It's cracked", "There's a crack": the subject the sentence gets from the seller
 SUBJECT = re.compile(r"^(?:(it'?s|it is)|(it has|it'?s got|has got)|(there'?s|there is|there are))\s+", re.IGNORECASE)
 # a seller's own story ("I dropped it", "my son cracked it") isn't yours to say
-FIRST_PERSON = re.compile(r"\b(?:i|i'?ve|i'?m|i'?d|my|me|mine|we|we'?ve|our|us)\b", re.IGNORECASE)
-SPARES = re.compile(r"\b(?:spares|repairs|for parts)\b", re.IGNORECASE)
-NEGATED = re.compile(r"\b(?:not|no|never|isn'?t)\b", re.IGNORECASE)
+FIRST_PERSON = re.compile(r"\b(?:I|I'?ve|I'?m|I'?d|[Mm]y|[Mm]e|[Mm]ine|[Ww]e|[Ww]e'?ve|[Oo]ur|us)\b")
+SPARES = re.compile(r"\bfor parts\b|\bspares(?:\s*(?:or|and|/|&)\s*repairs?)?\b|\brepairs?\b", re.IGNORECASE)
+NEGATED_SPARES = re.compile(r"\b(?:not|no|never|isn'?t)\s+(?:sold\s+)?(?:as\s+|for\s+)?(?:spares|repairs|parts)\b",
+                            re.IGNORECASE)
+# adjectives on their own: "Faulty", "Slightly scratched", "Cracked and scratched", "Bent"
+JUST_SAYS = re.compile(r"^(?:(?:slightly|lightly|a bit|bit|very|quite|heavily|badly|really)\s+)?"
+                       r"(?:cracked|scratched|scuffed|dented|chipped|faulty|bent|broken|damaged|worn|marked|stained|"
+                       r"smashed|shattered|loose|stiff|dead|unlocked|locked)"
+                       r"(?:\s+(?:and|&)\s+(?:cracked|scratched|scuffed|dented|chipped|faulty|bent|broken|damaged|worn|"
+                       r"marked|stained))?$", re.IGNORECASE)
 NO_FAULT = re.compile(r"^no\s+(?:sound|power|picture|signal|display|image|wifi|charge|charging|service|audio|video)\b",
                       re.IGNORECASE)
 # good condition in a shape this can say: "as it's in excellent condition"
@@ -49,8 +56,10 @@ GOOD_CONDITION = re.compile(r"\b((?:very |really )?(?:good|great|excellent|mint|
                             r"lovely|immaculate|flawless|pristine)\b", re.IGNORECASE)
 GOOD_AS_IS = re.compile(r"^(?:barely|hardly) used$|^well looked after$|^not a (?:mark|scratch) on it$", re.IGNORECASE)
 # for an offer at or over asking, nothing that calls it low: "I know it's a bit cheeky"
-LOWBALL = re.compile(r"\b(?:cheeky|lowball|low ball|low offer|lowest|sorry|under (?:the |your )?asking|go lower|"
-                     r"wiggle|cheap|bit low|too low)\b", re.IGNORECASE)
+LOWBALL = re.compile(r"\b(?:cheeky|cheek|lowball|low ball|low offer|lowest|sorry|under (?:the |your )?asking|go lower|"
+                     r"wiggle|cheap|bit low|too low|less than (?:you'?re |your )?asking|(?:a )?bit under|"
+                     r"insult\w*|worth a (?:shot|try)|hope (?:that'?s|it'?s|this is) ok|i know it'?s (?:less|lower|under))\b",
+                     re.IGNORECASE)
 # what may follow the price in "I can pay £X ...": nothing else from a question makes sense there
 SAFE_TAIL = re.compile(r"^(?:\s*(?:cash(?: on collection| in hand)?|for (?:it|this|them|these)|on collection))?\s*$",
                        re.IGNORECASE)
@@ -84,8 +93,15 @@ def flaw_phrase(part):
     part = part.strip().rstrip(".!")
     if not part or FIRST_PERSON.search(part) or len(part.split()) > MAX_FLAW:
         return None
-    if SPARES.search(part):
-        return None if NEGATED.search(part) else "that it's sold as spares or repairs"
+    spares = SPARES.search(part)
+    if spares:  # in the seller's own words: "for parts", "spares or repairs"
+        return None if NEGATED_SPARES.search(part) else \
+            "that it's sold for parts" if "part" in spares.group().lower() else f"that it's sold as {spares.group().lower()}"
+    problem = PROBLEM.search(part)
+    if problem and re.search(r"\d", part[:problem.start()]):  # a flaw in the title: "iPhone 13 128GB cracked screen"
+        part = part[problem.start():]
+    if JUST_SAYS.match(part):
+        return f"that it's {lower_first(part)}"  # "that it's faulty", "that it's slightly scratched"
     subject = SUBJECT.match(part)
     if subject:
         rest = part[subject.end():]
@@ -100,6 +116,8 @@ def flaw_phrase(part):
         return f"that it {part}"
     if VERB_INSIDE.search(part):
         return f"that {part}" if ARTICLE.match(part) else f"that the {part}"
+    if re.match(r"\w+(?:ed|en|s)\s+(?:the|a|an|its|his|her)\b", part, re.IGNORECASE):
+        return None  # "cracked the back": a deed, not a flaw this can name; the AI words it
     if len(part.split()) == 1 and re.search(r"(?:ed|en)$", part):
         return f"that it's {part}"  # "cracked"
     return part if ARTICLE.match(part) else f"the {part}"
@@ -206,7 +224,9 @@ def collecting_from(closing, pickup):
     you'll collect."""
     if not pickup or not re.search(r"\bcollect\b", closing, re.IGNORECASE):
         return closing
-    return re.sub(r"\bcollect\b", f"collect from {pickup}", closing, count=1, flags=re.IGNORECASE)
+    # after "collect it" if it says so: "Can collect it from Leeds LS6 today."
+    return re.sub(r"\bcollect(?:\s+(?:it|them|this))?\b", lambda m: f"{m.group()} from {pickup}", closing, count=1,
+                  flags=re.IGNORECASE)
 
 
 def fit(opener, middle, closing, at_least, item, already=""):
@@ -287,5 +307,5 @@ def make_longer(previous, questions=(), at_least=0, item="item"):
         body = [first, *body[1:]]
     elif len(body) > 1:
         opener, body = body[0], body[1:]
-    new = [q for q in merge_questions(questions) if not asked_already(q, previous)]
+    new = merge_questions([q for q in questions if not asked_already(q, previous)])  # each one on its own first
     return fit(opener, [*body, *new], closing, at_least, item, already=previous)

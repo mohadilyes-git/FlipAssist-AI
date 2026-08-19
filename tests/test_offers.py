@@ -191,11 +191,24 @@ def test_the_condition_check_holds_a_message_to_a_flaw_only_ai_found():
 @pytest.mark.parametrize("message, problems", [
     ("Hi mate, would you take £170 given the black dot on the screen? Can collect today.", []),
     ("Hi mate, would you take £170 given the black dot on the screen and the stiff hinge?",
-     ["the message gives a reason the listing doesn't: stiff, hinge"]),
+     ["the message says what's wrong with it in words the listing doesn't: stiff"]),
     ("Would you take £170 given the black dot and the screen burn?",
-     ["the message gives a reason the listing doesn't: burn"]),
+     ["the message says what's wrong with it in words the listing doesn't: burn"]),
+    ("Hi, would you take £170 with the stiff hinge?",
+     ["the message says what's wrong with it in words the listing doesn't: stiff"]),
+    ("Hi, would you take £170 cash? Shame about the stiff hinge.",
+     ["the message says what's wrong with it in words the listing doesn't: stiff"]),
+    ("Hi mate, would you take £170 as it's cash?", []),  # a reason about the sale
+    ("Hi, would you take £170 because it's a bit over my budget?", []),
+    ("Hi mate, I can pay £220, the black dot is no problem.", []),
     ("Would you take £170 as I can collect today?", []),  # a reason about you, not the item
     ("I can pay £220. I don't mind the black dot on the screen as long as everything works.", []),
 ])
 def test_a_reason_about_the_item_uses_the_listings_words(message, problems):
     assert check_reasons(message, "iPhone 13. Black dot on the screen, doesn't affect use. Battery 88%.") == problems
+
+
+def test_a_message_never_copies_the_sellers_own_story():
+    assert check_reasons("Hi mate, would you take £185 given I dropped it and cracked the back?",
+                         "iPhone. I dropped it and cracked the back.") == \
+        ['the message copies the seller\'s own story: "i dropped it and"']
