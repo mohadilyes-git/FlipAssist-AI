@@ -3,3 +3,8 @@
 pytest==9.2.0
 anthropic==2.3.0
 chromadb==1.5.9
+# the API (python -m flip.api): FastAPI with uvicorn to serve it, httpx for its tests, python-multipart for photo uploads
+fastapi==0.143.1
+uvicorn==0.54.0
+httpx==0.28.1
+python-multipart==0.0.32
