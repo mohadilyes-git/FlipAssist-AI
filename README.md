@@ -2,7 +2,7 @@
 
 Drafts eBay listings and offer messages for a reseller. Plain code does everything it can. A small local AI model does only what code can't. A paid API model steps in only when the local answer fails a check, and a person approves every draft.
 
-> **Work in progress.** The plain-code half, its safety checks, the AI listing drafter and the message drafter are built and tested. Next: an API for the app, a catalogue agent and measured results.
+> **Work in progress.** The plain-code half, its safety checks, the AI listing drafter, the message drafter and the API are built and tested. Next: a catalogue agent and measured results on real items.
 
 ## What it does now
 
@@ -39,8 +39,8 @@ Drafts eBay listings and offer messages for a reseller. Plain code does everythi
     - More: asking plus 5%, rounded up to a tidy number and at least one step over.
   - **The listing is read by AI, held to the seller's own words by code.** Gemma reads the flaws, where to collect and whether the seller takes offers; Haiku gets one try when Gemma's reading fails a check. Code then:
     - keeps only quotes that are in the listing word for word (capitals, punctuation, apostrophes and hyphens aside), so a flaw can't be made up;
-    - judges each quote in the seller's own sentence. A flaw the seller denies ("black spots" from "*No* black spots on the screen") fails the reading. Praise ("works perfectly"), what's not wrong ("scratch free", "doesn't affect use"), the sale ("smoke free home") and asides ("see pics") aren't flaws;
-    - keeps every flaw code finds by itself: AI can add a flaw, never take one away, and a fragment ("Screen" of "Screen cracked") doesn't replace it;
+    - counts a quote as a flaw only if it says what's wrong in so many words ("crack", "dot", "stiff", "drifts", "not working"...) and the seller doesn't deny it in the same clause. "Black spots" from "*No* black spots on the screen", "there aren't any dots" and "screen burn: none" fail the reading. Facts ("battery health 90%"), praise ("screen is perfect") and asides ("see pics") aren't flaws, and a seller's own story is cut to the flaw ("I dropped it and cracked the back" becomes "cracked the back");
+    - keeps every flaw code finds by itself, judged the same way: AI can add a flaw, never take one away. The more precise words win ("cracked back" over "Good condition apart from cracked back");
     - takes "no offers" only in words that say it ("price is firm"), and never from a listing that takes offers ("open to offers", "offers over £400") or only limits them ("no offers under £250").
 
     With no model, or none that passes, code reads the listing alone. Sellers' words code has no list for ("black dot on the screen", "hinge is stiff") are then missed.
@@ -101,9 +101,49 @@ So code writes unless the reseller's messages vary. All three judges agreed on t
 
 Without the checks, Gemma claimed flaws on 2 clean listings and said "no offers" on 21 that never did. The reader needed Haiku once in 24 tries, for 0.005p in total.
 
+## The API
+
+What AlertFlip calls, from a Supabase function, so the key never sits inside the phone app (`flip/api.py`, FastAPI):
+
+```bash
+.venv/bin/uvicorn flip.api:app --port 8000    # then open http://127.0.0.1:8000/docs
+```
+
+| Endpoint | What it does |
+|---|---|
+| `GET /health` | Whether the local model is running and the keys are set (no key needed, none shown) |
+| `POST /messages/draft` | Reads the listing, then drafts the offer at code's starting price or the one picked on the app's slider (`offer`, which must fit the kind of offer). It returns the message, who wrote it, the "no offers" note, what was read, every attempt with its seconds and cost, and a draft id |
+| `POST /listings/draft` | The listing's text, your notes and up to 8 photos (form fields and file uploads) in, the eBay draft out |
+| `POST /drafts/{id}/approve` | What you actually sent or listed, so the results can count how often a draft was right as it was |
+| `GET /stats` | The cost meter: drafts, the share done on this machine, cost per 100 drafts, how often a draft was edited before sending |
+
+- **Who can call it.** It answers only on this machine (127.0.0.1) unless it's put online on purpose. Every endpoint but `/health` needs `FLIP_API_KEY` from `.env` in an `X-API-Key` header.
+- **It never sends or lists anything itself.** AlertFlip does that, after the reseller approves.
+- **Bad input is refused before anything runs:** an unknown kind of offer, a price that isn't a price, a file that isn't a photo.
+
+```bash
+curl -s http://127.0.0.1:8000/messages/draft -H "X-API-Key: $FLIP_API_KEY" -H "Content-Type: application/json" \
+  -d '{"listing": {"title": "iPhone 13 128GB", "asking_price": "220", "description": "Black dot on the screen"}, "mention": true}'
+```
+
+## The app
+
+A front end in AlertFlip's design (`frontend/`, React and TypeScript):
+- **Message the seller:** price cards and a slider, the message with the seller's "no offers" note, and what was read.
+- **List on eBay:** photos, notes and the draft.
+- **Home:** the cost meter.
+
+```bash
+.venv/bin/uvicorn flip.api:app --port 8000      # the API, in one terminal
+cd frontend && npm install && npm run dev       # the app, in another: then open http://127.0.0.1:5173
+```
+
+The app's dev server adds the API key on the way, from `.env`, so the key never reaches the browser. `frontend/DESIGN_SPEC.md` describes every screen, the design tokens and the API it uses.
+
 ## Planned
 
-- **A web app** (FastAPI + React) where a person approves each draft.
+- **A launcher:** one icon that starts Gemma, the API and the app in its own window.
+- **The AlertFlip side:** a Supabase function that calls the API from the phone app.
 - **Measured results on the test set:**
   - fields right for local, API and the switch;
   - cost per 100 listings;
@@ -175,7 +215,8 @@ Include a few items the catalogue doesn't have: the right answer for those is "n
 
 ## Folders
 
-- `flip/`: the code
+- `flip/`: the code (`flip/api.py` is the API)
+- `frontend/`: the app (`npm test` runs its tests)
 - `data/`: the catalogue, eBay's item conditions and the questions a message may ask (facts, not code)
 - `tests/`: a test for every rule
 - `testset/`: the example format for the test set
