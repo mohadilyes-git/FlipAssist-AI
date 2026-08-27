@@ -1,13 +1,15 @@
-// The building blocks, drawn the way AlertFlip draws them: the screen head with
-// its icon tile, the blue gradient main button, the outlined second button,
-// the price slider, chips and notes.
-import type { CSSProperties, ReactNode } from "react";
+// The building blocks every screen shares, drawn the way the design draws them:
+// the screen head with its icon tile, the logo, the price line you slide, chips,
+// the orange warning row, the steps behind a draft, and the line icons.
+import { type KeyboardEvent, type PointerEvent, type ReactNode, useRef } from "react";
+import type { Attempt } from "./api";
+import { cost, writerName } from "./format";
 import { money } from "./prices";
 
-export function ScreenHead({ icon, title, sub, right }: { icon: ReactNode; title: string; sub: string; right?: ReactNode }) {
+export function Head({ icon, title, sub, right }: { icon: ReactNode; title: string; sub: string; right?: ReactNode }) {
   return (
     <div className="head">
-      <span className="head-icon">{icon}</span>
+      <span className="tile">{icon}</span>
       <div className="head-words">
         <h1>{title}</h1>
         <p>{sub}</p>
@@ -17,44 +19,79 @@ export function ScreenHead({ icon, title, sub, right }: { icon: ReactNode; title
   );
 }
 
-type ButtonProps = { label: string; onClick?: () => void; disabled?: boolean; type?: "button" | "submit"; icon?: ReactNode; title?: string };
-
-export function MainButton({ label, onClick, disabled, type = "button" }: ButtonProps) {
+/** AlertFlip's bolt in its blue tile: 34px in the sidebar, 68px on Welcome. */
+export function Logo({ big }: { big?: boolean }) {
   return (
-    <button type={type} className="main" onClick={onClick} disabled={disabled}>
-      {label}
-    </button>
-  );
-}
-
-export function SecondButton({ label, onClick, disabled, icon, title }: ButtonProps) {
-  return (
-    <button type="button" className="second" onClick={onClick} disabled={disabled} title={title}>
-      {icon}
-      {label}
-    </button>
+    <span className={big ? "logo-tile big" : "logo-tile"} aria-hidden="true">
+      <svg width={big ? 52 : 27} height={big ? 52 : 27} viewBox="0 0 100 100">
+        <path d="M62 12 30 58h16l-4 30 28-40H74z" fill="rgba(255,255,255,.28)" />
+        <path d="M56 14 24 60h16l-4 30 28-40H50z" fill="#fff" />
+      </svg>
+    </span>
   );
 }
 
 export function Chip({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) {
   return (
-    <button type="button" className={on ? "chip on" : "chip"} aria-pressed={on} onClick={onClick}>
+    <button type="button" className="chip" aria-pressed={on} onClick={onClick}>
       {label}
     </button>
   );
 }
 
-/** The offer price, a step at a time, along a line: AlertFlip's slider, as a range input. */
+export function Warn({ children }: { children: ReactNode }) {
+  return (
+    <p className="warn-row">
+      <WarningIcon size={14} stroke={2.2} />
+      {children}
+    </p>
+  );
+}
+
+/** The offer price along a line, a step at a time: drag it, tap the line, or use the keys
+ * (arrows one step, Page Up/Down five, Home/End the ends). */
 export function PriceSlider({ value, min, max, step, label, onChange }: {
   value: number; min: number; max: number; step: number; label: string; onChange: (value: number) => void;
 }) {
-  const at = max > min ? ((value - min) / (max - min)) * 100 : 0;
+  const track = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+  const fit = (to: number) => Math.min(max, Math.max(min, min + Math.round((to - min) / step) * step));
+  const move = (to: number) => {
+    const next = fit(to);
+    if (next !== value) onChange(next);
+  };
+  const at = (event: PointerEvent) => {
+    const box = track.current?.getBoundingClientRect();
+    if (!box?.width) return;
+    move(min + Math.min(1, Math.max(0, (event.clientX - box.left) / box.width)) * (max - min));
+  };
+  const keys: Record<string, number> = {
+    ArrowLeft: value - step, ArrowDown: value - step, ArrowRight: value + step, ArrowUp: value + step,
+    PageDown: value - 5 * step, PageUp: value + 5 * step, Home: min, End: max,
+  };
+  const share = max > min ? Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100)) : 0;
   return (
     <div className="slider">
-      <input type="range" min={min} max={max} step={step} value={value} aria-label={label}
-        aria-valuetext={money(value)} style={{ "--at": `${at}%` } as CSSProperties}
-        onChange={(e) => onChange(Number(e.target.value))} />
-      <div className="ends" aria-hidden="true">
+      <div ref={track} className="slider-track" role="slider" tabIndex={0} aria-label={label}
+        aria-valuemin={min} aria-valuemax={max} aria-valuenow={value} aria-valuetext={money(value)}
+        onKeyDown={(e: KeyboardEvent) => {
+          if (!(e.key in keys)) return;
+          e.preventDefault();
+          move(keys[e.key]);
+        }}
+        onPointerDown={(e) => {
+          dragging.current = true;
+          e.currentTarget.setPointerCapture?.(e.pointerId);
+          at(e);
+        }}
+        onPointerMove={(e) => dragging.current && at(e)}
+        onPointerUp={() => (dragging.current = false)}
+        onPointerCancel={() => (dragging.current = false)}>
+        <span className="slider-rail" />
+        <span className="slider-fill" style={{ width: `${share}%` }} />
+        <span className="slider-thumb" style={{ left: `${share}%` }} />
+      </div>
+      <div className="slider-ends" aria-hidden="true">
         <span>{money(min)}</span>
         <span>{money(max)}</span>
       </div>
@@ -62,36 +99,50 @@ export function PriceSlider({ value, min, max, step, label, onChange }: {
   );
 }
 
-export function Note({ children, tone }: { children: ReactNode; tone?: "warn" }) {
-  return <p className={tone === "warn" ? "note warn" : "note"}>{children}</p>;
-}
-
-export function Warn({ children }: { children: ReactNode }) {
+/** Each step behind a draft: who tried it, whether the checks passed it, and what it took. */
+export function Steps({ attempts }: { attempts: Attempt[] }) {
   return (
-    <p className="warn-row" role="note">
-      <WarningIcon />
-      {children}
-    </p>
+    <ol className="steps">
+      {attempts.map((a, i) => (
+        <li key={i}>
+          <span className={a.problems.length ? "failed" : "passed"}>
+            {writerName(a.model)} {a.problems.length ? `failed: ${a.problems.join("; ")}` : "passed"}
+          </span>
+          <span className="meta">{a.seconds.toFixed(1)}s · {cost(a.cost_pence)}</span>
+        </li>
+      ))}
+    </ol>
   );
 }
 
-// ── icons ───────────────────────────────────────────────────────────────────
+// ── icons: line icons on a 24 grid, 2px strokes, round ends ─────────────────
 
-const svg = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2,
-  strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
+type IconProps = { size?: number; stroke?: number };
 
-export const SparkleIcon = () => (
-  <svg {...svg}><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" /><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" /></svg>
-);
-export const TagIcon = () => (
-  <svg {...svg}><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z" /><circle cx="7.5" cy="7.5" r="1.5" /></svg>
-);
-export const MeterIcon = () => (
-  <svg {...svg}><path d="M3 12a9 9 0 0 1 18 0" /><path d="M12 12l4-4" /><path d="M5 19h14" /></svg>
-);
-export const WarningIcon = () => (
-  <svg {...svg} width={14} height={14}><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>
-);
-export const CameraIcon = () => (
-  <svg {...svg}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
-);
+function icon(paths: ReactNode) {
+  return function Icon({ size = 18, stroke = 2 }: IconProps) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke}
+        strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {paths}
+      </svg>
+    );
+  };
+}
+
+export const SparkleIcon = icon(<>
+  <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />
+  <path d="M19 16l.7 1.8 1.8.7-1.8.7L19 21l-.7-1.8-1.8-.7 1.8-.7z" />
+</>);
+export const TagIcon = icon(<><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z" /><circle cx="7.5" cy="7.5" r="1.3" /></>);
+export const GaugeIcon = icon(<><path d="M3.5 18a9 9 0 1 1 17 0" /><path d="m12 14 4-4" /></>);
+export const PenIcon = icon(<path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4" />);
+export const SunIcon = icon(<path d="M12 4V2M12 22v-2M4 12H2M22 12h-2M5.6 5.6 4.2 4.2M19.8 19.8l-1.4-1.4M5.6 18.4l-1.4 1.4M19.8 4.2l-1.4 1.4M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />);
+export const MoonIcon = icon(<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />);
+export const WarningIcon = icon(<><path d="M12 3 2 20h20z" /><path d="M12 10v4M12 17h.01" /></>);
+export const CameraIcon = icon(<><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></>);
+export const CheckIcon = icon(<path d="m5 12 5 5L20 7" />);
+export const CrossIcon = icon(<path d="M6 6l12 12M18 6 6 18" />);
+export const TrashIcon = icon(<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />);
+export const ChevronIcon = icon(<path d="m6 9 6 6 6-6" />);
+export const PlusIcon = icon(<path d="M12 5v14M5 12h14" />);

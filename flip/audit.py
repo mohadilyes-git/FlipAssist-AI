@@ -19,7 +19,8 @@ create table if not exists attempts (
     id integer primary key, at text, item_id text, model text, answer text, error text,
     problems text, tokens_in integer, tokens_out integer, seconds real, cost_pence text);
 create table if not exists drafts (
-    id integer primary key, at text, item_id text, status text, reasons text, title text, answer text, job text);
+    id integer primary key, at text, item_id text, status text, reasons text, title text, answer text, job text,
+    listing text);
 create table if not exists approvals (
     id integer primary key, at text, draft_id integer references drafts(id), sent text, edited integer);
 """
@@ -44,8 +45,10 @@ class AuditLog:
         self.db = sqlite3.connect(path, check_same_thread=False)  # the API answers from more than one thread
         self.lock = threading.Lock()
         self.db.executescript(TABLES)
-        if "job" not in {row[1] for row in self.db.execute("pragma table_info(drafts)")}:
-            self.db.execute("alter table drafts add column job text")  # a log from before the API
+        columns = {row[1] for row in self.db.execute("pragma table_info(drafts)")}
+        for column in ("job", "listing"):  # a log from before the API, or before approving taught your style
+            if column not in columns:
+                self.db.execute(f"alter table drafts add column {column} text")
 
     def attempt(self, item_id, reply, problems, cost):
         with self.lock:
@@ -61,9 +64,11 @@ class AuditLog:
         job = "message" if "offer" in result else "listing"
         with self.lock:
             cursor = self.db.execute(
-                "insert into drafts (at, item_id, status, reasons, title, answer, job) values (?, ?, ?, ?, ?, ?, ?)",
+                "insert into drafts (at, item_id, status, reasons, title, answer, job, listing)"
+                " values (?, ?, ?, ?, ?, ?, ?, ?)",
                 (now(), result["item_id"], result["status"], json.dumps(result["reasons"], ensure_ascii=False),
-                 result["title"], json.dumps(result["answer"], ensure_ascii=False), job))
+                 result["title"], json.dumps(result["answer"], ensure_ascii=False), job,
+                 json.dumps(result.get("listing"), ensure_ascii=False)))
             self.db.commit()
         result["draft_id"] = cursor.lastrowid
         return cursor.lastrowid
@@ -83,6 +88,13 @@ class AuditLog:
                             (at, draft_id, sent, int(edited)))
             self.db.commit()
         return {"draft_id": draft_id, "edited": edited, "at": at}
+
+    def listing(self, draft_id):
+        """The listing a message was drafted for (its title, asking_price and
+        marketplace), or None: a listing's draft, or a draft from before."""
+        with self.lock:
+            row = self.db.execute("select listing from drafts where id = ? and job = 'message'", (draft_id,)).fetchone()
+        return json.loads(row[0]) if row and row[0] else None
 
     def stats(self):
         """The cost meter: how drafts ended, which model did the work, what it

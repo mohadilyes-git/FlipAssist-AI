@@ -7,12 +7,19 @@ no AI:
    offer without handing the AI a number to copy.
 3. Your phrasebook: the opener, offer and closing sentences you use again and
    again, which flip.writer turns into a whole message with no AI.
+
+StyleBook keeps the messages it all comes from, on this Mac.
 """
 
 import csv
 import re
+import sqlite3
 import statistics
+import threading
+import uuid
 from collections import Counter
+from datetime import datetime, timezone
+from pathlib import Path
 
 from flip.catalogue import words
 from flip.checks import promised_in
@@ -35,6 +42,13 @@ ASKING_SAID = re.compile(r"\b(?:available (?:at|for)|asking|listed (?:at|for)|pr
 # title words that don't name the item
 TITLE_FILLER = {"with", "and", "for", "the", "of", "in", "on", "to", "or", "plus", "new", "used"}
 AMOUNT = r"(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{2})?"  # a comma only between thousands: "£185, cash" keeps its comma
+STYLE_DB = Path(__file__).resolve().parent.parent / "private" / "style.sqlite3"
+FIELDS = ("id", "listing_title", "asking_price", "marketplace", "my_message", "source", "at")
+TABLE = """
+create table if not exists messages (
+    n integer primary key, id text unique, listing_title text, asking_price text, marketplace text,
+    my_message text, source text, at text);
+"""
 OLD_PRICE = re.compile(rf"£\s?{AMOUNT}"
                        rf"|\b{AMOUNT}\s?(quid|pounds)\b"
                        rf"|\b(take|do|accept|consider|offer|pay|stretch to|go to|let it go for)\s+{AMOUNT}\b",
@@ -123,3 +137,103 @@ def describe(card, words=None):
     if card["mentions"]:
         lines.append(f"Usually mentions: {', '.join(card['mentions'])}")
     return lines
+
+
+def and_list(names):
+    """["cash", "collecting"] -> "cash and collecting"."""
+    return " and ".join([", ".join(names[:-1]), names[-1]]) if len(names) > 1 else "".join(names)
+
+
+def traits(card):
+    """The style card as the app shows it: [("Opens with", "'Hi mate'"),
+    ("Length", "about 12 words"), ("Mentions", "cash and collecting"),
+    ("Says the flaw", "yes")]. Empty before there are any messages."""
+    if not card:
+        return []
+    said = [name for name in card["mentions"] if name != "condition"]
+    rows = [("Opens with", f"'{card['greeting']}'")] if card.get("greeting") else []
+    rows.append(("Length", f"about {card['words']} words"))
+    if said:
+        rows.append(("Mentions", and_list(said)))
+    if card["emoji"]:
+        rows.append(("Emojis", "yes"))
+    rows.append(("Says the flaw", "yes" if "condition" in card["mentions"] else "no"))
+    return rows
+
+
+def phrase_rows(card):
+    """The phrasebook as the app shows it, the offer price left out:
+    [("Usual opener", "Hi mate,"), ("Offer sentence", "Would you take £… cash?")]."""
+    book = (card or {}).get("phrases") or {}
+    named = (("opener", "Usual opener"), ("offer", "Offer sentence"), ("closing", "Closing"), ("emoji", "Emoji"))
+    return [(label, book[key].replace("[OFFER]", "…")) for key, label in named if book.get(key)]
+
+
+class StyleBook:
+    """The messages your style is learned from, kept on this Mac (private/ is
+    never uploaded): the ones you wrote or pasted in the app, the drafts you
+    approved, and any learned from a CSV. The style card and the message
+    search follow every change, so the next draft already writes like the
+    message you just added. index is the MessageIndex to keep in step, or
+    None for no search."""
+
+    def __init__(self, path=STYLE_DB, index=None):
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        self.db = sqlite3.connect(path, check_same_thread=False)  # the API answers from more than one thread
+        self.lock = threading.RLock()
+        self.db.executescript(TABLE)
+        self.index, self._card = index, None
+        if index is not None:
+            self.sync()
+
+    def messages(self, newest_first=True):
+        with self.lock:
+            rows = self.db.execute(f"select {', '.join(FIELDS)} from messages order by n "
+                                   f"{'desc' if newest_first else 'asc'}").fetchall()
+        return [dict(zip(FIELDS, row)) for row in rows]
+
+    def add(self, messages, source):
+        """Add messages, each a listing_title, asking_price, marketplace and
+        my_message. One with an id that's here already takes its place, so
+        learning the same CSV twice, or approving a draft twice, keeps one copy."""
+        at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        rows = [{"id": m.get("id") or f"msg-{uuid.uuid4().hex[:12]}", "listing_title": m.get("listing_title") or "",
+                 "asking_price": m.get("asking_price") or "", "marketplace": m.get("marketplace") or "",
+                 "my_message": m["my_message"].strip(), "source": source, "at": at} for m in messages]
+        with self.lock:
+            self.db.executemany(
+                "insert into messages (id, listing_title, asking_price, marketplace, my_message, source, at) "
+                "values (:id, :listing_title, :asking_price, :marketplace, :my_message, :source, :at) "
+                "on conflict(id) do update set listing_title = excluded.listing_title, asking_price = "
+                "excluded.asking_price, marketplace = excluded.marketplace, my_message = excluded.my_message, "
+                "source = excluded.source, at = excluded.at", rows)
+            self.db.commit()
+            self._card = None
+        if self.index is not None:
+            self.index.add(rows)
+        return rows
+
+    def remove(self, message_id):
+        """Forget one message. False if there's no such message."""
+        with self.lock:
+            gone = self.db.execute("delete from messages where id = ?", (message_id,)).rowcount
+            self.db.commit()
+            self._card = None
+        if gone and self.index is not None:
+            self.index.remove([message_id])
+        return bool(gone)
+
+    def card(self):
+        """Your style card (style_card), from every message here, oldest first."""
+        with self.lock:
+            if self._card is None:
+                self._card = style_card(self.messages(newest_first=False))
+            return self._card
+
+    def sync(self):
+        """Make the message search hold exactly the messages here: after a
+        crash between the two, or messages stored for search by an older version."""
+        rows = self.messages()
+        here, stored = {r["id"] for r in rows}, set(self.index.ids())
+        self.index.remove(stored - here)
+        self.index.add([r for r in rows if r["id"] not in stored])

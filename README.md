@@ -114,8 +114,10 @@ What AlertFlip calls, from a Supabase function, so the key never sits inside the
 | `GET /health` | Whether the local model is running and the keys are set (no key needed, none shown) |
 | `POST /messages/draft` | Reads the listing, then drafts the offer at code's starting price or the one picked on the app's slider (`offer`, which must fit the kind of offer). It returns the message, who wrote it, the "no offers" note, what was read, every attempt with its seconds and cost, and a draft id |
 | `POST /listings/draft` | The listing's text, your notes and up to 8 photos (form fields and file uploads) in, the eBay draft out |
-| `POST /drafts/{id}/approve` | What you actually sent or listed, so the results can count how often a draft was right as it was |
+| `POST /drafts/{id}/approve` | What you actually sent or listed, so the results can count how often a draft was right as it was. An approved message also joins the messages your style is learned from |
 | `GET /stats` | The cost meter: drafts, the share done on this machine, cost per 100 drafts, how often a draft was edited before sending |
+| `GET /style` | What it learned from your messages: the style card (habits in 40% or more of them) and the phrasebook (sentences in 2 or more) |
+| `GET`, `POST /style/messages`, `DELETE /style/messages/{id}` | The messages it learns from: list them, add one or many (`title`, `price`, `text`), or delete one. The search for the closest past messages follows at once, so the next draft already uses what you added |
 
 - **Who can call it.** It answers only on this machine (127.0.0.1) unless it's put online on purpose. Every endpoint but `/health` needs `FLIP_API_KEY` from `.env` in an `X-API-Key` header.
 - **It never sends or lists anything itself.** AlertFlip does that, after the reseller approves.
@@ -128,17 +130,19 @@ curl -s http://127.0.0.1:8000/messages/draft -H "X-API-Key: $FLIP_API_KEY" -H "C
 
 ## The app
 
-A front end in AlertFlip's design (`frontend/`, React and TypeScript):
-- **Message the seller:** price cards and a slider, the message with the seller's "no offers" note, and what was read.
-- **List on eBay:** photos, notes and the draft.
-- **Home:** the cost meter.
+A Mac-style window in AlertFlip's design (`frontend/`, React and TypeScript), light or dark:
+- **Set up your style**, on first launch: reply to 8 listings (each shows one habit, like whether you mention flaws), or paste messages you've already sent. Nothing gets trained: it learns from your own messages with plain code.
+- **AI message:** price cards and a slider, the message with the seller's "no offers" note, what was read, and why, step by step.
+- **List on eBay:** photos, notes, and the draft to check.
+- **Home:** the cost meter, and whether Gemma, the backup and the key are ready.
+- **Your style:** the style card, the phrasebook, and the messages it learns from, each yours to delete.
 
 ```bash
 .venv/bin/uvicorn flip.api:app --port 8000      # the API, in one terminal
 cd frontend && npm install && npm run dev       # the app, in another: then open http://127.0.0.1:5173
 ```
 
-The app's dev server adds the API key on the way, from `.env`, so the key never reaches the browser. `frontend/DESIGN_SPEC.md` describes every screen, the design tokens and the API it uses.
+The app's dev server adds the API key on the way, from `.env`, so the key never reaches the browser.
 
 ## Planned
 
@@ -183,7 +187,7 @@ cp .env.example .env      # then put your key in .env (never uploaded)
 
 `--mode local` uses only the local model, `--mode api` only Claude Haiku, and the default `auto` tries the local model first.
 
-For messages, put your past messages in `testset/private/messages.csv` (`testset/messages.example.csv` shows the columns), then:
+For messages, set up your style in the app, or put your past messages in `testset/private/messages.csv` (`testset/messages.example.csv` shows the columns) and learn them; either way they're kept in `private/style.sqlite3`, which never leaves this machine:
 
 ```bash
 .venv/bin/python -m flip.message --learn

@@ -1,53 +1,209 @@
-// The app: three screens, each with its own address (#message, #listing, #home),
-// and AlertFlip's floating dock to move between them.
-import { type ComponentType, useEffect, useState } from "react";
+// The app: a Mac-style window with four screens in a sidebar, each at its own
+// address (#message, #listing, #home, #style) so a refresh keeps your place,
+// light or dark as your Mac is (or as you switch it), and on first launch
+// "Set up your style" before any of them.
+import { type ComponentType, useCallback, useEffect, useMemo, useState } from "react";
+import { api, type Health, type Style } from "./api";
 import { HomeScreen } from "./screens/HomeScreen";
 import { ListingScreen } from "./screens/ListingScreen";
 import { MessageScreen } from "./screens/MessageScreen";
-import { MeterIcon, SparkleIcon, TagIcon } from "./ui";
+import { Setup, type SetupStep } from "./screens/Setup";
+import { StyleScreen } from "./screens/StyleScreen";
+import { GaugeIcon, Logo, MoonIcon, PenIcon, SparkleIcon, SunIcon, TagIcon } from "./ui";
 
-type Tab = "message" | "listing" | "home";
-const TABS: { tab: Tab; label: string; icon: ComponentType }[] = [
-  { tab: "message", label: "Message", icon: SparkleIcon },
+export type Tab = "message" | "listing" | "home" | "style";
+const TABS: { tab: Tab; label: string; icon: ComponentType<{ size?: number; stroke?: number }> }[] = [
+  { tab: "message", label: "AI message", icon: SparkleIcon },
   { tab: "listing", label: "List on eBay", icon: TagIcon },
-  { tab: "home", label: "Home", icon: MeterIcon },
+  { tab: "home", label: "Home", icon: GaugeIcon },
+  { tab: "style", label: "Your style", icon: PenIcon },
 ];
+export const SETUP_DONE = "flipassist.setupDone";
+export const THEME = "flipassist.theme";
+type Theme = "light" | "dark";
+/** /health's answer, or "down" when the API didn't answer at all */
+export type Running = Health | "down" | null;
+
+// what's remembered in this browser; a private window may refuse, and then it's just not remembered
+const stored = (key: string) => {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+const store = (key: string, value: string) => {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // nothing to do: it's forgotten when the window closes
+  }
+};
 
 const fromHash = (): Tab => {
   const found = window.location.hash.slice(1);
   return TABS.some((t) => t.tab === found) ? (found as Tab) : "message";
 };
 
+/** Light or dark: your Mac's choice, until you switch it here. */
+function useTheme(): [Theme, () => void] {
+  const darkMac = useMemo(() => window.matchMedia?.("(prefers-color-scheme: dark)"), []);
+  const [mac, setMac] = useState<Theme>(darkMac?.matches ? "dark" : "light");
+  const [picked, setPicked] = useState<Theme | null>(() => {
+    const found = stored(THEME);
+    return found === "light" || found === "dark" ? found : null;
+  });
+  useEffect(() => {
+    if (!darkMac) return;
+    const follow = () => setMac(darkMac.matches ? "dark" : "light");
+    darkMac.addEventListener("change", follow);
+    return () => darkMac.removeEventListener("change", follow);
+  }, [darkMac]);
+  const theme = picked ?? mac;
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+  const toggle = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setPicked(next);
+    store(THEME, next);
+  };
+  return [theme, toggle];
+}
+
 export function App() {
   const [tab, setTab] = useState<Tab>(fromHash);
+  const [setup, setSetup] = useState<SetupStep | null>(() => (stored(SETUP_DONE) ? null : "welcome"));
+  const [theme, toggleTheme] = useTheme();
+  const [style, setStyle] = useState<Style | null>(null);
+  const [running, setRunning] = useState<Running>(null);
+
+  const loadStyle = useCallback(async () => {
+    try {
+      setStyle(await api.style());
+    } catch {
+      // each screen says what's wrong when it can't reach the API
+    }
+  }, []);
+  const loadRunning = useCallback(async () => {
+    try {
+      setRunning(await api.health());
+    } catch {
+      setRunning("down");
+    }
+  }, []);
+
   useEffect(() => {
+    void loadRunning();
+    const every = window.setInterval(() => void loadRunning(), 30_000);
+    api.style().then((found) => {
+      setStyle(found);
+      // the API already knows your style (set up in another browser, or learned from a CSV): no need to ask again
+      if (found.count && !stored(SETUP_DONE)) {
+        store(SETUP_DONE, "1");
+        setSetup((now) => (now === "welcome" ? null : now));
+      }
+    }, () => undefined);
     const follow = () => setTab(fromHash());
     window.addEventListener("hashchange", follow);
-    return () => window.removeEventListener("hashchange", follow);
-  }, []);
-  const go = (next: Tab) => {
+    return () => {
+      window.clearInterval(every);
+      window.removeEventListener("hashchange", follow);
+    };
+  }, [loadRunning]);
+
+  const go = useCallback((next: Tab) => {
     window.location.hash = next;
     setTab(next);
+  }, []);
+  const start = () => {
+    store(SETUP_DONE, "1");
+    setSetup(null);
+    go("message");
   };
+
+  const name = setup ? "Set up your style" : TABS.find((t) => t.tab === tab)!.label;
+  useEffect(() => {
+    document.title = `FlipAssist · ${name}`;
+  }, [name]);
+  const count = style?.count ?? 0;
+
   return (
-    <>
-      <main>
-        {tab === "message" && <MessageScreen />}
-        {tab === "listing" && <ListingScreen />}
-        {tab === "home" && <HomeScreen go={go} />}
-      </main>
-      <nav className="dock" aria-label="Screens">
-        {TABS.map(({ tab: t, label, icon: Icon }) => (
-          <a key={t} href={`#${t}`} aria-current={tab === t ? "page" : undefined}
-            onClick={(e) => {
-              e.preventDefault();
-              go(t);
-            }}>
-            <Icon />
-            <span>{label}</span>
-          </a>
-        ))}
-      </nav>
-    </>
+    <div className="desk">
+      <div className="window">
+        <header className="titlebar">
+          <span className="lights" aria-hidden="true"><span /><span /><span /></span>
+          <span className="window-title">FlipAssist · {name}</span>
+          <StatusPill running={running} />
+        </header>
+        <div className="window-body">
+          {!setup && (
+            <aside className="sidebar">
+              <a className="logo" href="#home" onClick={(e) => {
+                e.preventDefault();
+                go("home");
+              }}>
+                <Logo />
+                <span className="wordmark">
+                  <strong>Flip<span>Assist</span></strong>
+                  <small>by AlertFlip</small>
+                </span>
+              </a>
+              <nav className="nav" aria-label="Screens">
+                {TABS.map(({ tab: t, label, icon: Icon }) => (
+                  <a key={t} href={`#${t}`} aria-current={tab === t ? "page" : undefined} onClick={(e) => {
+                    e.preventDefault();
+                    go(t);
+                  }}>
+                    <Icon size={17} stroke={2.1} />
+                    <span>{label}</span>
+                  </a>
+                ))}
+              </nav>
+              <div className="spacer" />
+              <a className="style-link" href="#style" onClick={(e) => {
+                e.preventDefault();
+                go("style");
+              }}>
+                <span className="caps">Your style</span>
+                <strong>Learning from {count} of your messages</strong>
+                <span>See what it learned</span>
+              </a>
+              <button type="button" className="theme-button" onClick={toggleTheme}>
+                {theme === "dark" ? <SunIcon size={16} /> : <MoonIcon size={16} />}
+                {theme === "dark" ? "Light mode" : "Dark mode"}
+              </button>
+            </aside>
+          )}
+          <main className="content">
+            <div className="column">
+              {setup ? (
+                <Setup step={setup} go={setSetup} style={style} onLearned={loadStyle} onStart={start} />
+              ) : (
+                <>
+                  {/* the two screens you type into stay put while you look elsewhere; the others load fresh */}
+                  <div className="screen" hidden={tab !== "message"}><MessageScreen onApproved={loadStyle} /></div>
+                  <div className="screen" hidden={tab !== "listing"}><ListingScreen /></div>
+                  {tab === "home" && <HomeScreen go={go} count={count} running={running} reload={loadRunning} />}
+                  {tab === "style" && (
+                    <StyleScreen style={style} reload={loadStyle} redo={() => setSetup("welcome")}
+                      addMore={() => setSetup("paste")} />
+                  )}
+                </>
+              )}
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
   );
+}
+
+/** Top right of the window: whether Gemma, the AI on this Mac, is there to read and write. */
+function StatusPill({ running }: { running: Running }) {
+  if (running === null) return <span />;
+  if (running === "down") return <span className="status-pill down">API not running</span>;
+  return running.local_running
+    ? <span className="status-pill">Gemma running</span>
+    : <span className="status-pill off">Gemma not running</span>;
 }

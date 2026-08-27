@@ -10,11 +10,11 @@ from fastapi.testclient import TestClient
 from flip import api
 from flip.ai import Reply
 from flip.audit import AuditLog
-from flip.style import load_messages, style_card
+from flip.style import StyleBook, load_messages
 from tests.fakes import FakeModel
 
 ROOT = Path(__file__).resolve().parent.parent
-PAST = style_card(load_messages(ROOT / "testset" / "messages.example.csv"))  # messages that repeat
+PAST = load_messages(ROOT / "testset" / "messages.example.csv")  # messages that repeat
 KEY = "test-key"
 LISTING = {"title": "iPhone 13 128GB Blue", "asking_price": "220", "marketplace": "facebook",
            "description": "Black dot on the screen, doesn't affect use. Collection only from Leeds LS6. "
@@ -42,16 +42,19 @@ JPEG = base64.b64decode(
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    """The API with the key set, and use(...) to give it pretend models and a style card."""
+    """The API with the key set, and use(...) to give it pretend models and your past messages."""
     monkeypatch.setenv("FLIP_API_KEY", KEY)
     log = AuditLog(tmp_path / "audit.sqlite3")
+    book = StyleBook(tmp_path / "style.sqlite3")  # no search: the examples come from the style card alone
 
-    def use(local=None, api_model=None, card=None):
-        api.app.dependency_overrides[api.setup] = lambda: api.Setup(local, api_model, log, card)
+    def use(local=None, api_model=None, messages=()):
+        book.add(list(messages), "csv")
+        api.app.dependency_overrides[api.setup] = lambda: api.Setup(local, api_model, log)
         api.app.dependency_overrides[api.audit] = lambda: log
+        api.app.dependency_overrides[api.style] = lambda: book
 
     test = TestClient(api.app, headers={"X-API-Key": KEY})
-    test.use = use
+    test.use, test.book = use, book
     use()
     yield test
     api.app.dependency_overrides.clear()
@@ -83,7 +86,7 @@ def test_with_no_key_set_nobody_can_call_it(client, monkeypatch):
 
 def test_a_message_from_your_own_sentences_with_the_reading_and_the_note(client):
     local = FakeModel("gemma3:4b", READ)  # reads the listing; the message is written without AI
-    client.use(local=local, card=PAST)
+    client.use(local=local, messages=PAST)
     answer = client.post("/messages/draft", json={"listing": LISTING, "mention": True})
     assert answer.status_code == 200
     draft = answer.json()
@@ -98,9 +101,9 @@ def test_a_message_from_your_own_sentences_with_the_reading_and_the_note(client)
 
 
 def test_a_message_the_ai_writes(client):
-    varied = style_card([{"my_message": "Hiya, would £90 do? 😊"}, {"my_message": "Hey! Could you do £120?"}])
+    varied = [{"my_message": "Hiya, would £90 do? 😊"}, {"my_message": "Hey! Could you do £120?"}]
     local = FakeModel("gemma3:4b", READ, {"message": "Hiya, would you take £185, given the black dot on the screen? 😊"})
-    client.use(local=local, card=varied)
+    client.use(local=local, messages=varied)
     draft = client.post("/messages/draft", json={"listing": LISTING, "mention": True}).json()
     assert (draft["status"], draft["written_by"]) == ("ready", "gemma3:4b")
     assert [a["model"] for a in draft["attempts"]] == ["gemma3:4b"]
@@ -108,7 +111,7 @@ def test_a_message_the_ai_writes(client):
 
 def test_with_no_model_running_code_reads_and_writes_alone(client):
     down = Reply("gemma3:4b", error="the local model isn't running (connection refused)", reachable=False)
-    client.use(local=FakeModel("gemma3:4b", down), card=PAST)
+    client.use(local=FakeModel("gemma3:4b", down), messages=PAST)
     draft = client.post("/messages/draft", json={"listing": LISTING}).json()
     assert (draft["status"], draft["written_by"], draft["reading"]["read_by"]) == ("ready", "template", "code")
     assert draft["note"] == 'The seller says: "Price is firm"'
@@ -161,7 +164,7 @@ def test_a_listing_the_catalogue_doesnt_know_needs_you_and_asks_no_ai(client):
 # ── approving, and the cost meter ───────────────────────────────────────────
 
 def test_approving_records_what_you_sent_and_whether_you_edited_it(client):
-    client.use(local=FakeModel("gemma3:4b", READ), card=PAST)
+    client.use(local=FakeModel("gemma3:4b", READ), messages=PAST)
     draft = client.post("/messages/draft", json={"listing": LISTING, "mention": True}).json()
     url = f"/drafts/{draft['draft_id']}/approve"
     assert client.post(url, json={"sent": draft["message"]}).json()["edited"] is False
@@ -170,8 +173,30 @@ def test_approving_records_what_you_sent_and_whether_you_edited_it(client):
     assert client.post(url, json={"sent": ""}).status_code == 422
 
 
+def test_an_approved_message_joins_your_style_once(client):
+    client.use(local=FakeModel("gemma3:4b", READ), messages=PAST)
+    draft = client.post("/messages/draft", json={"listing": LISTING, "mention": True}).json()
+    url = f"/drafts/{draft['draft_id']}/approve"
+    assert client.post(url, json={"sent": draft["message"]}).json()["saved_to_style"] is True
+    client.post(url, json={"sent": "Hi mate, would you take £185? Cheers"})  # approved again, edited
+    newest = client.get("/style/messages").json()[0]
+    assert (newest["id"], newest["title"], newest["price"], newest["source"]) == \
+        (f"draft-{draft['draft_id']}", LISTING["title"], "220", "approved")
+    assert newest["text"] == "Hi mate, would you take £185? Cheers"
+    assert client.get("/style").json()["count"] == len(PAST) + 1
+
+
+def test_an_approved_listing_isnt_a_message_to_learn_from(client):
+    client.use(local=FakeModel("gemma3:4b", READ, LISTED))
+    form = {"title": "iPhone 13 128GB Midnight unlocked", "notes": "light scratch on the back, battery 87%"}
+    draft = client.post("/listings/draft", data=form, files=[("photos", ("a.jpg", JPEG, "image/jpeg"))]).json()
+    assert client.post(f"/drafts/{draft['draft_id']}/approve", json={"sent": "described"}).json()["saved_to_style"] \
+        is False
+    assert client.get("/style/messages").json() == []
+
+
 def test_the_cost_meter_adds_it_all_up(client):
-    client.use(local=FakeModel("gemma3:4b", READ, READ), api_model=FakeModel("claude-haiku-5-5"), card=PAST)
+    client.use(local=FakeModel("gemma3:4b", READ, READ), api_model=FakeModel("claude-haiku-5-5"), messages=PAST)
     first = client.post("/messages/draft", json={"listing": LISTING, "mention": True}).json()
     client.post("/messages/draft", json={"listing": LISTING, "kind": "asking", "mention": True})
     client.post(f"/drafts/{first['draft_id']}/approve", json={"sent": first["message"]})
@@ -183,9 +208,44 @@ def test_the_cost_meter_adds_it_all_up(client):
 
 
 def test_the_price_you_picked_is_drafted_and_one_that_doesnt_fit_is_refused(client):
-    client.use(local=FakeModel("gemma3:4b", READ, READ), card=PAST)
+    client.use(local=FakeModel("gemma3:4b", READ, READ), messages=PAST)
     draft = client.post("/messages/draft", json={"listing": LISTING, "offer": "150", "mention": True}).json()
     assert (draft["offer"], draft["offer_pence"]) == ("£150", 15000) and "£150" in draft["message"]
     refused = client.post("/messages/draft", json={"listing": LISTING, "offer": "230"})
     assert refused.status_code == 422 and "isn't a lower offer" in refused.json()["detail"]
     assert client.post("/messages/draft", json={"listing": LISTING, "offer": "cheap"}).status_code == 422
+
+
+# ── your style ──────────────────────────────────────────────────────────────
+
+def test_your_style_learns_from_the_messages_you_add(client):
+    assert client.get("/style").json() == {"count": 0, "traits": [], "phrases": []}
+    sent = [{"title": "iPhone 12 64GB", "price": "£150", "text": "Hi mate, would you take £125 cash? Cheers"},
+            {"title": "PS5 Slim", "price": "£1,200", "text": "Hi mate, would you take £270 cash? Cheers"},
+            {"title": "", "price": "", "text": "Hi mate, would you take £90 cash? Cheers"}]
+    added = client.post("/style/messages", json=sent)
+    assert added.status_code == 201 and [m["price"] for m in added.json()] == ["150", "1200", ""]
+    style = client.get("/style").json()
+    assert style["count"] == 3
+    assert {"k": "Opens with", "v": "'Hi mate'"} in style["traits"] and {"k": "Mentions", "v": "cash"} in style["traits"]
+    assert {"k": "Offer sentence", "v": "Hi mate, would you take £… cash?"} in style["phrases"]
+    assert {"k": "Closing", "v": "Cheers"} in style["phrases"]
+    assert [m["text"] for m in client.get("/style/messages").json()][0] == sent[-1]["text"]  # newest first
+
+
+def test_a_message_you_add_needs_words_and_a_price_that_is_one(client):
+    for refused in ([], [{"text": "   "}], [{"text": "Hi, £90?", "price": "cheap"}], [{"price": "£90"}]):
+        assert client.post("/style/messages", json=refused).status_code == 422
+    assert client.get("/style/messages").json() == []
+
+
+def test_a_message_you_delete_is_no_longer_learned_from(client):
+    added = client.post("/style/messages", json=[{"text": "Hi mate, would you take £90? Cheers"}]).json()
+    assert client.delete(f"/style/messages/{added[0]['id']}").status_code == 204
+    assert client.get("/style").json()["count"] == 0
+    assert client.delete(f"/style/messages/{added[0]['id']}").status_code == 404
+
+
+def test_your_style_needs_the_key(client):
+    assert TestClient(api.app).get("/style").status_code == 401
+    assert TestClient(api.app).post("/style/messages", json=[{"text": "hi"}]).status_code == 401

@@ -8,7 +8,9 @@
     .venv/bin/python -m flip.message "iPhone 13 128GB" --asking 220 --description "Black dot on the screen" --writer ai
 
 Your past messages live in testset/private/messages.csv (testset/messages.example.csv
-shows the columns). --learn reads them into private/chroma; both stay on this Mac.
+shows the columns). --learn adds them to the messages your style is learned from
+(private/style.sqlite3, searched through private/chroma), the same ones the app's
+"Your style" shows; all of it stays on this Mac.
 """
 
 import argparse
@@ -23,7 +25,7 @@ from flip.message_drafter import MESSAGE_TOKENS, WRITERS, draft_message
 from flip.reader import read_listing_with_ai
 from flip.money import OFFER_KINDS
 from flip.retrieval import MessageIndex
-from flip.style import describe, load_messages, style_card
+from flip.style import StyleBook, describe, load_messages
 
 ROOT = Path(__file__).resolve().parent.parent
 MESSAGES = ROOT / "testset" / "private" / "messages.csv"
@@ -48,17 +50,17 @@ def main():
                         help="who writes: your past messages decide (auto, the default), template (no AI) or ai")
     parser.add_argument("--mode", choices=list(MODES), default="auto")
     parser.add_argument("--messages", default=str(MESSAGES), help="your past messages (CSV)")
-    parser.add_argument("--learn", action="store_true", help="store your past messages for search, then stop")
+    parser.add_argument("--learn", action="store_true", help="learn your past messages from the CSV, then stop")
     args = parser.parse_args()
     load_env()
 
-    messages = load_messages(args.messages) if Path(args.messages).is_file() else []
-    card = style_card(messages)
-    index = MessageIndex()
+    book = StyleBook(index=MessageIndex())
     if args.learn:
-        index.add(messages)
-        print(f"{len(messages)} past messages stored for search (private/chroma, never uploaded)")
-        print("your style card:", *(f"  - {line}" for line in describe(card) or ["(no messages yet)"]), sep="\n")
+        messages = load_messages(args.messages) if Path(args.messages).is_file() else []
+        book.add([m for m in messages if m.get("my_message")], "csv")
+        print(f"{len(messages)} past messages learned, {len(book.messages())} in all (private/, never uploaded)")
+        print("your style card:", *(f"  - {line}" for line in describe(book.card()) or ["(no messages yet)"]),
+              sep="\n")
         return
     if not args.title or not args.asking:
         parser.error("give the listing's title and --asking price (or --learn)")
@@ -70,7 +72,7 @@ def main():
     reading = read_listing_with_ai(listing, local, api, args.mode, log)
     mention = {"yes": True, "no": False}.get(args.mention)
     longer = args.longer or bool(args.previous)
-    result = draft_message(listing, card, index, local, api, args.mode, log, args.discount,
+    result = draft_message(listing, book.card(), book.index, local, api, args.mode, log, args.discount,
                            kind=args.offer, mention=mention, length="longer" if longer else "usual",
                            previous=args.previous, reading=reading, writer=args.writer)
 

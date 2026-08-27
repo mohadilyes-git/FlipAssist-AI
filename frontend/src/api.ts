@@ -68,7 +68,24 @@ export type ListingDraft = {
   cost_pence: number;
 };
 
-export type Approved = { draft_id: number; edited: boolean; at: string };
+/** saved_to_style: an approved message joins the messages your style is learned from */
+export type Approved = { draft_id: number; edited: boolean; at: string; saved_to_style: boolean };
+
+/** What it learned from your messages, with plain code: nothing gets trained. */
+export type Style = { count: number; traits: { k: string; v: string }[]; phrases: { k: string; v: string }[] };
+
+/** One of the messages your style is learned from; price is in pounds, as written ("220"), or empty. */
+export type StyleMessage = {
+  id: string;
+  title: string;
+  price: string;
+  text: string;
+  marketplace: string;
+  source: string;
+  at: string;
+};
+
+export type NewStyleMessage = { title: string; price: string; text: string; marketplace?: string };
 
 export type Stats = {
   drafts: number;
@@ -136,4 +153,8 @@ export const api = {
   draftMessage: (request: MessageRequest) => call<MessageDraft>("/messages/draft", json(request)),
   draftListing: (form: FormData) => call<ListingDraft>("/listings/draft", { method: "POST", body: form }),
   approve: (draftId: number, sent: string) => call<Approved>(`/drafts/${draftId}/approve`, json({ sent })),
+  style: () => call<Style>("/style"),
+  styleMessages: () => call<StyleMessage[]>("/style/messages"),
+  addStyleMessages: (messages: NewStyleMessage[]) => call<StyleMessage[]>("/style/messages", json(messages)),
+  forgetStyleMessage: (id: string) => call<null>(`/style/messages/${encodeURIComponent(id)}`, { method: "DELETE" }),
 };

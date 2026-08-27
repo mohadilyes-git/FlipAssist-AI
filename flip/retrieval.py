@@ -44,6 +44,15 @@ class MessageIndex:
             documents=[m["my_message"] for m in messages],
             metadatas=[{"listing_title": m["listing_title"], "marketplace": m.get("marketplace", "")} for m in messages])
 
+    def ids(self):
+        """The id of every message stored."""
+        return self.collection.get(include=[])["ids"]
+
+    def remove(self, ids):
+        """Forget messages by id."""
+        if ids:
+            self.collection.delete(ids=list(ids))
+
     def similar(self, text, n=3, leave_out=None):
         """The n messages you wrote for the listings most like this one, nearest
         first. leave_out skips one message by id: when testing on your own

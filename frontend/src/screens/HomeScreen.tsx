@@ -1,89 +1,107 @@
-// Home, drawn like AlertFlip's home: a blue hero card with the cost meter, then
-// whether everything's running and who did the work. From /health and /stats.
-import { useCallback, useEffect, useState } from "react";
-import { api, type Health, type Stats } from "../api";
+// Home: the cost meter in the blue hero card, whether everything's running,
+// and who did the work. From /stats and /health.
+import { type MouseEvent, useCallback, useEffect, useState } from "react";
+import { api, type Stats } from "../api";
+import type { Running, Tab } from "../App";
 import { cost, writerName } from "../format";
-import { MainButton, MeterIcon, ScreenHead, SecondButton } from "../ui";
+import { GaugeIcon, Head, PenIcon, TagIcon } from "../ui";
 
-export function HomeScreen({ go }: { go: (tab: "message" | "listing") => void }) {
-  const [health, setHealth] = useState<Health | null>(null);
+type Props = { go: (tab: Tab) => void; count: number; running: Running; reload: () => Promise<void> };
+
+const percent = (part: number, whole = 1) => (whole ? `${Math.round((part / whole) * 100)}%` : "–");
+
+export function HomeScreen({ go, count, running, reload }: Props) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
+    setBusy(true);
     setError("");
     try {
-      const [h, s] = await Promise.all([api.health(), api.stats()]);
-      setHealth(h);
-      setStats(s);
+      const [found] = await Promise.all([api.stats(), reload()]);
+      setStats(found);
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setBusy(false);
     }
-  }, []);
+  }, [reload]);
   useEffect(() => void load(), [load]);
 
-  const percent = (n: number) => `${Math.round(n * 100)}%`;
+  const link = (tab: Tab) => (e: MouseEvent) => {
+    e.preventDefault();
+    go(tab);
+  };
   return (
-    <div className="screen">
-      <ScreenHead icon={<MeterIcon />} title="FlipAssist" sub="Code first · AI on this Mac · paid AI only when it must"
-        right={<button type="button" className="link" onClick={() => void load()}>Refresh</button>} />
-
-      {stats && (
-        <section className="hero">
-          <p className="hero-label">DONE ON THIS MAC</p>
-          <p className="hero-big">{percent(stats.done_on_this_mac)}</p>
+    <>
+      <Head icon={<GaugeIcon />} title="FlipAssist" sub="Code first · AI on this Mac · paid AI only when it must"
+        right={<button type="button" className="link" disabled={busy} onClick={() => void load()}>{busy ? "Refreshing…" : "Refresh"}</button>} />
+      {error && <p className="error" role="alert">{error}</p>}
+      <div className="split tight">
+        <section className="hero" aria-label="Done on this Mac">
+          <p className="caps">Done on this Mac</p>
+          <p className="hero-big">{stats ? percent(stats.done_on_this_mac) : "–"}</p>
+          <p className="sub">of drafts never needed the paid backup</p>
+          <a className="hero-pill" href="#style" onClick={link("style")}>
+            <PenIcon size={12} stroke={2.4} />
+            Learning from {count} of your messages
+          </a>
           <div className="hero-rule" />
           <div className="hero-stats">
-            <div><strong>{cost(stats.cost_per_100_drafts_pence)}</strong><span>per 100 drafts</span></div>
-            <div><strong>{stats.drafts}</strong><span>drafts</span></div>
-            <div><strong>{stats.drafts ? percent(stats.ready / stats.drafts) : "–"}</strong><span>ready</span></div>
-            <div><strong>{stats.approved ? percent(stats.edited_before_sending / stats.approved) : "–"}</strong><span>edited</span></div>
+            <div><strong>{stats ? cost(stats.cost_per_100_drafts_pence) : "–"}</strong><span>per 100 drafts</span></div>
+            <div><strong>{stats?.drafts ?? "–"}</strong><span>drafts</span></div>
+            <div><strong>{stats ? percent(stats.ready, stats.drafts) : "–"}</strong><span>ready</span></div>
+            <div><strong>{stats ? percent(stats.edited_before_sending, stats.approved) : "–"}</strong><span>edited</span></div>
           </div>
         </section>
-      )}
 
-      {error && <p className="error" role="alert">{error}</p>}
-
-      {health && (
         <section className="card">
-          <p className="section-label">RUNNING</p>
-          <div className="rows">
-            <Status ok={health.local_running} name={writerName(health.local_model)}
-              value={health.local_running ? "Running" : "Not running: start it with ollama serve"} />
-            <Status ok={health.api_key_set} name={writerName(health.api_model)}
-              value={health.api_key_set ? "Ready if Gemma's answer fails a check" : "No key: local only"} />
-            <Status ok={health.flip_api_key_set} name="API key" value={health.flip_api_key_set ? "Set" : "Missing: every draft is refused"} />
-          </div>
+          <p className="caps">Running</p>
+          {runningRows(running).map((row) => (
+            <div className="running" key={row.name}>
+              <span className={row.ok ? "dot" : "dot bad"} aria-hidden="true" />
+              <span>
+                <strong>{row.name}</strong>
+                <span className="sub">{row.state}</span>
+              </span>
+            </div>
+          ))}
         </section>
-      )}
 
-      {stats && stats.models.length > 0 && (
         <section className="card">
-          <p className="section-label">WHO DID THE WORK</p>
-          <div className="rows">
-            {stats.models.map((m) => (
-              <div className="row" key={m.model}>
-                <span className="row-name">{writerName(m.model)}</span>
-                <span className="row-value">{m.passed} of {m.attempts} passed · {cost(m.cost_pence)}</span>
-              </div>
-            ))}
-          </div>
+          <p className="caps">Who did the work</p>
+          {stats?.models.length ? stats.models.map((m) => (
+            <div className="model" key={m.model}>
+              <p className="model-head">
+                <span>{writerName(m.model)}</span>
+                <span className={m.cost_pence ? undefined : "free"}>{cost(m.cost_pence)}</span>
+              </p>
+              <span className="bar"><span style={{ width: percent(m.passed, m.attempts) }} /></span>
+              <span className="sub">{m.passed} of {m.attempts} passed</span>
+            </div>
+          )) : <p className="sub">Nothing drafted yet.</p>}
         </section>
-      )}
 
-      <div className="footer">
-        <SecondButton label="List on eBay" onClick={() => go("listing")} />
-        <MainButton label="Message a seller" onClick={() => go("message")} />
+        <div className="buttons wide">
+          <a className="second" href="#listing" onClick={link("listing")}><TagIcon size={16} />List on eBay</a>
+          <a className="main" href="#message" onClick={link("message")}>Message a seller</a>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
-function Status({ ok, name, value }: { ok: boolean; name: string; value: string }) {
-  return (
-    <div className="row">
-      <span className="row-name"><span className={ok ? "dot ok" : "dot bad"} aria-hidden="true" />{name}</span>
-      <span className="row-value">{value}</span>
-    </div>
-  );
+function runningRows(running: Running): { name: string; state: string; ok: boolean }[] {
+  if (running === null) return [{ name: "FlipAssist's API", state: "Checking…", ok: true }];
+  if (running === "down") {
+    return [{ name: "FlipAssist's API", state: "Not running: start it with .venv/bin/uvicorn flip.api:app", ok: false }];
+  }
+  return [
+    { name: writerName(running.local_model), ok: running.local_running,
+      state: running.local_running ? "Running" : "Not running: start it with ollama serve" },
+    { name: writerName(running.api_model), ok: running.api_key_set,
+      state: running.api_key_set ? "Ready if Gemma's answer fails a check" : "No key: local only" },
+    { name: "API key", ok: running.flip_api_key_set, state: running.flip_api_key_set ? "Set" : "Missing: every draft is refused" },
+  ];
 }

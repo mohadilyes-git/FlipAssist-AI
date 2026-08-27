@@ -11,11 +11,14 @@ stays on a server, never inside the phone app.
 FlipAssist only drafts. It never sends a message or lists anything: AlertFlip
 does that once you approve, and /drafts/{id}/approve records what you actually
 sent, edited or not, so the results can count how often a draft was right as
-it was. /stats is the cost meter.
+it was. A message you approve also joins the messages your style is learned
+from (/style), with the ones you wrote or pasted when setting it up. /stats is
+the cost meter.
 """
 
 import hmac
 import os
+import re
 import subprocess
 import tempfile
 import urllib.request
@@ -24,7 +27,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import Body, Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from flip.ai import ApiModel, LocalModel
@@ -32,14 +35,13 @@ from flip.audit import AuditLog
 from flip.catalogue import load_catalogue, load_conditions
 from flip.draft import load_env
 from flip.drafter import draft_listing
-from flip.message import MESSAGES
 from flip.message_drafter import MESSAGE_TOKENS, draft_message
 from flip.money import to_pence
 from flip.photos import photo_base64
 from flip.prompts import offer_words
 from flip.reader import read_listing_with_ai
 from flip.retrieval import MessageIndex
-from flip.style import load_messages, style_card
+from flip.style import StyleBook, phrase_rows, traits
 
 MAX_PHOTOS = 8
 MAX_PHOTO_BYTES = 15 * 1024 * 1024  # an iPhone photo is 2-5 MB
@@ -133,6 +135,37 @@ class Approved(BaseModel):
     draft_id: int
     edited: bool
     at: str
+    saved_to_style: bool = Field(description="a message you approve joins the messages your style is learned from")
+
+
+class Row(BaseModel):
+    k: str
+    v: str
+
+
+class Style(BaseModel):
+    """What it learned from your messages, with plain code: nothing gets trained."""
+    count: int = Field(description="how many of your messages it learns from")
+    traits: list[Row] = Field(description="the style card: habits in 40% or more of your messages")
+    phrases: list[Row] = Field(description="the phrasebook: sentences in 2 or more of your messages, the price as …")
+
+
+class NewMessage(BaseModel):
+    """A message you've sent a seller, with the listing it was for."""
+    title: str = Field("", max_length=300, description="the listing's title")
+    price: str = Field("", max_length=20, description='its asking price, as written: "£220", "220", or empty')
+    text: str = Field(min_length=1, max_length=2000, description="your message, as you sent it")
+    marketplace: str = Field("", max_length=40)
+
+
+class StyleMessage(BaseModel):
+    id: str
+    title: str
+    price: str = Field(description='the asking price in pounds, as written: "220"; empty if not given')
+    text: str
+    marketplace: str
+    source: str = Field(description="added (in the app), approved (a draft you sent) or csv (flip.message --learn)")
+    at: str
 
 
 class ModelUse(BaseModel):
@@ -165,11 +198,10 @@ class Health(BaseModel):
 # ── what every endpoint shares ──────────────────────────────────────────────
 
 class Setup:
-    """The models, the audit log, the catalogue, and your style card and
-    past messages: made once, on the first call that needs them."""
+    """The models, the audit log and the catalogue: made once, on the first call that needs them."""
 
-    def __init__(self, local, api, log, card=None, index=None, local_listing=None):
-        self.local, self.api, self.log, self.card, self.index = local, api, log, card or {}, index
+    def __init__(self, local, api, log, local_listing=None):
+        self.local, self.api, self.log = local, api, log
         self.local_listing = local_listing or local  # listings get the bigger answer budget
         self.catalogue, self.conditions = load_catalogue(), load_conditions()
 
@@ -181,10 +213,14 @@ def audit():
 
 @lru_cache
 def setup():
-    messages = load_messages(MESSAGES) if MESSAGES.is_file() else []
     api = ApiModel() if os.environ.get("ANTHROPIC_API_KEY") else None
-    return Setup(LocalModel(max_tokens=MESSAGE_TOKENS), api, audit(), style_card(messages), MessageIndex(),
-                 LocalModel())
+    return Setup(LocalModel(max_tokens=MESSAGE_TOKENS), api, audit(), LocalModel())
+
+
+@lru_cache
+def style():
+    """Your messages, your style card from them, and the search for the closest."""
+    return StyleBook(index=MessageIndex())
 
 
 def key(x_api_key: str | None = Header(None, description="FLIP_API_KEY from .env")):
@@ -203,6 +239,18 @@ def attempts(found):
 
 def new_id():
     return f"api-{uuid.uuid4().hex[:12]}"
+
+
+def pounds(written):
+    """"£1,200" -> "1200", "" -> ""; None if it isn't a price."""
+    plain = re.sub(r"[£,\s]", "", written)
+    return plain if not plain or re.fullmatch(MONEY, plain) else None
+
+
+def shown(message):
+    return StyleMessage(id=message["id"], title=message["listing_title"], price=message["asking_price"],
+                        text=message["my_message"], marketplace=message["marketplace"], source=message["source"],
+                        at=message["at"])
 
 
 # ── the endpoints ───────────────────────────────────────────────────────────
@@ -227,14 +275,14 @@ def health():
 
 
 @app.post("/messages/draft", response_model=MessageDraft, dependencies=[Depends(key)])
-def draft_a_message(request: MessageRequest, s: Setup = Depends(setup)):
+def draft_a_message(request: MessageRequest, s: Setup = Depends(setup), book: StyleBook = Depends(style)):
     """Read the listing (its flaws, where to collect, whether the seller takes
     offers), then draft the offer: code sets the price, your own sentences
     or the AI write it, and the checks decide."""
     listing = {**request.listing.model_dump(), "id": request.listing.id or new_id()}
     reading = read_listing_with_ai(listing, s.local, s.api, request.mode, s.log)
     try:
-        result = draft_message(listing, s.card, s.index, s.local, s.api, request.mode, s.log, kind=request.kind,
+        result = draft_message(listing, book.card(), book.index, s.local, s.api, request.mode, s.log, kind=request.kind,
                                mention=request.mention, length=request.length, previous=request.previous,
                                reading=reading, writer=request.writer,
                                offer=to_pence(request.offer) if request.offer else None)
@@ -293,12 +341,56 @@ def draft_a_listing(title: str = Form(min_length=1, max_length=300), description
 
 
 @app.post("/drafts/{draft_id}/approve", response_model=Approved, dependencies=[Depends(key)])
-def approve(draft_id: int, approval: Approval, log: AuditLog = Depends(audit)):
-    """Record what you actually sent for a draft, and whether you edited it."""
+def approve(draft_id: int, approval: Approval, log: AuditLog = Depends(audit), book: StyleBook = Depends(style)):
+    """Record what you actually sent for a draft, and whether you edited it. A
+    message also joins the messages your style is learned from, once however
+    often it's approved."""
     found = log.approve(draft_id, approval.sent)
     if found is None:
         raise HTTPException(404, "no draft with that id")
-    return found
+    listing = log.listing(draft_id)
+    if listing is not None:
+        book.add([{"id": f"draft-{draft_id}", "listing_title": listing["title"], "asking_price": listing["asking_price"],
+                   "marketplace": listing["marketplace"], "my_message": approval.sent}], "approved")
+    return {**found, "saved_to_style": listing is not None}
+
+
+@app.get("/style", response_model=Style, dependencies=[Depends(key)])
+def your_style(book: StyleBook = Depends(style)):
+    """What it learned from your messages: the style card (habits in 40% or
+    more of them) and the phrasebook (sentences in 2 or more). Plain code."""
+    card = book.card()
+    return Style(count=card.get("messages", 0), traits=[Row(k=k, v=v) for k, v in traits(card)],
+                 phrases=[Row(k=k, v=v) for k, v in phrase_rows(card)])
+
+
+@app.get("/style/messages", response_model=list[StyleMessage], dependencies=[Depends(key)])
+def style_messages(book: StyleBook = Depends(style)):
+    """The messages your style is learned from, newest first."""
+    return [shown(m) for m in book.messages()]
+
+
+@app.post("/style/messages", response_model=list[StyleMessage], status_code=201, dependencies=[Depends(key)])
+def add_style_messages(messages: list[NewMessage] = Body(min_length=1, max_length=100),
+                       book: StyleBook = Depends(style)):
+    """Add messages you've sent sellers. The next draft already learns from them."""
+    rows = []
+    for m in messages:
+        price = pounds(m.price)
+        if price is None:
+            raise HTTPException(422, f"{m.price}: not a price")
+        if not m.text.strip():
+            raise HTTPException(422, "a message needs some words")
+        rows.append({"listing_title": m.title.strip(), "asking_price": price, "marketplace": m.marketplace.strip(),
+                     "my_message": m.text})
+    return [shown(m) for m in book.add(rows, "added")]
+
+
+@app.delete("/style/messages/{message_id}", status_code=204, dependencies=[Depends(key)])
+def forget_style_message(message_id: str, book: StyleBook = Depends(style)):
+    """Stop learning from one of your messages."""
+    if not book.remove(message_id):
+        raise HTTPException(404, "no message with that id")
 
 
 @app.get("/stats", response_model=Stats, dependencies=[Depends(key)])

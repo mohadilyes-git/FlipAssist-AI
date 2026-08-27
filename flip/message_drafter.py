@@ -141,6 +141,7 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     allowed = habits(card, examples)
     pickup = reading["pickup"] if "collecting" in allowed else ""  # only if you'd say you'll collect
     result = {"item_id": listing.get("id"), "status": "needs you", "reasons": [], "kind": kind, "offer": offer,
+              "listing": {key: listing.get(key) or "" for key in ("title", "asking_price", "marketplace")},
               "point": point["says"] if point else [], "mentioned": mention,
               "ask": question_for(kind, point) if point and not mention and style_decides else None,
               "note": f"The seller says: \"{reading['no_offers']}\"" if reading["no_offers"] else None,

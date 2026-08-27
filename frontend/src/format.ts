@@ -12,6 +12,11 @@ export function writerName(model: string | null): string {
   return model ? (WRITERS[model] ?? model) : "Nobody yet";
 }
 
+/** Who read the listing: "read by Gemma, on this Mac", or "read by code (no AI)". */
+export function readBy(model: string): string {
+  return model === "code" ? "read by code (no AI)" : `read by ${writerName(model)}`;
+}
+
 /** 0 -> "free"; 0.0091 -> "0.009p". */
 export function cost(pence: number): string {
   return pence ? `${pence < 0.001 ? "<0.001" : pence.toFixed(3)}p` : "free";
@@ -30,4 +35,10 @@ export const CONDITIONS: Record<string, string> = {
   "7000": "For parts or not working",
 };
 
-export const MARKETPLACES = ["facebook", "ebay", "vinted", "gumtree", "other"];
+export const MARKETPLACES = [
+  { id: "facebook", name: "Facebook" },
+  { id: "ebay", name: "eBay" },
+  { id: "vinted", name: "Vinted" },
+  { id: "gumtree", name: "Gumtree" },
+  { id: "other", name: "Other" },
+];
