@@ -2,6 +2,7 @@
 log: no AI runs, nothing is sent anywhere, and nothing costs anything."""
 
 import base64
+import json
 from pathlib import Path
 
 import pytest
@@ -15,7 +16,7 @@ from tests.fakes import FakeModel
 
 ROOT = Path(__file__).resolve().parent.parent
 PAST = load_messages(ROOT / "testset" / "messages.example.csv")  # messages that repeat
-KEY = "test-key"
+KEY = "test-key-for-the-api-0123456789-abcdef"  # 32 characters or more, as a real key is
 LISTING = {"title": "iPhone 13 128GB Blue", "asking_price": "220", "marketplace": "facebook",
            "description": "Black dot on the screen, doesn't affect use. Collection only from Leeds LS6. "
                           "Price is firm, no offers."}
@@ -249,3 +250,140 @@ def test_a_message_you_delete_is_no_longer_learned_from(client):
 def test_your_style_needs_the_key(client):
     assert TestClient(api.app).get("/style").status_code == 401
     assert TestClient(api.app).post("/style/messages", json=[{"text": "hi"}]).status_code == 401
+
+
+# ── what the review of the API found ────────────────────────────────────────
+
+def served(path, headers, chunks):
+    """Call the app as a server would, with the body in chunks: its answer's
+    status, and the chunks it read."""
+    import asyncio
+    read, sent, chunks = [], [], list(chunks)
+
+    async def receive():
+        if not chunks:
+            return {"type": "http.disconnect"}
+        read.append(chunks.pop(0))
+        return {"type": "http.request", "body": read[-1], "more_body": bool(chunks)}
+
+    async def send(message):
+        sent.append(message)
+
+    scope = {"type": "http", "method": "POST", "path": path, "raw_path": path.encode(), "query_string": b"",
+             "root_path": "", "scheme": "http", "http_version": "1.1", "server": ("127.0.0.1", 8000),
+             "client": ("127.0.0.1", 5000), "headers": [(k.lower().encode(), v.encode()) for k, v in headers.items()]}
+    asyncio.run(api.app(scope, receive, send))
+    return next(m["status"] for m in sent if m["type"] == "http.response.start"), read
+
+
+def test_a_caller_without_the_key_is_turned_away_before_a_byte_is_read(client):
+    for path in ("/messages/draft", "/listings/draft", "/style/messages", "/drafts/1/approve", "/nowhere"):
+        assert served(path, {"content-type": "application/json"}, [b"x" * 65536] * 80) == (401, [])
+
+
+def test_a_body_bigger_than_the_endpoint_takes_is_turned_away(client):
+    with_key = {"x-api-key": KEY, "content-type": "application/json"}
+    assert served("/messages/draft", {**with_key, "content-length": str(api.MAX_JSON + 1)}, [b"{}"]) == (413, [])
+    assert served("/messages/draft", {**with_key, "content-length": "lots"}, [b"{}"])[0] == 413
+    status, read = served("/style/messages", with_key, [b" " * 65536] * 40)  # 2.5 MB in chunks, no length given
+    assert status == 413 and sum(map(len, read)) <= api.MAX_JSON + 65536
+    assert TestClient(api.app).get("/health").status_code == 200  # still open, as are the docs
+    assert TestClient(api.app).get("/openapi.json").status_code == 200
+
+
+@pytest.mark.parametrize("weak", ["your-key-here", "short", "x" * (api.MIN_KEY - 1)])
+def test_the_placeholder_or_a_short_key_is_no_key(client, monkeypatch, weak):
+    monkeypatch.setenv("FLIP_API_KEY", weak)
+    refused = TestClient(api.app, headers={"X-API-Key": weak}).get("/stats")
+    assert refused.status_code == 503 and "32 characters or more" in refused.json()["detail"]
+    assert TestClient(api.app).get("/health").json()["flip_api_key_set"] is False
+
+
+def test_a_photo_is_known_by_its_bytes_not_its_name(client):
+    client.use(local=FakeModel("gemma3:4b", LISTED))
+    form = {"title": "iPhone 13 128GB unlocked", "notes": "boxed, battery 87%, light scratch on the back"}
+    from_a_blob = client.post("/listings/draft", data=form, files=[("photos", ("blob", JPEG, "image/jpeg"))])
+    assert from_a_blob.status_code == 200 and from_a_blob.json()["photo_count"] == 1
+    pdf = client.post("/listings/draft", data=form, files=[("photos", ("invoice.jpg", b"%PDF-1.4\n%x", "image/jpeg"))])
+    assert pdf.status_code == 422 and pdf.json()["detail"] == "invoice.jpg: send photos as JPEG, PNG, HEIC or WebP"
+
+
+def test_the_colour_is_the_checked_one_and_says_where_it_came_from(client):
+    unsure = {**LISTED, "colour": "UNSURE"}
+    client.use(local=FakeModel("gemma3:4b", unsure, LISTED, {k: v for k, v in LISTED.items() if k != "colour"}))
+    form = {"notes": "boxed, battery 87%, light scratch on the back"}
+    photo = [("photos", ("back.jpg", JPEG, "image/jpeg"))]
+    guessed = client.post("/listings/draft", data={**form, "title": "iPhone 13 128GB unlocked"}, files=photo).json()
+    assert (guessed["colour"], guessed["colour_from"], guessed["status"]) == (None, None, "needs you")
+    seen = client.post("/listings/draft", data={**form, "title": "iPhone 13 128GB unlocked"}, files=photo).json()
+    assert (seen["colour"], seen["colour_from"]) == ("Midnight", "photos")
+    assert "colour" not in seen["filled_by_code"]  # the AI's, not code's
+    read = client.post("/listings/draft", data={**form, "title": "iPhone 13 128GB Midnight unlocked"}, files=photo).json()
+    assert (read["colour"], read["colour_from"], read["filled_by_code"]["colour"]) == ("Midnight", "listing", "Midnight")
+
+
+def test_approving_a_draft_again_counts_it_once_as_last_approved(client):
+    client.use(local=FakeModel("gemma3:4b", READ), messages=PAST)
+    draft = client.post("/messages/draft", json={"listing": LISTING, "mention": True}).json()
+    url = f"/drafts/{draft['draft_id']}/approve"
+    for sent in (draft["message"], draft["message"] + " Thanks", draft["message"] + " Thanks"):
+        client.post(url, json={"sent": sent})
+    stats = client.get("/stats").json()
+    assert (stats["drafts"], stats["approved"], stats["edited_before_sending"]) == (1, 1, 1)
+    client.post(url, json={"sent": draft["message"]})
+    assert client.get("/stats").json()["edited_before_sending"] == 0
+
+
+@pytest.mark.parametrize("draft_id", ["0", "-1", str(2**63), "9" * 40])
+def test_a_draft_id_out_of_range_is_refused_not_a_crash(client, draft_id):
+    assert client.post(f"/drafts/{draft_id}/approve", json={"sent": "hi"}).status_code == 422
+
+
+@pytest.mark.parametrize("change, words", [
+    ({"listing": {**LISTING, "asking_price": "0"}}, "under £1"),
+    ({"listing": {**LISTING, "asking_price": "0.50"}}, "under £1"),
+    ({"offer": "230"}, "isn't a lower offer"),
+    ({"previous": "Hi, would you take £185?"}, 'with "length": "longer"'),
+])
+def test_what_cant_be_drafted_is_refused_before_anything_runs(client, change, words):
+    local = FakeModel("gemma3:4b")
+    client.use(local=local, messages=PAST)
+    refused = client.post("/messages/draft", json={"listing": LISTING, **change})
+    assert refused.status_code == 422 and words in refused.json()["detail"]
+    assert local.asked == []  # not even the reading ran
+
+
+def test_a_local_model_that_hangs_up_falls_back_to_code(client, monkeypatch):
+    import http.client
+    import io
+    from flip import ai
+
+    def hangs_up(request, timeout):
+        raise http.client.RemoteDisconnected("Remote end closed connection without response")
+    monkeypatch.setattr(ai.urllib.request, "urlopen", hangs_up)
+    client.use(local=ai.LocalModel(), messages=PAST)
+    draft = client.post("/messages/draft", json={"listing": LISTING, "mention": True})
+    assert draft.status_code == 200 and draft.json()["reading"]["read_by"] == "code"
+    assert draft.json()["status"] == "ready"  # your own sentences, no AI needed
+    monkeypatch.setattr(ai.urllib.request, "urlopen", lambda request, timeout: io.BytesIO(b"<html>Bad gateway</html>"))
+    assert client.post("/messages/draft", json={"listing": LISTING, "mention": True}).status_code == 200
+
+
+def test_a_fault_inside_is_a_500_not_the_callers_mistake(client, monkeypatch):
+    client.use(local=FakeModel("gemma3:4b", READ), messages=PAST)
+
+    def broken(*args, **kwargs):
+        raise ValueError("a bug, not bad input")
+    monkeypatch.setattr(api, "draft_message", broken)
+    assert TestClient(api.app, headers={"X-API-Key": KEY}, raise_server_exceptions=False).post(
+        "/messages/draft", json={"listing": LISTING}).status_code == 500
+
+
+def test_half_a_character_from_a_caller_is_made_whole_not_a_crash(client):
+    client.use(local=FakeModel("gemma3:4b", READ), messages=PAST)
+    body = json.dumps({"listing": {**LISTING, "title": "iPhone 13 128GB Blue"}}).replace("Blue", "Blue \\ud800")
+    draft = client.post("/messages/draft", content=body, headers={"Content-Type": "application/json"})
+    assert draft.status_code == 200, draft.text
+    added = client.post("/style/messages", content='[{"title": "Pixel \\udfff", "text": "Hi, would you take \\u00a3220?"}]',
+                        headers={"Content-Type": "application/json"})
+    assert added.status_code == 201 and added.json()[0]["title"] == "Pixel �"

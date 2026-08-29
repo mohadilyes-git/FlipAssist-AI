@@ -284,8 +284,10 @@ TAG_QUESTION = re.compile(r",?\s*(?:does that (?:work|suit(?: you)?|sound (?:ok|
                           r"(?: (?:for|with) you)?\s*\?$", re.IGNORECASE)
 # "would you take £170, or is it postage only?" asks about the sale, it doesn't promise
 ONLY_QUESTION = re.compile(r",?\s+or is (?:it|that)\b.*$", re.IGNORECASE)
-# what can come after a sentence's own end: an emoji, a kiss, "..."
-SIGN_OFF = re.compile(r"(?:\s*(?:[\U0001F300-\U0001FAFF☀-➿\U0001F3FB-\U0001F3FF\ufe0f\u200d]+|\bx{1,3}\b|\.{2,}|…))+\s*$",
+# what can come after a sentence's own end: an emoji, a kiss, "...". Possessive (*+, ++): a run of
+# emojis is taken whole, never split up and retried, so emojis mid-sentence ("cracked ❤️❤️❤️ still
+# works") can't make it try every way of splitting them, which doubled the time with each emoji
+SIGN_OFF = re.compile(r"(?:\s*+(?:[\U0001F300-\U0001FAFF☀-➿\U0001F3FB-\U0001F3FF\ufe0f\u200d]++|\bx{1,3}\b|\.{2,}+|…))++\s*$",
                       re.IGNORECASE)
 CLAUSES = re.compile(r"[,;:]|\b(?:as|because|since|given|considering|seeing|with|due|though|although|now that|"
                      r"knowing|bearing in mind|in light of|in view of|despite|to allow for|to account for|"

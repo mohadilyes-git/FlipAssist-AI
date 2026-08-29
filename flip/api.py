@@ -4,8 +4,10 @@
     then open http://127.0.0.1:8000/docs: every endpoint, what it takes and what it answers
 
 It runs on this Mac only (127.0.0.1) unless it's put online on purpose, and
-every endpoint but /health needs the key from .env (FLIP_API_KEY) in an
-X-API-Key header. AlertFlip calls it from a Supabase function, so the key
+every endpoint but /health (and the /docs pages, which only describe them)
+needs the key from .env (FLIP_API_KEY) in an X-API-Key header. A request
+without it, or bigger than its endpoint takes, is turned away before any of
+it is read (Gate). AlertFlip calls it from a Supabase function, so the key
 stays on a server, never inside the phone app.
 
 FlipAssist only drafts. It never sends a message or lists anything: AlertFlip
@@ -17,6 +19,7 @@ the cost meter.
 """
 
 import hmac
+import json
 import os
 import re
 import subprocess
@@ -27,17 +30,21 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from fastapi import Body, Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import Body, Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi import Path as PathParam
+from fastapi.routing import APIRoute
 from pydantic import BaseModel, Field
+from starlette.datastructures import Headers
+from starlette.responses import JSONResponse
 
-from flip.ai import ApiModel, LocalModel
+from flip.ai import ApiModel, LocalModel, whole_text
 from flip.audit import AuditLog
 from flip.catalogue import load_catalogue, load_conditions
 from flip.draft import load_env
 from flip.drafter import draft_listing
-from flip.message_drafter import MESSAGE_TOKENS, draft_message
+from flip.message_drafter import MESSAGE_TOKENS, Refused, draft_message, offer_to_draft
 from flip.money import to_pence
-from flip.photos import photo_base64
+from flip.photos import NotAPhoto, photo_base64, photo_kind
 from flip.prompts import offer_words
 from flip.reader import read_listing_with_ai
 from flip.retrieval import MessageIndex
@@ -45,7 +52,11 @@ from flip.style import StyleBook, phrase_rows, traits
 
 MAX_PHOTOS = 8
 MAX_PHOTO_BYTES = 15 * 1024 * 1024  # an iPhone photo is 2-5 MB
-PHOTO_TYPES = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp"}
+MAX_JSON = 1024 * 1024  # a message request is a few KB; 100 messages for your style fit with room to spare
+MAX_FORM = MAX_PHOTOS * MAX_PHOTO_BYTES + MAX_JSON  # /listings/draft: 8 photos and the text
+MIN_KEY = 32  # characters: the placeholder from .env.example, or anything short, is as good as no key
+MAX_ID = 2**63 - 1  # the biggest id SQLite keeps
+OPEN = {"/health", "/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json"}  # no key: they call nothing
 MONEY = r"^\d{1,6}(?:\.\d{1,2})?$"  # pounds, as written: "220" or "219.99"
 Mode = Literal["auto", "local", "api"]
 
@@ -58,7 +69,7 @@ class Listing(BaseModel):
     """A seller's listing, as AlertFlip found it."""
     title: str = Field(min_length=1, max_length=300)
     description: str = Field("", max_length=5000)
-    asking_price: str = Field(pattern=MONEY, description='pounds, as written: "220" or "219.99"')
+    asking_price: str = Field(pattern=MONEY, description='pounds, as written: "220" or "219.99"; £1 or more')
     marketplace: str = Field("", max_length=40, description="facebook, ebay, vinted, gumtree...")
     id: str | None = Field(None, max_length=100, description="AlertFlip's own id for it, kept in the audit log")
 
@@ -68,7 +79,8 @@ class MessageRequest(BaseModel):
     kind: Literal["lower", "asking", "more"] = "lower"
     mention: bool | None = Field(None, description="say the listing's flaw or good condition; null: your style decides")
     length: Literal["usual", "longer"] = "usual"
-    previous: str | None = Field(None, max_length=1000, description="the draft on screen, to make longer")
+    previous: str | None = Field(None, max_length=1000, description='the draft on screen, to make longer: only with '
+                                                                    '"length": "longer"')
     writer: Literal["auto", "template", "ai"] = Field("auto", description="auto: your past messages decide")
     offer: str | None = Field(None, pattern=MONEY, description="the price you picked, in pounds; leave it out and code "
                                                                 "starts from its own (15% under, or 5% over, asking)")
@@ -117,7 +129,10 @@ class ListingDraft(BaseModel):
     condition_id: str | None
     condition_note: str | None
     description: str | None
-    colour: str | None
+    colour: str | None = Field(description="one of the model's colours, checked; null when neither the listing nor "
+                                           "the photos settle it")
+    colour_from: Literal["listing", "photos"] | None = Field(
+        description="listing: code read it from the title, description or notes; photos: the AI picked it from them")
     filled_by_code: dict = Field(description="model, storage, network, specs...: from the catalogue, no AI")
     warnings: list[str]
     reasons: list[str]
@@ -192,7 +207,8 @@ class Health(BaseModel):
     local_running: bool
     api_model: str
     api_key_set: bool = Field(description="the Anthropic key for the paid fallback is in .env")
-    flip_api_key_set: bool = Field(description="the key callers need is set; without it every call is refused")
+    flip_api_key_set: bool = Field(description=f"the key callers need is set, {MIN_KEY} characters or more; "
+                                                "without it every call is refused")
 
 
 # ── what every endpoint shares ──────────────────────────────────────────────
@@ -223,13 +239,63 @@ def style():
     return StyleBook(index=MessageIndex())
 
 
-def key(x_api_key: str | None = Header(None, description="FLIP_API_KEY from .env")):
-    """Every endpoint but /health: the caller must send the key."""
-    expected = os.environ.get("FLIP_API_KEY", "")
+def usable_key():
+    """FLIP_API_KEY, or "" when it's unset, the placeholder, or too short to be a key."""
+    found = os.environ.get("FLIP_API_KEY", "").strip()
+    return found if len(found) >= MIN_KEY else ""
+
+
+def refusal(given):
+    """Why a call sending this X-API-Key is turned away, as (status, words), or None."""
+    expected = usable_key()
     if not expected:
-        raise HTTPException(503, "set FLIP_API_KEY in .env first: without it nobody can call this")
-    if not x_api_key or not hmac.compare_digest(x_api_key.encode(), expected.encode()):
-        raise HTTPException(401, "missing or wrong X-API-Key")
+        return 503, f"set FLIP_API_KEY in .env first, a random one of {MIN_KEY} characters or more (.env.example " \
+                    "shows how): without it nobody can call this"
+    if not given or not hmac.compare_digest(given.encode(), expected.encode()):
+        return 401, "missing or wrong X-API-Key"
+    return None
+
+
+def key(x_api_key: str | None = Header(None, description="FLIP_API_KEY from .env")):
+    """Every endpoint but /health: the caller must send the key. Gate has
+    already checked it; this shows it in /docs, and checks it again."""
+    refused = refusal(x_api_key)
+    if refused:
+        raise HTTPException(*refused)
+
+
+class Gate:
+    """Turns a request away before anything reads its body: one without the
+    key (every path but OPEN's), and one bigger than its endpoint takes, by
+    its Content-Length or, sent in chunks, as it arrives. FastAPI reads and
+    parses a whole body before an endpoint's own checks run, so without this
+    a caller with no key could make this Mac hold or write all they sent."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope["path"] in OPEN:
+            return await self.app(scope, receive, send)
+        headers = Headers(scope=scope)
+        limit = MAX_FORM if scope["path"] == "/listings/draft" else MAX_JSON
+        too_big = 413, f"too big: at most {limit // 1024 // 1024} MB here"
+        length = headers.get("content-length")
+        refused = refusal(headers.get("x-api-key")) or (
+            too_big if length is not None and (not length.isdigit() or int(length) > limit) else None)
+        if refused:
+            return await JSONResponse({"detail": refused[1]}, status_code=refused[0])(scope, receive, send)
+        taken = 0
+
+        async def counted():
+            nonlocal taken
+            message = await receive()
+            taken += len(message.get("body", b""))
+            if taken > limit:
+                raise HTTPException(*too_big)  # FastAPI passes it on as the answer
+            return message
+
+        await self.app(scope, counted, send)
 
 
 def attempts(found):
@@ -253,11 +319,34 @@ def shown(message):
                         at=message["at"])
 
 
+class WholeText(Request):
+    """JSON can spell half a character ("\\ud800"). Python takes it, but the
+    answer, the audit log and your style can't be written with it in, so a
+    listing or message carrying one was a 500. It's made "\ufffd" before any
+    endpoint sees the request."""
+
+    async def json(self):
+        if not hasattr(self, "_json"):
+            self._json = whole_text(json.loads(await self.body()))
+        return self._json
+
+
+class WholeTextRoute(APIRoute):
+    def get_route_handler(self):
+        handle = super().get_route_handler()
+
+        async def with_whole_text(request):
+            return await handle(WholeText(request.scope, request.receive))
+        return with_whole_text
+
+
 # ── the endpoints ───────────────────────────────────────────────────────────
 
 app = FastAPI(title="FlipAssist", version="0.4.0",
               description="Drafts eBay listings and offer messages. Code does what it can, a local AI the rest, a "
                           "paid AI only when the local answer fails a check, and a person approves every draft.")
+app.add_middleware(Gate)
+app.router.route_class = WholeTextRoute
 
 
 @app.get("/health", response_model=Health)
@@ -271,7 +360,7 @@ def health():
         running = False
     return Health(local_model=local.name, local_running=running, api_model=ApiModel().name,
                   api_key_set=bool(os.environ.get("ANTHROPIC_API_KEY")),
-                  flip_api_key_set=bool(os.environ.get("FLIP_API_KEY")))
+                  flip_api_key_set=bool(usable_key()))
 
 
 @app.post("/messages/draft", response_model=MessageDraft, dependencies=[Depends(key)])
@@ -279,14 +368,20 @@ def draft_a_message(request: MessageRequest, s: Setup = Depends(setup), book: St
     """Read the listing (its flaws, where to collect, whether the seller takes
     offers), then draft the offer: code sets the price, your own sentences
     or the AI write it, and the checks decide."""
+    offer = to_pence(request.offer) if request.offer else None
+    try:  # refused before anything runs: no reading, no model
+        offer_to_draft(request.kind, to_pence(request.listing.asking_price), offer)
+        if request.previous and request.length != "longer":
+            raise Refused('previous is the draft to make longer: send it with "length": "longer"')
+    except Refused as e:
+        raise HTTPException(422, str(e))
     listing = {**request.listing.model_dump(), "id": request.listing.id or new_id()}
     reading = read_listing_with_ai(listing, s.local, s.api, request.mode, s.log)
     try:
         result = draft_message(listing, book.card(), book.index, s.local, s.api, request.mode, s.log, kind=request.kind,
                                mention=request.mention, length=request.length, previous=request.previous,
-                               reading=reading, writer=request.writer,
-                               offer=to_pence(request.offer) if request.offer else None)
-    except ValueError as e:
+                               reading=reading, writer=request.writer, offer=offer)
+    except Refused as e:  # anything else is a fault here, not the caller's: a 500
         raise HTTPException(422, str(e))
     answer = result["answer"] or {}
     tried = attempts(result["attempts"])
@@ -315,18 +410,21 @@ def draft_a_listing(title: str = Form(min_length=1, max_length=300), description
     encoded = []
     with tempfile.TemporaryDirectory() as folder:
         for n, photo in enumerate(photos):
-            suffix = Path(photo.filename or "").suffix.lower()
-            if suffix not in PHOTO_TYPES:
-                raise HTTPException(422, f"{photo.filename}: send photos as JPEG, PNG, HEIC or WebP")
+            name = photo.filename or f"photo {n + 1}"
             data = photo.file.read(MAX_PHOTO_BYTES + 1)
             if len(data) > MAX_PHOTO_BYTES:
-                raise HTTPException(413, f"{photo.filename}: bigger than {MAX_PHOTO_BYTES // 1024 // 1024} MB")
-            path = Path(folder) / f"photo-{n}{suffix}"
+                raise HTTPException(413, f"{name}: bigger than {MAX_PHOTO_BYTES // 1024 // 1024} MB")
+            kind = photo_kind(data[:16])  # by its bytes, whatever it's called: a Blob arrives as "blob"
+            if kind is None:
+                raise HTTPException(422, f"{name}: send photos as JPEG, PNG, HEIC or WebP")
+            path = Path(folder) / f"photo-{n}{kind}"
             path.write_bytes(data)
             try:
                 encoded.append(photo_base64(path))
+            except NotAPhoto as e:  # more pixels than a photo has, or too slow to read
+                raise HTTPException(422, f"{name}: {e.why}")
             except (OSError, ValueError, subprocess.CalledProcessError):
-                raise HTTPException(422, f"{photo.filename}: can't be read as a photo")
+                raise HTTPException(422, f"{name}: can't be read as a photo")
     entry = {"id": id or new_id(), "original_title": title, "original_description": description, "my_notes": notes}
     result = draft_listing(entry, s.catalogue, s.conditions, s.local_listing, s.api, mode, encoded, s.log)
     answer, item = result["answer"] or {}, result["item"]
@@ -334,14 +432,17 @@ def draft_a_listing(title: str = Form(min_length=1, max_length=300), description
     return ListingDraft(
         draft_id=result["draft_id"], status=result["status"], ebay_title=result["title"],
         condition_id=answer.get("condition_id"), condition_note=answer.get("condition_note"),
-        description=answer.get("description"), colour=answer.get("colour") or item.get("colour"),
-        filled_by_code={k: v for k, v in item.items() if k not in ("warnings", "missing")},
+        description=answer.get("description"), colour=item.get("colour"),
+        colour_from=result["colour_from"],
+        filled_by_code={k: v for k, v in item.items()  # code's facts only: a colour from the photos is the AI's
+                        if k not in ("warnings", "missing") and not (k == "colour" and result["colour_from"] == "photos")},
         warnings=result["warnings"], reasons=result["reasons"], photo_count=len(encoded), attempts=tried,
         cost_pence=round(sum(a.cost_pence for a in tried), 4))
 
 
 @app.post("/drafts/{draft_id}/approve", response_model=Approved, dependencies=[Depends(key)])
-def approve(draft_id: int, approval: Approval, log: AuditLog = Depends(audit), book: StyleBook = Depends(style)):
+def approve(approval: Approval, draft_id: int = PathParam(ge=1, le=MAX_ID), log: AuditLog = Depends(audit),
+            book: StyleBook = Depends(style)):
     """Record what you actually sent for a draft, and whether you edited it. A
     message also joins the messages your style is learned from, once however
     often it's approved."""

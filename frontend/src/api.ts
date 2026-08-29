@@ -59,7 +59,9 @@ export type ListingDraft = {
   condition_id: string | null;
   condition_note: string | null;
   description: string | null;
+  /** checked against the model's colours; null when neither the listing nor the photos settle it */
   colour: string | null;
+  colour_from: "listing" | "photos" | null;
   filled_by_code: Record<string, unknown>;
   warnings: string[];
   reasons: string[];

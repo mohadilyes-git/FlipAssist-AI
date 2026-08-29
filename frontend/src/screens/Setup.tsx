@@ -116,7 +116,7 @@ export function Setup({ step, go, style, onLearned, onStart }: Props) {
             </p>
           </section>
           <div className="stack">
-            <textarea className="input answer" aria-label="Your message to this seller" value={answers[at]}
+            <textarea className="input answer" aria-label="Your message to this seller" value={answers[at]} maxLength={2000}
               placeholder="Write it the way you normally would." onChange={(e) => {
                 const text = e.target.value;
                 setAnswers((now) => now.map((a, i) => (i === at ? text : a)));
@@ -158,12 +158,12 @@ export function Setup({ step, go, style, onLearned, onStart }: Props) {
                 </button>
               </p>
               <div className="pasted-pair">
-                <input className="input" aria-label="Listing title" placeholder="Listing title" value={p.title}
+                <input className="input" aria-label="Listing title" placeholder="Listing title" value={p.title} maxLength={300}
                   onChange={(e) => edit(p.id, { title: e.target.value })} />
-                <input className="input" aria-label="Price" placeholder="£220" inputMode="decimal" value={p.price}
+                <input className="input" aria-label="Price" placeholder="£220" inputMode="decimal" value={p.price} maxLength={20}
                   onChange={(e) => edit(p.id, { price: e.target.value })} />
               </div>
-              <textarea className="input" rows={4} aria-label="Your message" placeholder="Hi mate, would you take £185 cash?"
+              <textarea className="input" rows={4} aria-label="Your message" placeholder="Hi mate, would you take £185 cash?" maxLength={2000}
                 value={p.text} onChange={(e) => edit(p.id, { text: e.target.value })} />
             </section>
           ))}

@@ -704,3 +704,30 @@ def test_more_ways_of_promising_how_youll_buy(message, promised):
 
 def test_no_power_for_spares_is_still_a_fault():
     assert has_fault("No power, spares or repairs.") and has_fault("No sound, spares or repairs.")
+
+
+# ── what comes after a sentence: a run of emojis can't hang the checks ──────
+
+@pytest.mark.parametrize("sentence, core, after", [
+    ("Would you take £210?😊", "Would you take £210?", "😊"),
+    ("Would you take £210? x", "Would you take £210?", "x"),
+    ("Cheers 👍🏽👍🏽 xx", "Cheers", "👍🏽👍🏽 xx"),
+    ("Would you take £210...", "Would you take £210", "..."),
+    ("ok 😊 thanks", "ok 😊 thanks", ""),  # an emoji mid-sentence isn't a sign-off
+    ("Taxi", "Taxi", ""),
+])
+def test_what_comes_after_a_sentences_own_end(sentence, core, after):
+    from flip.writer import split_sign_off
+    assert split_sign_off(sentence) == (core, after)
+
+
+def test_a_row_of_emojis_mid_sentence_is_checked_at_once():
+    """It once tried every way of splitting the row: 12 hearts took 19 seconds, 15 would take 20 minutes."""
+    import time
+    from flip.writer import split_sign_off
+    hearts = "❤️" * 1000
+    started = time.monotonic()
+    check_message(f"Would you take £185, given the back glass cracked {hearts} still works fine? Can collect today.",
+                  18500, f"Back glass cracked {hearts} still works fine. Collection only.", 22000)
+    split_sign_off(f"Hi {hearts} mate")
+    assert time.monotonic() - started < 2

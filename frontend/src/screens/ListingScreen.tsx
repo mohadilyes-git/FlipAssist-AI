@@ -9,6 +9,7 @@ import { CONDITIONS, cost, seconds, writerName } from "../format";
 import { CameraIcon, CheckIcon, ChevronIcon, CrossIcon, Head, Steps, TagIcon, Warn, WarningIcon } from "../ui";
 
 const MAX_PHOTOS = 8;
+const MAX_PHOTO_BYTES = 15 * 1024 * 1024; // the API's limit for one photo: refused here, before it's sent
 const TITLE_LIMIT = 80; // eBay's limit
 const LONG_TITLE = 74; // past this the counter turns orange
 const PHOTO_TYPE = /^image\/(jpeg|png|heic|heif|webp)$/;
@@ -28,7 +29,14 @@ export function ListingScreen() {
   const [copied, setCopied] = useState<boolean | null>(null);
 
   function add(files: FileList | null) {
-    const fit = Array.from(files ?? []).filter((f) => PHOTO_TYPE.test(f.type) || PHOTO_NAME.test(f.name));
+    const given = Array.from(files ?? []);
+    const photo = (f: File) => PHOTO_TYPE.test(f.type) || PHOTO_NAME.test(f.name);
+    const fit = given.filter((f) => photo(f) && f.size <= MAX_PHOTO_BYTES);
+    const left = [
+      ...given.filter((f) => !photo(f)).map((f) => `${f.name} isn't a JPEG, PNG, HEIC or WebP photo`),
+      ...given.filter((f) => photo(f) && f.size > MAX_PHOTO_BYTES).map((f) => `${f.name} is over 15 MB`),
+    ];
+    setError(left.length ? `Left out: ${left.join("; ")}.` : "");
     setPhotos((now) => [...now, ...fit].slice(0, MAX_PHOTOS));
   }
 
@@ -148,7 +156,8 @@ function Drafted({ draft, ebayTitle, setEbayTitle, text, setText }: DraftedProps
   const [code, setCode] = useState(false);
   const [why, setWhy] = useState(false);
   const ready = draft.status === "ready";
-  const unsure = !draft.colour || draft.colour === "unsure";
+  const colour = !draft.colour ? "Unsure from the photos: check it"
+    : draft.colour_from === "photos" ? `${draft.colour} (from the photos)` : draft.colour;
   return (
     <section className="card" aria-label="Your eBay draft" aria-live="polite">
       <p className="status-row">
@@ -166,7 +175,7 @@ function Drafted({ draft, ebayTitle, setEbayTitle, text, setText }: DraftedProps
       <div className="rows">
         <Row name="Condition" value={draft.condition_id ? CONDITIONS[draft.condition_id] ?? draft.condition_id : "Not drafted"} />
         {draft.condition_note && <Row name="Condition note" value={draft.condition_note} />}
-        <Row name="Colour" value={unsure ? "Unsure from the photos: check it" : draft.colour!} warn={unsure} />
+        <Row name="Colour" value={colour} warn={!draft.colour} />
       </div>
       <label className="field">
         <span>Description</span>

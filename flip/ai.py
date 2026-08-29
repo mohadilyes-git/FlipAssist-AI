@@ -7,7 +7,9 @@ whose local answer failed the checks. "Couldn't be reached" and "answered
 wrongly" are kept apart, because only a wrong answer may go on to the API.
 """
 
+import http.client
 import json
+import re
 import time
 import urllib.error
 import urllib.request
@@ -33,20 +35,55 @@ class Reply:
     seconds: float = 0.0
 
 
+HALF_CHARACTER = re.compile("[\ud800-\udfff]")  # a whole pair is one character by now: only halves are left
+
+
 def ollama_text(data):
     """The answer's text from Ollama's reply. If it stopped at a curly end, the
     text is closed the way it should have been: "...cash.”} -> ...cash."}"""
-    text = data.get("message", {}).get("content", "")
+    text = whole_text(data["message"]["content"])
     if data.get("done_reason") == "stop" and not text.rstrip().endswith("}"):
         text += '"}'
     return text
 
 
+def whole_text(value):
+    """Text, or JSON made of it, with any half character made "�", the sign
+    for one that can't be shown. JSON can spell half a character (\\ud800):
+    Python takes it, but nothing can write it out again, the audit log included."""
+    if isinstance(value, str):
+        return HALF_CHARACTER.sub("\ufffd", value)
+    if isinstance(value, list):
+        return [whole_text(v) for v in value]
+    if isinstance(value, dict):
+        return {whole_text(k): whole_text(v) for k, v in value.items()}
+    return value
+
+
+def ollama_shaped(data):
+    """Whether a reply is shaped like Ollama's: a message with text in it."""
+    return isinstance(data, dict) and isinstance(data.get("message"), dict) \
+        and isinstance(data["message"].get("content"), str)
+
+
+def count(tokens):
+    """A token count as Ollama gives it, or 0 for one that can't be: not a whole number, below 0, or absurd."""
+    return tokens if isinstance(tokens, int) and not isinstance(tokens, bool) and 0 <= tokens < 10**9 else 0
+
+
+def said(error):
+    """What an HTTP error's page says, if it can be read: it may be in any encoding, or hang up halfway."""
+    try:
+        return error.read(2000).decode("utf-8", "replace")[:200]
+    except (OSError, http.client.HTTPException, ValueError):
+        return "no reason given"
+
+
 def parse_answer(text):
     """The answer as a dict, and an error if it isn't one."""
     try:
-        answer = json.loads(text)
-    except (TypeError, ValueError):
+        answer = whole_text(json.loads(text))
+    except (TypeError, ValueError, RecursionError):
         return None, "the answer isn't valid JSON"
     if not isinstance(answer, dict):
         return None, "the answer isn't a JSON object"
@@ -79,14 +116,24 @@ class LocalModel:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 data = json.load(response)
         except urllib.error.HTTPError as e:  # e.g. the model isn't downloaded
-            return Reply(self.name, error=f"the local model refused ({e.code}): {e.read().decode()[:200]}",
+            return Reply(self.name, error=f"the local model refused ({e.code}): {said(e)}",
                          reachable=False, seconds=time.monotonic() - started)
         except urllib.error.URLError as e:
             return Reply(self.name, error=f"the local model isn't running ({e.reason})", reachable=False,
                          seconds=time.monotonic() - started)
-        except TimeoutError:
-            return Reply(self.name, error="the local model took too long", seconds=time.monotonic() - started)
-        reply = Reply(self.name, tokens_in=data.get("prompt_eval_count", 0), tokens_out=data.get("eval_count", 0),
+        except TimeoutError:  # minutes with no answer: as good as not running, so it isn't sent to the API instead
+            return Reply(self.name, error="the local model took too long", reachable=False,
+                         seconds=time.monotonic() - started)
+        except (ConnectionError, http.client.HTTPException) as e:  # it quit, restarted or crashed mid-answer
+            return Reply(self.name, error=f"the local model stopped answering ({type(e).__name__})", reachable=False,
+                         seconds=time.monotonic() - started)
+        except (OSError, ValueError, RecursionError):  # not Ollama's JSON: something else is on its port
+            return Reply(self.name, error="the local model's answer couldn't be read", reachable=False,
+                         seconds=time.monotonic() - started)
+        if not ollama_shaped(data):
+            return Reply(self.name, error="the local model's answer couldn't be read", reachable=False,
+                         seconds=time.monotonic() - started)
+        reply = Reply(self.name, tokens_in=count(data.get("prompt_eval_count")), tokens_out=count(data.get("eval_count")),
                       seconds=time.monotonic() - started)
         if data.get("done_reason") == "length":
             reply.error = "the answer was cut off"

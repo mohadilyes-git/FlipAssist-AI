@@ -23,7 +23,8 @@ def draft_listing(entry, catalogue, conditions, local=None, api=None, mode="auto
     title, description, notes = (entry.get(k) or "" for k in ("original_title", "original_description", "my_notes"))
     item = fill_from_catalogue(title, notes, catalogue, description)
     result = {"item_id": entry.get("id"), "status": "needs you", "reasons": [], "warnings": item["warnings"],
-              "item": item, "answer": None, "title": None, "attempts": []}
+              "item": item, "answer": None, "title": None, "attempts": [],
+              "colour_from": "listing" if item.get("colour") else None}
     if not item["model_id"]:
         result["reasons"].append("the model isn't in the catalogue")
         return finish(result, log)
@@ -41,11 +42,13 @@ def draft_listing(entry, catalogue, conditions, local=None, api=None, mode="auto
     if result["answer"] is None:
         return finish(result, log)
 
-    # a colour the AI picked, once checked, completes the item
+    # a colour the AI picked from the photos, once checked, completes the item; one code read stays.
+    # With no photos it had nothing to look at, so its pick is a guess: the colour stays for you
     colour = result["answer"].get("colour")
-    if colour and str(colour).strip().lower() != UNSURE:
+    if photos and not item.get("colour") and colour and str(colour).strip().lower() != UNSURE:
         item = {**item, "colour": canonical(colour, model["colours"], model.get("colour_aliases")),
                 "missing": [field for field in item["missing"] if field != "colour"]}
+        result["colour_from"] = "photos"
     result["item"] = item
     result["title"] = build_title(item)
     if item["missing"]:

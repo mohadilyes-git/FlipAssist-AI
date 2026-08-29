@@ -119,9 +119,10 @@ What AlertFlip calls, from a Supabase function, so the key never sits inside the
 | `GET /style` | What it learned from your messages: the style card (habits in 40% or more of them) and the phrasebook (sentences in 2 or more) |
 | `GET`, `POST /style/messages`, `DELETE /style/messages/{id}` | The messages it learns from: list them, add one or many (`title`, `price`, `text`), or delete one. The search for the closest past messages follows at once, so the next draft already uses what you added |
 
-- **Who can call it.** It answers only on this machine (127.0.0.1) unless it's put online on purpose. Every endpoint but `/health` needs `FLIP_API_KEY` from `.env` in an `X-API-Key` header.
+- **Who can call it.** It answers only on this machine (127.0.0.1) unless it's put online on purpose. Every endpoint but `/health` and the `/docs` pages (which only describe the API) needs `FLIP_API_KEY` from `.env` in an `X-API-Key` header. A key under 32 characters, like the example file's, counts as none, and the API then refuses every call.
+- **Turned away before it's read.** A request without the key, or bigger than its endpoint takes (1 MB, or 121 MB for 8 photos), is refused before any of it is read, so nobody can fill the machine's memory or disk.
 - **It never sends or lists anything itself.** AlertFlip does that, after the reseller approves.
-- **Bad input is refused before anything runs:** an unknown kind of offer, a price that isn't a price, a file that isn't a photo.
+- **Bad input is refused before anything runs:** an unknown kind of offer, a price that isn't a price (or is under £1), an offer that doesn't fit its kind, a file that isn't a photo. A photo is known by its bytes (JPEG, PNG, HEIC or WebP), not its name, and one with more pixels than any camera takes is refused before it's converted.
 
 ```bash
 curl -s http://127.0.0.1:8000/messages/draft -H "X-API-Key: $FLIP_API_KEY" -H "Content-Type: application/json" \
@@ -181,7 +182,7 @@ For the AI drafter, install [Ollama](https://ollama.com) and the local model (ab
 brew install ollama
 ollama serve              # leave this running in its own terminal
 ollama pull gemma3:4b
-cp .env.example .env      # then put your key in .env (never uploaded)
+cp .env.example .env      # then put both keys in .env (never uploaded): yours from Anthropic, and a random FLIP_API_KEY
 .venv/bin/python -m flip.draft testset/items.example.json --mode local
 ```
 

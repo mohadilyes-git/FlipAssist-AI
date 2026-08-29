@@ -48,6 +48,7 @@ LONGEST = 70  # still well inside the 500-character limit
 # local model that runs on stops in seconds, not half a minute
 MESSAGE_TOKENS = 300
 WRITERS = ("auto", "template", "ai")
+MIN_ASKING = 100  # pence: under £1 is a free listing or a typo, not a price to make an offer on
 # what a raw listing title adds that isn't the item: "*BARGAIN*", "FREE DELIVERY", "excellent condition boxed".
 # The title is cut where the first of these starts, so a name keeps every word of its own ("Pokemon Go Plus")
 TITLE_CUT = re.compile(r"\s+[-–|]\s+|[*|(\[,]")
@@ -79,14 +80,30 @@ def item_name(model_id, title):
     return " ".join(name.split()[:MAX_NAME]) or "item"
 
 
+class Refused(ValueError):
+    """A request that can't be drafted as it was asked: an asking price under
+    £1, an offer that doesn't fit its kind, an unknown length or writer. The
+    API answers it as the caller's mistake; any other error is a fault here."""
+
+
 def picked(kind, asking, offer):
     """The price you picked, if it fits the kind of offer: under asking for
     lower, the asking price itself, or over it for more."""
     if offer <= 0 or kind == "lower" and offer >= asking or kind == "more" and offer <= asking \
             or kind == "asking" and offer != asking:
         name = {"lower": "a lower offer", "asking": "an offer of the asking price", "more": "an offer over asking"}
-        raise ValueError(f"£{offer / 100:,.2f} isn't {name.get(kind, 'that kind of offer')} on a £{asking / 100:,.2f} listing")
+        raise Refused(f"£{offer / 100:,.2f} isn't {name.get(kind, 'that kind of offer')} on a £{asking / 100:,.2f} listing")
     return offer
+
+
+def offer_to_draft(kind, asking, offer=None, discount_percent=15):
+    """The price the message offers: the one you picked, if it fits the kind
+    of offer, or the one code starts from. All in pence."""
+    if asking < MIN_ASKING:
+        raise Refused(f"£{asking / 100:,.2f} is under £1: not an asking price to make an offer on")
+    if kind not in ("lower", "asking", "more"):
+        raise Refused(f"not a kind of offer: {kind!r} (lower, asking or more)")
+    return picked(kind, asking, offer) if offer is not None else offer_for(kind, asking, discount_percent)
 
 
 def habits(card, examples):
@@ -114,13 +131,16 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     starts from; it must fit the kind: under asking for lower, the asking
     price itself, or over it for more."""
     if length not in ("usual", "longer"):
-        raise ValueError(f"not a length: {length!r} (usual or longer)")
+        raise Refused(f"not a length: {length!r} (usual or longer)")
     if writer not in WRITERS:
-        raise ValueError(f"not a writer: {writer!r} (auto, template or ai)")
+        raise Refused(f"not a writer: {writer!r} (auto, template or ai)")
     card = card or {}
     previous = (previous or "").strip() if length == "longer" else ""
-    asking = to_pence(listing["asking_price"])
-    offer = picked(kind, asking, offer) if offer is not None else offer_for(kind, asking, discount_percent)
+    try:
+        asking = to_pence(listing["asking_price"])
+    except ValueError as e:
+        raise Refused(str(e)) from None
+    offer = offer_to_draft(kind, asking, offer, discount_percent)
     title = listing.get("title") or ""
     sources = f"{title}. {listing.get('description') or ''}"
     reading = reading or code_reading(sources)

@@ -1,11 +1,15 @@
 """The drafter, tested with pretend models before any real AI runs: which model
 is asked, when the API is (and isn't) used, and when a draft is ready."""
 
+import http.client
 import io
 import json
+import urllib.error
 import urllib.request
 from decimal import Decimal
 from types import SimpleNamespace
+
+import pytest
 
 from flip.ai import ApiModel, LocalModel, Reply, parse_answer
 from flip.audit import AuditLog
@@ -43,8 +47,11 @@ class FakeClient:
         return self.response
 
 
+PHOTO = "pretend-base64-photo"  # the fakes never look at it; with it, the AI's colour can count
+
+
 def draft(entry=ENTRY, local=None, api=None, mode="auto", **options):
-    return draft_listing(entry, CATALOGUE, CONDITIONS, local, api, mode, **options)
+    return draft_listing(entry, CATALOGUE, CONDITIONS, local, api, mode, **{"photos": [PHOTO], **options})
 
 
 def haiku_response(stop_reason="end_turn", text=json.dumps(GOOD)):
@@ -221,3 +228,67 @@ def test_every_attempt_and_outcome_goes_in_the_audit_log(tmp_path):
     assert [model for model, _ in attempts] == ["gemma3:4b", "claude-haiku-5-5"]
     assert "charger" in attempts[0][1]
     assert log.db.execute("select item_id, status from drafts").fetchall() == [("t1", "ready")]
+
+
+def test_with_no_photos_the_ais_colour_is_a_guess_and_stays_for_you():
+    result = draft(local=FakeModel("gemma3:4b", GOOD), photos=[])
+    assert (result["status"], result["item"]["colour"], result["colour_from"]) == ("needs you", None, None)
+    assert result["reasons"] == ["fill in: colour"]
+    with_photo = draft(local=FakeModel("gemma3:4b", GOOD))
+    assert (with_photo["status"], with_photo["item"]["colour"], with_photo["colour_from"]) == ("ready", "Midnight", "photos")
+
+
+# ── whatever answers on the local model's port, it never crashes a draft ────
+
+def answering(monkeypatch, answer):
+    """urlopen, pretend: it answers with these bytes, or raises this."""
+    def urlopen(request, timeout):
+        if isinstance(answer, BaseException):
+            raise answer
+        return io.BytesIO(answer)
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+
+
+@pytest.mark.parametrize("answer", [
+    b"{}", b"[1, 2]", b"<html>Bad gateway</html>", b'{"error": "model not found"}',
+    b'{"message": {}}', b'{"message": {"content": 5}, "done_reason": "stop"}',
+    b'{"message": {"content": null}, "done_reason": "stop"}', b'{"message": {"content": {"a": 1}}}',
+    b"[" * 100000 + b"]" * 100000,
+])
+def test_a_reply_that_isnt_ollamas_is_as_good_as_no_model(monkeypatch, answer):
+    answering(monkeypatch, answer)
+    reply = LocalModel().ask("system", "user", [], {})
+    assert (reply.answer, reply.reachable, reply.error) == (None, False, "the local model's answer couldn't be read")
+
+
+@pytest.mark.parametrize("failure", [TimeoutError("timed out"), http.client.RemoteDisconnected("gone"),
+                                     http.client.IncompleteRead(b"{"), ConnectionResetError("reset")])
+def test_a_local_model_that_stops_answering_is_never_swapped_for_the_api(monkeypatch, failure):
+    answering(monkeypatch, failure)
+    result = draft(local=LocalModel(), api=FakeModel("claude-haiku-5-5"))  # asking it would fail: it has no answers
+    assert result["status"] == "needs you" and [a["model"] for a in result["attempts"]] == ["gemma3:4b"]
+    assert "nothing was sent to the API instead" in result["reasons"][0]
+
+
+@pytest.mark.parametrize("page", [io.BytesIO("modèle introuvable".encode("latin-1")), None])
+def test_an_error_page_is_read_whatever_its_encoding_or_skipped(monkeypatch, page):
+    class HangsUp(io.RawIOBase):
+        def read(self, *size):
+            raise ConnectionResetError("reset")
+    answering(monkeypatch, urllib.error.HTTPError("http://127.0.0.1:11434", 404, "Not Found", {}, page or HangsUp()))
+    reply = LocalModel().ask("system", "user", [], {})
+    assert reply.error.startswith("the local model refused (404)") and not reply.reachable
+
+
+def test_token_counts_that_cant_be_are_counted_as_none(monkeypatch):
+    answer = {"message": {"content": json.dumps(GOOD)}, "done_reason": "stop", "prompt_eval_count": "lots",
+              "eval_count": 2**70}
+    answering(monkeypatch, json.dumps(answer).encode())
+    reply = LocalModel().ask("system", "user", [], {})
+    assert (reply.answer, reply.tokens_in, reply.tokens_out) == (GOOD, 0, 0)
+
+
+def test_half_a_character_in_an_answer_becomes_one_that_can_be_written(tmp_path):
+    answer, error = parse_answer('{"description": "Light scratch \\ud800 on the back"}')
+    assert (answer["description"], error) == ("Light scratch � on the back", "")
+    AuditLog(tmp_path / "audit.sqlite3").attempt("item", Reply("gemma3:4b", answer=answer), [], 0)  # no crash

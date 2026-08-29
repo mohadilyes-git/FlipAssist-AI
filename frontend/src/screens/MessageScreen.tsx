@@ -32,9 +32,9 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
   const [approval, setApproval] = useState<Approval | null>(null);
 
   const askingPence = toPence(asking);
-  // each card's price: where you slid it, or the price code starts from
+  // each card's price: where you slid it, or the price code starts from (under £1 isn't a price to offer on)
   const prices = useMemo(() => {
-    if (askingPence === null || askingPence <= 0) return null;
+    if (askingPence === null || askingPence < 100) return null;
     return {
       lower: moved.lower ?? lowerPrice(askingPence),
       asking: askingPence,
@@ -210,7 +210,7 @@ function Drafted({ draft, text, setText, busy, approval, onLonger, onAnswer, onR
   return (
     <>
       <div className="message">
-        <textarea className="input" aria-label="Your message" value={text} onChange={(e) => setText(e.target.value)}
+        <textarea className="input" aria-label="Your message" value={text} maxLength={5000} onChange={(e) => setText(e.target.value)}
           placeholder="No draft passed the checks: write your own here." />
         {draft.note && <p className="orange">{draft.note}</p>}
         {draft.reasons.map((r) => <p className="orange" key={r}>{r}</p>)}

@@ -75,7 +75,9 @@ class AuditLog:
 
     def approve(self, draft_id, sent):
         """Keep what you actually sent for a draft, and whether you changed it
-        first (spaces aside). None if there's no such draft."""
+        first (spaces aside). None if there's no such draft. A draft has one
+        approval: approving it again (a retry, a second tap, a later edit)
+        replaces the first, so it's counted once."""
         with self.lock:
             row = self.db.execute("select job, answer from drafts where id = ?", (draft_id,)).fetchone()
             if row is None:
@@ -84,8 +86,11 @@ class AuditLog:
             drafted = (json.loads(answer) or {}).get(DRAFTED.get(job, "message")) or ""
             edited = " ".join(sent.split()) != " ".join(drafted.split())
             at = now()
-            self.db.execute("insert into approvals (at, draft_id, sent, edited) values (?, ?, ?, ?)",
-                            (at, draft_id, sent, int(edited)))
+            replaced = self.db.execute("update approvals set at = ?, sent = ?, edited = ? where draft_id = ?",
+                                       (at, sent, int(edited), draft_id)).rowcount
+            if not replaced:
+                self.db.execute("insert into approvals (at, draft_id, sent, edited) values (?, ?, ?, ?)",
+                                (at, draft_id, sent, int(edited)))
             self.db.commit()
         return {"draft_id": draft_id, "edited": edited, "at": at}
 
@@ -104,7 +109,10 @@ class AuditLog:
         with self.lock:
             ended = dict(self.db.execute("select status, count(*) from drafts group by status").fetchall())
             rows = self.db.execute("select model, problems, cost_pence from attempts").fetchall()
-            approved, edited = self.db.execute("select count(*), coalesce(sum(edited), 0) from approvals").fetchone()
+            # each draft once, as last approved: a log from before kept every approval
+            approved, edited = self.db.execute(
+                "select count(*), coalesce(sum(edited), 0) from approvals"
+                " where id in (select max(id) from approvals group by draft_id)").fetchone()
         models = {}
         for model, problems, cost in rows:
             use = models.setdefault(model, {"model": model, "attempts": 0, "passed": 0, "cost_pence": Decimal(0)})

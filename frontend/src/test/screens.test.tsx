@@ -155,6 +155,15 @@ describe("the price line", () => {
     expect(line.getAttribute("aria-valuetext")).toBe("£215"); // never past the end
   });
 
+  it("has no prices to offer under £1", async () => {
+    const user = userEvent.setup();
+    render(<MessageScreen />);
+    await user.type(screen.getByLabelText("Listing title"), "Free sofa");
+    await user.type(screen.getByLabelText("Asking price"), "0.50");
+    expect(screen.getAllByText("enter a price")).toHaveLength(3);
+    expect(screen.getByRole("button", { name: "Write my message" }).hasAttribute("disabled")).toBe(true);
+  });
+
   it("starts again from code's prices when the asking price changes", async () => {
     const user = userEvent.setup();
     render(<MessageScreen />);
@@ -169,14 +178,15 @@ describe("the price line", () => {
 describe("List on eBay", () => {
   const LISTED: ListingDraft = {
     draft_id: 3, status: "needs you", ebay_title: "Apple iPhone 13 128GB Midnight Unlocked", condition_id: "3000",
-    condition_note: "Light scratch on the back.", description: "Apple iPhone 13 128GB in Midnight.", colour: "unsure",
+    condition_note: "Light scratch on the back.", description: "Apple iPhone 13 128GB in Midnight.", colour: null,
+    colour_from: null,
     filled_by_code: { brand: "Apple", model: "iPhone 13", storage: "128GB", specs: { "Screen Size": "6.1 in" } },
     warnings: [], reasons: ["Fill in: colour"], photo_count: 2,
     attempts: [{ model: "gemma3:4b", problems: [], seconds: 9.5, cost_pence: 0 }], cost_pence: 0,
   };
 
   it("takes at most 8 photos and sends them with the form", async () => {
-    const fetch = serve({ "POST /api/listings/draft": [200, LISTED] });
+    const fetch = serve({ "POST /api/listings/draft": [200, { ...LISTED, colour: "Midnight", colour_from: "photos" }] });
     const user = userEvent.setup();
     const { container } = render(<ListingScreen />);
     const photos = Array.from({ length: 10 }, (_, n) => new File(["x"], `p${n}.jpg`, { type: "image/jpeg" }));
@@ -187,9 +197,23 @@ describe("List on eBay", () => {
     await user.type(screen.getByLabelText("The seller's title"), "iphone 13 128gb");
     await user.click(screen.getByRole("button", { name: "Draft listing" }));
     expect(await screen.findByDisplayValue(LISTED.ebay_title!)).toBeTruthy();
+    expect(screen.getByText("Midnight (from the photos)")).toBeTruthy();
     const form = fetch.mock.calls[0][1]!.body as FormData;
     expect(form.getAll("photos")).toHaveLength(8);
     expect(form.get("title")).toBe("iphone 13 128gb");
+  });
+
+  it("leaves out a photo too big to send, or a file that isn't a photo, and says so", async () => {
+    const user = userEvent.setup({ applyAccept: false });
+    const { container } = render(<ListingScreen />);
+    const big = new File(["x"], "huge.jpg", { type: "image/jpeg" });
+    Object.defineProperty(big, "size", { value: 16 * 1024 * 1024 });
+    const pdf = new File(["%PDF"], "invoice.pdf", { type: "application/pdf" });
+    await user.upload(container.querySelector("input[type=file]") as HTMLInputElement,
+      [big, pdf, new File(["x"], "ok.jpg", { type: "image/jpeg" })]);
+    expect(screen.getAllByRole("img")).toHaveLength(1);
+    expect(screen.getByRole("alert").textContent).toBe(
+      "Left out: invoice.pdf isn't a JPEG, PNG, HEIC or WebP photo; huge.jpg is over 15 MB.");
   });
 
   it("shows the draft to check: what needs you, the condition by name, and what code filled", async () => {
