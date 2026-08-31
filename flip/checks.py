@@ -90,6 +90,10 @@ SAME_AS = [
     ("scuff free", "no scuff"), ("crack free", "no crack"), ("free from", "no"), ("free of", "no"),
 ]
 # phrases that contain a claim word but aren't a claim
+# a seller who isn't sure claims nothing, yes or no: "not sure if locked or not" leaves
+# "is it unlocked?" open. Read on the part's words, so "don't" is "don t"
+NOT_SURE = re.compile(r" (?:not sure|unsure|don t know|dont know|do not know|no idea|not certain|can t confirm|"
+                    r"cannot confirm|can t say|unknown) ")
 HARMLESS = ["perfect for", "perfect gift", "new owner", "new home", "since new", "from new",
             "works with", "working with", "compatible with", "games console", "games consoles", "game console",
             "stand out", "stands out"]
@@ -342,6 +346,8 @@ def promises_in(text):
     # or "no scratches and comes with box" doesn't turn into "no box"
     for part in re.split(r"[,.;:!?\n()]|\bbut\b|\band\b(?= (?:comes|has|includes|included|with|is|boxed))", text):
         part = " " + " ".join(words(part)) + " "
+        if NOT_SURE.search(part):
+            continue
         for phrase, same in SAME_AS:
             part = part.replace(f" {phrase} ", f" {same} ")
         for phrase in HARMLESS:

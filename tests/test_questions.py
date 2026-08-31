@@ -75,3 +75,28 @@ def test_not_all_the_accessories_answers_nothing():
 
 def test_a_no_in_another_clause_doesnt_cancel_phone_only():
     assert "Does it come with a charger?" not in open_questions("iPhone 13 128GB. No box, phone only.", "phones")
+
+
+# a real listing (18 Aug): the seller wasn't sure, and a good question was refused for it
+UNSURE_LISTING = ("iphone 15 pro max. iPhone 14 for sale\nNot sure if locked or not if so would be with EE\n"
+                  "Few scratches on screen but does not effect\nWorks perfectly fine!\nNo offers")
+
+
+def test_a_seller_who_isnt_sure_leaves_the_question_open():
+    assert "unlocked" not in answered(UNSURE_LISTING)
+    message = ("Hi, I can pay £400 for this, and I don't mind the few scratches on the screen. "
+               "Would it be possible to confirm if it's locked to EE? Cheers")
+    assert check_no_answered_questions(message, UNSURE_LISTING) == []
+    assert "Is it unlocked?" in open_questions(UNSURE_LISTING, "phones")
+
+
+@pytest.mark.parametrize("unsure", ["I don't know if it comes with a charger", "no idea if the box is still around",
+                                    "battery health unknown", "can't confirm it's unlocked"])
+def test_an_unsure_line_claims_nothing(unsure):
+    from flip.checks import promises_in
+    assert promises_in(unsure) == {}
+
+
+def test_a_sure_line_still_answers():
+    assert "unlocked" in answered("Unlocked to all networks") and "unlocked" in answered("Locked to EE")
+    assert "box" in answered("Not sure about the cable, comes boxed")  # each part of the line on its own

@@ -238,7 +238,7 @@ function Drafted({ draft, text, setText, busy, approval, onLonger, onAnswer, onR
           {!reading.flaws.length && !reading.pickup && !reading.no_offers && <span className="sub">Nothing to note</span>}
         </p>
         <p className="sub">
-          {writerName(draft.written_by)} · {seconds(steps)} · {cost(draft.cost_pence)} · {readBy(reading.read_by)}
+          {draft.written_by ? writerName(draft.written_by) : "No draft passed"} · {seconds(steps)} · {cost(draft.cost_pence)} · {readBy(reading.read_by)}
         </p>
         {steps.length > 0 && (
           <button type="button" className="link" aria-expanded={why} onClick={() => setWhy(!why)}>

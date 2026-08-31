@@ -265,3 +265,26 @@ def test_a_place_ends_where_the_time_starts_and_hyphens_count_both_ways():
 ])
 def test_no_offers_in_more_of_the_ways_sellers_say_it(text, said):
     assert code_reading(text)["no_offers"] == said
+
+
+# ── what a model copies from its own instructions is dropped, not failed ────
+
+def test_a_line_copied_from_the_instructions_is_dropped_and_the_rest_still_counts():
+    from flip.reader import without_echoes
+    text = "iPhone 14. Few scratches on screen but does not effect. A small mark on the back. No offers"
+    reply = Reply("gemma3:4b", answer={"flaws": ["each fault, damage, mark or sign of wear the listing mentions",
+                                                 "Few scratches on screen but does not effect", "mark"],
+                                       "pickup": "Leeds LS6", "no_offers": "No offers"})
+    assert without_echoes(reply, text).answer == {"flaws": ["Few scratches on screen but does not effect", "mark"],
+                                                  "pickup": "", "no_offers": "No offers"}  # "mark" is the seller's too
+
+
+def test_a_reading_with_an_echo_passes_on_this_mac_without_asking_the_api():
+    echoed = {"flaws": ["each fault, damage, mark or sign of wear the listing mentions",
+                        "Few scratches on screen but does not effect"], "pickup": "", "no_offers": "No offers"}
+    listing = {"title": "iphone 15 pro max", "description": "iPhone 14 for sale\nNot sure if locked or not if so would "
+               "be with EE\nFew scratches on screen but does not effect\nWorks perfectly fine!\nNo offers"}
+    api = FakeModel("claude-haiku-5-5")  # it has no answers: asking it would fail the test
+    reading = read_listing_with_ai(listing, FakeModel("gemma3:4b", echoed), api)
+    assert reading["read_by"] == "gemma3:4b" and api.asked == []
+    assert reading["flaws"] == ["Few scratches on screen"] and reading["no_offers"] == "No offers"  # the aside trimmed

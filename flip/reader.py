@@ -38,7 +38,7 @@ from flip.attempts import try_models
 from flip.catalogue import contains, find_phrase, words
 from flip.checks import NEGATIONS, PROBLEM
 from flip.offers import LISTING_PARTS, read_listing
-from flip.prompts import READING_SCHEMA, reading_prompt
+from flip.prompts import READING_SCHEMA, READING_SYSTEM, reading_prompt
 
 # the listing's parts: its sentences and clauses, and what follows "apart from" or "except"
 SPLIT = re.compile(LISTING_PARTS.pattern + r"|\b(?:apart from|except(?: for)?|other than|save for)\b", re.IGNORECASE)
@@ -245,6 +245,24 @@ def reading_from(answer, text, read_by):
             "no_offers": said if said and no_offers_ok(said, text) else code_no_offers(text), "read_by": read_by}
 
 
+def without_echoes(reply, text):
+    """A reading without what the model copied from its own instructions
+    rather than the listing: "each fault, damage, mark or sign of wear the
+    listing mentions" as a flaw, the example "Leeds LS6" as the pickup place.
+    That isn't the seller's word, so it's dropped and the rest is checked as
+    usual: failing the whole reading for it paid the API for a reading that
+    was otherwise right. A quote that's in the listing too always stays."""
+    answer = reply.answer
+    echo = lambda quote: isinstance(quote, str) and bool(quote.strip()) and in_listing(quote, READING_SYSTEM) \
+        and not in_listing(quote, text)
+    if isinstance(answer, dict):
+        if isinstance(answer.get("flaws"), list):
+            answer = {**answer, "flaws": [f for f in answer["flaws"] if not echo(f)]}
+        answer = {**answer, **{key: "" for key in ("pickup", "no_offers") if echo(answer.get(key))}}
+        reply.answer = answer
+    return reply
+
+
 def read_listing_with_ai(listing, local=None, api=None, mode="auto", log=None):
     """The listing (title and description) read by AI and checked by code, or
     by code alone when no model's reading passes. Returns the reading
@@ -254,7 +272,7 @@ def read_listing_with_ai(listing, local=None, api=None, mode="auto", log=None):
     result = {"item_id": listing.get("id"), "reasons": [], "attempts": []}
     system, user = reading_prompt(listing)
     answer = try_models(mode, {"local": local, "api": api},
-                        ask=lambda ai: ai.ask(system, user, [], READING_SCHEMA),
+                        ask=lambda ai: without_echoes(ai.ask(system, user, [], READING_SCHEMA), text),
                         check=lambda found: check_reading(found, text), result=result, log=log)
     reading = code_reading(text) if answer is None else reading_from(answer, text, result["attempts"][-1]["model"])
     return {**reading, "attempts": result["attempts"], "reasons": result["reasons"]}

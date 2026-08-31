@@ -74,6 +74,17 @@ describe("AI message", () => {
     expect([body.listing.asking_price, body.offer, body.listing.marketplace]).toEqual(["220.00", "185.00", "facebook"]);
   });
 
+  it("says so plainly when no draft passed the checks", async () => {
+    serve({ "POST /api/messages/draft": [200, { ...DRAFT, status: "needs you", message: null, written_by: null,
+      reasons: ["no answer passed the checks"] }] });
+    const user = userEvent.setup();
+    render(<MessageScreen />);
+    await user.type(screen.getByLabelText("Listing title"), "iPhone 13");
+    await user.type(screen.getByLabelText("Asking price"), "220");
+    await user.click(screen.getByRole("button", { name: "Write my message" }));
+    expect(await screen.findByText(/^No draft passed · /)).toBeTruthy();
+  });
+
   it("shows why, step by step", async () => {
     serve({ "POST /api/messages/draft": [200, DRAFT] });
     const user = userEvent.setup();
