@@ -1,0 +1,19 @@
+{
+  "name": "flipassist-launcher",
+  "private": true,
+  "version": "0.1.0",
+  "description": "FlipAssist as a Mac app: one double-click starts Gemma and the API, then opens the app in its own window.",
+  "main": "build/main.js",
+  "scripts": {
+    "build": "tsc -p .",
+    "start": "npm run build && electron .",
+    "test": "npm run build && node --test \"build/**/*.test.js\"",
+    "selftest": "npm run build && electron . --selftest"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "@types/node": "24.19.2",
+    "electron": "44.7.2",
+    "typescript": "7.0.2"
+  }
+}

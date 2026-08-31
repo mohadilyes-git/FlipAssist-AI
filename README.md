@@ -145,9 +145,24 @@ cd frontend && npm install && npm run dev       # the app, in another: then open
 
 The app's dev server adds the API key on the way, from `.env`, so the key never reaches the browser.
 
+## The launcher
+
+FlipAssist opens like any Mac app: one double-click on **FlipAssist** (in Applications, Spotlight or the Dock) and it runs in its own window, with no browser around it (`launcher/`, Electron and TypeScript).
+
+1. A launch screen shows Gemma and the API starting. Whatever is already running is used as it is; whatever isn't is started: Ollama for Gemma, and the API from the repo's own Python.
+2. Gemma is loaded into memory straight away, so the first draft doesn't wait for it. Without Gemma, the launch screen says so and drafts use code only.
+3. The app is the built front end, at `app://flipassist/`. Its calls to `/api/...` are passed on to the API by the launcher, which adds the key from `.env` on the way. The page never sees the key, and no other program on the Mac can borrow it, as it could from a local web server.
+4. Quitting stops only what the launcher started. What each part printed is in `~/Library/Logs/FlipAssist`.
+
+```bash
+launcher/build.sh     # builds the app and the launcher, draws the icon, puts FlipAssist.app in ~/Applications
+cd launcher && npm test && npm run selftest    # the launcher's own tests, then the real window checked end to end
+```
+
+The self-test opens the window, checks every kind of call (files, JSON, photo uploads, refused paths, copying, saved settings) without drafting or saving anything, and quits.
+
 ## Planned
 
-- **A launcher:** one icon that starts Gemma, the API and the app in its own window.
 - **The AlertFlip side:** a Supabase function that calls the API from the phone app.
 - **Measured results on the test set:**
   - fields right for local, API and the switch;
@@ -222,6 +237,7 @@ Include a few items the catalogue doesn't have: the right answer for those is "n
 
 - `flip/`: the code (`flip/api.py` is the API)
 - `frontend/`: the app (`npm test` runs its tests)
+- `launcher/`: FlipAssist as a Mac app (`build.sh` builds it)
 - `data/`: the catalogue, eBay's item conditions and the questions a message may ask (facts, not code)
 - `tests/`: a test for every rule
 - `testset/`: the example format for the test set

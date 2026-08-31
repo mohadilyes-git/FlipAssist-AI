@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>FlipAssist</title>
+<style>
+  /* the launch screen, while Gemma and the API start: the app's own colours (frontend/src/styles.css) */
+  :root {
+    color-scheme: light;
+    --bgT: #ffffff; --bgM: #eef1f6; --bgB: #dbe3ef;
+    --card: #ffffff; --tx: #0e1116; --tx2: rgba(14, 17, 22, 0.5); --bc: rgba(14, 17, 22, 0.08);
+    --track: rgba(14, 17, 22, 0.14); --pos: #137c4a; --posT: rgba(19, 124, 74, 0.12);
+    --warn: #b06f0a; --warnT: rgba(216, 140, 20, 0.12); --neg: #be2828; --negT: rgba(190, 40, 40, 0.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --bgT: #1c2331; --bgM: #12161f; --bgB: #090c12;
+      --card: #161b26; --tx: #eef2f8; --tx2: rgba(255, 255, 255, 0.6); --bc: rgba(255, 255, 255, 0.1);
+      --track: rgba(255, 255, 255, 0.18); --pos: #4fd695; --posT: rgba(52, 199, 123, 0.16);
+      --warn: #f0aa3c; --warnT: rgba(240, 170, 60, 0.16); --neg: #ff7a7a; --negT: rgba(255, 122, 122, 0.1);
+    }
+  }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse 120% 90% at 50% 0%, var(--bgT) 0%, var(--bgM) 52%, var(--bgB) 100%);
+    color: var(--tx); font-family: Manrope, -apple-system, system-ui, sans-serif; -webkit-font-smoothing: antialiased;
+    -webkit-app-region: drag; user-select: none; cursor: default;
+  }
+  main { width: 100%; max-width: 400px; padding: 0 24px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .logo {
+    width: 68px; height: 68px; border-radius: 20px; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(145deg, #2f6fed 0%, #1c47a8 60%, #12295f 100%); box-shadow: 0 6px 16px rgba(28, 71, 168, 0.4);
+  }
+  h1 { margin: 6px 0 0; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
+  ul { width: 100%; margin: 4px 0 0; padding: 6px 16px; list-style: none; background: var(--card); border: 1px solid var(--bc); border-radius: 18px; }
+  li { display: flex; gap: 10px; align-items: flex-start; padding: 11px 0; }
+  li + li { border-top: 1px solid var(--bc); }
+  .dot { width: 8px; height: 8px; margin-top: 6px; flex: none; border-radius: 999px; background: var(--track); }
+  .ok .dot { background: var(--pos); box-shadow: 0 0 0 3px var(--posT); }
+  .warn .dot { background: var(--warn); box-shadow: 0 0 0 3px var(--warnT); }
+  .bad .dot { background: var(--neg); box-shadow: 0 0 0 3px var(--negT); }
+  strong { display: block; font-size: 14px; font-weight: 800; }
+  small { display: block; font-size: 12.5px; font-weight: 700; color: var(--tx2); }
+  .waiting small::after { content: "…"; animation: wait 1.2s steps(4) infinite; display: inline-block; width: 1ch; overflow: hidden; vertical-align: bottom; }
+  @keyframes wait { from { width: 0; } to { width: 1.3ch; } }
+  #error { margin: 0; width: 100%; box-sizing: border-box; padding: 11px 13px; border-radius: 14px; border: 1px solid var(--neg); background: var(--negT); color: var(--neg); font-size: 12.5px; font-weight: 700; line-height: 1.5; user-select: text; -webkit-app-region: no-drag; }
+</style>
+</head>
+<body>
+<main>
+  <span class="logo" aria-hidden="true">
+    <svg width="52" height="52" viewBox="0 0 100 100"><path d="M62 12 30 58h16l-4 30 28-40H74z" fill="rgba(255,255,255,.28)"/><path d="M56 14 24 60h16l-4 30 28-40H50z" fill="#fff"/></svg>
+  </span>
+  <h1 id="title">Starting FlipAssist…</h1>
+  <ul>
+    <li id="gemma" class="waiting"><span class="dot"></span><span><strong>Gemma, on this Mac</strong><small>Starting</small></span></li>
+    <li id="api" class="waiting"><span class="dot"></span><span><strong>FlipAssist's API</strong><small>Starting</small></span></li>
+  </ul>
+  <p id="error" role="alert" hidden></p>
+</main>
+<script>
+  // the launcher calls show() as each part comes up (launcher/src/main.ts)
+  function row(id, tone, words) {
+    const item = document.getElementById(id);
+    item.className = tone;
+    item.querySelector("small").textContent = words;
+  }
+  function show(state) {
+    if (state.gemma) row("gemma", state.gemma, state.gemmaWords);
+    if (state.api) row("api", state.api, state.apiWords);
+    if (state.done) document.getElementById("title").textContent = state.done;
+    if (state.error) {
+      document.getElementById("title").textContent = "FlipAssist can't start";
+      const error = document.getElementById("error");
+      error.textContent = state.error;
+      error.hidden = false;
+    }
+  }
+</script>
+</body>
+</html>

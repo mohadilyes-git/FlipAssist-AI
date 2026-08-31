@@ -19,9 +19,11 @@ logs/
 .env*
 !.env.example
 
-# the web app's installed packages and built files
+# the web app's and the launcher's installed packages and built files
 node_modules/
 frontend/dist/
+launcher/build/
+launcher/out/
 
 # local editor and tool settings
 .claude/

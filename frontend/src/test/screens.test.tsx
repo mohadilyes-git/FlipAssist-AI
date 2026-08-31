@@ -1,7 +1,7 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { App, SETUP_DONE, THEME } from "../App";
+import { App, markShell, SETUP_DONE, THEME } from "../App";
 import type { ListingDraft, MessageDraft, Style } from "../api";
 import { ListingScreen } from "../screens/ListingScreen";
 import { MessageScreen } from "../screens/MessageScreen";
@@ -334,6 +334,14 @@ describe("the app", () => {
     expect(document.documentElement.dataset.theme).toBe("dark");
     expect(localStorage.getItem(THEME)).toBe("dark");
     expect(screen.getByRole("button", { name: "Light mode" })).toBeTruthy();
+  });
+
+  it("fills its own Mac window when the launcher opens it, and only then", () => {
+    markShell(window);
+    expect(document.documentElement.dataset.shell).toBeUndefined();
+    markShell(Object.assign(Object.create(window), { flipassistShell: { window: "mac" } }));
+    expect(document.documentElement.dataset.shell).toBe("window");
+    delete document.documentElement.dataset.shell;
   });
 
   it("says so when the API isn't running", async () => {

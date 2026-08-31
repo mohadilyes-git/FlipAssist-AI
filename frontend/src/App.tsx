@@ -40,6 +40,12 @@ const store = (key: string, value: string) => {
   }
 };
 
+/** In FlipAssist's own Mac window (launcher/), the window is the app: no desk around
+ * it, the Mac's traffic lights in place of drawn ones, and its top bar to drag it by. */
+export function markShell(page: Window = window) {
+  if ("flipassistShell" in page) document.documentElement.dataset.shell = "window";
+}
+
 const fromHash = (): Tab => {
   const found = window.location.hash.slice(1);
   return TABS.some((t) => t.tab === found) ? (found as Tab) : "message";
