@@ -455,13 +455,15 @@ def test_a_rewrite_asks_for_other_words_and_refuses_the_same_message():
     result = ai_draft(LISTING, style_card(PAST), None, local, api, rewrite_of=ON_SCREEN)
     assert result["attempts"][0]["problems"] == ["it's the message on screen again: a rewrite says it in other words"]
     assert (result["status"], result["answer"], result["writer"]) == ("ready", REWORDED, "claude-haiku-5-5")
-    assert local.asked[0]["vary"] is True and f'from this message: "{ON_SCREEN}"' in local.asked[0]["user"]
+    assert local.asked[0]["vary"] is True
+    assert local.asked[0]["user"].endswith(f'wants another version of it: "{ON_SCREEN}"\nSay the same things, but word '
+                                           f'every sentence differently, the way the reseller might have written it another day.')
 
 
 def test_a_first_draft_is_the_same_every_time():
     local = FakeModel("gemma3:4b", GOOD)
     ai_draft(LISTING, style_card(PAST), None, local)
-    assert local.asked[0]["vary"] is False and "Rewrite:" not in local.asked[0]["user"]
+    assert local.asked[0]["vary"] is False and "rewrite" not in local.asked[0]["user"]
 
 
 def test_your_own_sentences_say_it_one_way_so_the_ai_rewords_a_rewrite():

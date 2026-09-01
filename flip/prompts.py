@@ -87,6 +87,9 @@ CONDITION_LINES = {"lower": "give this flaw from the listing, once, plainly and 
                    "asking": "say once that the reseller doesn't mind this flaw from the listing: {says}",
                    "more": "give this from the listing as the reason for paying more: {says}"}
 NO_CONDITION = "don't mention it"
+REWRITE = ('This is a rewrite: the reseller has seen this message and wants another version of it: "{previous}"\n'
+           "Say the same things, but word every sentence differently, the way the reseller might have written it "
+           "another day.")
 # a longer message says more only with what code allows: the reseller's usual
 # points and questions the listing doesn't answer (flip.questions)
 LONGER = "Length: about {words} words, longer than usual. Keep their greeting and tone, and say more only with " \
@@ -148,7 +151,6 @@ def message_prompt(listing, offer, style_lines, examples, kind="lower", point=No
         f"Condition: {CONDITION_LINES[kind].format(says=quoted(point)) if point else NO_CONDITION}",
         *([f"Pickup: {pickup}, where the listing says to collect"] if pickup else []),
         *(longer_lines(longer) if longer else []),
-        *([f'Rewrite: say the same things in different words from this message: "{rewrite_of}"'] if rewrite_of else []),
         "",
         "Style notes:",
         *(f"- {line}" for line in style_lines or ["(none yet)"]),
@@ -156,5 +158,7 @@ def message_prompt(listing, offer, style_lines, examples, kind="lower", point=No
         "Their messages for similar listings:",
         *([f'{n}. For "{e["listing_title"]}": {without_prices(e["my_message"])}' for n, e in enumerate(examples, 1)]
           or ["(none yet)"]),
+        # last, where a small model can't miss it: in the middle, Gemma wrote the same message again 5 times in 5
+        *(["", REWRITE.format(previous=rewrite_of)] if rewrite_of else []),
     ]
     return MESSAGE_SYSTEM, "\n".join(lines)
