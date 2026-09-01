@@ -30,7 +30,7 @@ import time
 
 from flip.ai import Reply
 from flip.attempts import try_models
-from flip.catalogue import fill_from_catalogue, load_catalogue, words
+from flip.catalogue import fill_from_catalogue, load_catalogue, models_disagree, words
 from flip.checks import check_message, check_no_unasked_promises, names_other_model, promised_in
 from flip.money import offer_for, to_pence
 from flip.offers import check_condition_talk, point_for, question_for, says_point
@@ -115,7 +115,7 @@ def habits(card, examples):
 
 def draft_message(listing, card=None, index=None, local=None, api=None, mode="auto", log=None,
                   discount_percent=15, leave_out=None, kind="lower", mention=None, length="usual", previous=None,
-                  reading=None, writer="auto", offer=None):
+                  reading=None, writer="auto", offer=None, rewrite_of=None):
     """Draft one offer message. listing has a title, description, asking_price
     (pounds, as written) and marketplace. card is your style card
     (flip.style.style_card) and index a MessageIndex of your past messages;
@@ -129,13 +129,17 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     "auto" (your past messages decide), "template" (no AI) or "ai". offer:
     the price you picked (pence), say on a slider, in place of the one code
     starts from; it must fit the kind: under asking for lower, the asking
-    price itself, or over it for more."""
+    price itself, or over it for more. rewrite_of: the message on screen, for
+    Rewrite: the new one must say it in other words. Your own sentences say
+    it one way only, so the AI writes a rewrite (or, with writer="template",
+    you get the same message back and a warning saying so)."""
     if length not in ("usual", "longer"):
         raise Refused(f"not a length: {length!r} (usual or longer)")
     if writer not in WRITERS:
         raise Refused(f"not a writer: {writer!r} (auto, template or ai)")
     card = card or {}
     previous = (previous or "").strip() if length == "longer" else ""
+    rewrite_of = (rewrite_of or "").strip()
     try:
         asking = to_pence(listing["asking_price"])
     except ValueError as e:
@@ -169,7 +173,10 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
               "length": length, "words": longer["words"] if longer else None,
               "questions": longer["questions"] if longer else [],
               "examples": [e["id"] for e in examples], "writer": None, "answer": None, "title": None,
-              "attempts": []}
+              "attempts": [], "warnings": []}
+    disagree = models_disagree(title, listing.get("description"), load_catalogue())
+    if disagree:
+        result["warnings"].append(disagree)
     at_least = math.ceil(longer["words"] * 3 / 4) if longer else 0  # a little short of the aim still counts
     if previous:
         at_least = max(at_least, len(previous.split()) + 1)  # longer than the draft on screen, never shorter
@@ -182,10 +189,12 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     catalogue = load_catalogue()
     model = next((m for m in catalogue if m["id"] == found.get("model_id")), None)
 
-    def check(answer):
+    def check(answer, rewrite=True):
         message = answer.get("message")
         problems = check_message(message, offer, sources, asking, kind, at_least) + \
             check_condition_talk(message, sources, point, mention, kind, offer)
+        if isinstance(message, str) and rewrite and rewrite_of and words(message) == words(rewrite_of):
+            problems.append("it's the message on screen again: a rewrite says it in other words")
         if isinstance(message, str):
             problems += check_no_answered_questions(message, sources) + check_no_unasked_promises(message, allowed)
             sentences = re.split(r"(?<=[.!?])\s+|\n+", message)
@@ -196,24 +205,35 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
                 problems.append(f"the message says it'll collect from a place the listing doesn't: {', '.join(made_up)}")
         return problems
 
+    yours = None  # your own sentences' message, when it's the one on screen again
     if writer == "template" or writer == "auto" and (not card or repeats(card)):
-        ready = written_without_ai(result, check, card, kind, offer, point if mention else None, longer, at_least,
+        ready = written_without_ai(result, lambda answer: check(answer, rewrite=False), card, kind, offer,
+                                   point if mention else None, longer, at_least,
                                    item_name(found.get("model_id"), title), pickup, previous, log)
-        if ready or writer == "template":
+        again = ready and rewrite_of and words(result["answer"]["message"]) == words(rewrite_of)
+        if again and writer == "auto":
+            yours = result["answer"]  # the AI words the rewrite; this stays if it can't
+            result.update(answer=None, status="needs you", writer=None)
+        elif ready or writer == "template":
             if not ready:
                 result["reasons"].append("the message written without AI didn't pass the checks")
+            elif again:
+                result["warnings"].append("Your own sentences say this one way only: choose AI for other words")
             if log:
                 log.draft(result)
             return result
 
     system, user = message_prompt(listing, offer, describe(card, longer["words"] if longer else None), examples,
-                                  kind, point if mention else None, longer, pickup or None)
+                                  kind, point if mention else None, longer, pickup or None, rewrite_of or None)
     result["answer"] = try_models(
         mode, {"local": local, "api": api},
-        ask=lambda ai: ai.ask(system, user, [], MESSAGE_SCHEMA),
+        ask=lambda ai: ai.ask(system, user, [], MESSAGE_SCHEMA, vary=bool(rewrite_of)),
         check=check, result=result, log=log)
     if result["answer"] is not None:
         result["status"], result["writer"] = "ready", result["attempts"][-1]["model"]
+    elif yours:  # no other wording passed: your own message stays, as it was
+        result.update(answer=yours, status="ready", writer="template", reasons=[])
+        result["warnings"].append("No other wording passed the checks: this is your usual message")
     if log:
         log.draft(result)
     return result

@@ -212,3 +212,26 @@ def test_a_message_never_copies_the_sellers_own_story():
     assert check_reasons("Hi mate, would you take £185 given I dropped it and cracked the back?",
                          "iPhone. I dropped it and cracked the back.") == \
         ['the message copies the seller\'s own story: "i dropped it and"']
+
+
+def test_what_follows_if_in_a_statement_is_a_condition_not_a_claim():
+    """A real longer message (18 Aug) was refused for "good" here."""
+    listing = "iPhone 14 for sale. Few scratches on screen but does not effect. Works perfectly fine! No offers"
+    message = ("Hi, I can pay £400 for it. I don't mind the few scratches on screen. Still available? "
+               "I'm happy to take it as listed if it's still available and the battery is in good shape.")
+    point = point_for("asking", listing, ["Few scratches on screen"])
+    assert check_condition_talk(message, listing, point, True, "asking", 40000) == []
+    claimed = message.replace("if it's still available and the battery", "and the battery")  # now it's a claim
+    assert check_condition_talk(claimed, listing, point, True, "asking", 40000) == \
+        ["the message says things about the condition the listing doesn't: good"]
+
+
+@pytest.mark.parametrize("said", ["The few scratches on screen don't bother me.", "The scratches aren't a problem.",
+                                  "I can live with the few scratches on screen.", "The scratches won't put me off.",
+                                  "The few scratches on screen are fine by me."])
+def test_not_minding_the_flaw_can_be_said_in_other_words(said):
+    """A real rewrite (18 Aug) was refused for "don't bother me"."""
+    listing = "iPhone 14 for sale. Few scratches on screen but does not effect. No offers"
+    point = point_for("asking", listing, ["Few scratches on screen"])
+    assert check_condition_talk(f"Hi, I can pay £400 for it. {said} Is it still available?", listing, point, True,
+                                "asking", 40000) == []

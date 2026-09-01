@@ -128,12 +128,14 @@ def longer_lines(longer):
     return lines
 
 
-def message_prompt(listing, offer, style_lines, examples, kind="lower", point=None, longer=None, pickup=None):
+def message_prompt(listing, offer, style_lines, examples, kind="lower", point=None, longer=None, pickup=None,
+                   rewrite_of=None):
     """The system prompt and the message about this listing. point is what the
     listing gives this offer to say (flip.offers), passed only when the
     message is to say it. longer, for a longer message: {"words", "questions",
     "previous"}. pickup: where the listing says to collect (flip.reader),
-    passed only when the reseller's own messages talk about collecting. The
+    passed only when the reseller's own messages talk about collecting.
+    rewrite_of: the message on screen, for a rewrite that says it in other words. The
     asking price never comes as a number of its own: code already set the
     offer, so the AI has no second number to slip in."""
     lines = [
@@ -146,6 +148,7 @@ def message_prompt(listing, offer, style_lines, examples, kind="lower", point=No
         f"Condition: {CONDITION_LINES[kind].format(says=quoted(point)) if point else NO_CONDITION}",
         *([f"Pickup: {pickup}, where the listing says to collect"] if pickup else []),
         *(longer_lines(longer) if longer else []),
+        *([f'Rewrite: say the same things in different words from this message: "{rewrite_of}"'] if rewrite_of else []),
         "",
         "Style notes:",
         *(f"- {line}" for line in style_lines or ["(none yet)"]),

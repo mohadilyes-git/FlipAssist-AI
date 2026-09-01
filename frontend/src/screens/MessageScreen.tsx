@@ -4,7 +4,7 @@
 // write it. Nothing is sent from here: you copy it into the marketplace, and
 // approving it teaches your style.
 import { useMemo, useState } from "react";
-import { api, type Kind, type MessageDraft, type Writer } from "../api";
+import { api, type Kind, type Length, type MessageDraft, type Writer } from "../api";
 import { cost, MARKETPLACES, readBy, seconds, writerName } from "../format";
 import { gapOf, lowerPrice, money, morePrice, sliderRange, toPence } from "../prices";
 import { CheckIcon, ChevronIcon, Chip, Head, PriceSlider, SparkleIcon, Steps, Warn, WarningIcon } from "../ui";
@@ -27,6 +27,7 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
   const [writer, setWriter] = useState<Writer>("auto");
   const [draft, setDraft] = useState<MessageDraft | null>(null);
   const [text, setText] = useState("");
+  const [length, setLength] = useState<Length>("usual"); // the length on screen: Rewrite keeps it
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [approval, setApproval] = useState<Approval | null>(null);
@@ -43,7 +44,7 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
   }, [askingPence, moved]);
   const range = prices && kind !== "asking" ? sliderRange(prices.asking, kind) : null;
 
-  async function write(length: "usual" | "longer", overrides: { mention?: boolean | null; previous?: string } = {}) {
+  async function write(asked: Length, overrides: { mention?: boolean | null; previous?: string; rewrite_of?: string } = {}) {
     if (!prices) return;
     setBusy(true);
     setError("");
@@ -54,12 +55,20 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
         kind,
         offer: (prices[kind] / 100).toFixed(2),
         mention: overrides.mention !== undefined ? overrides.mention : MENTION[mention],
-        length,
+        length: asked,
         previous: overrides.previous ?? null,
         writer,
+        rewrite_of: overrides.rewrite_of ?? null,
       });
+      const changing = overrides.previous ?? overrides.rewrite_of;
+      if (!found.message && changing) {
+        // no new version passed the checks: the one on screen stays, as it was
+        setError(`${overrides.previous ? "No longer message" : "No new wording"} passed the checks, so your message is unchanged`);
+        return;
+      }
       setDraft(found);
       setText(found.message ?? "");
+      setLength(asked);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -170,12 +179,13 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
 
           {shown ? (
             <Drafted draft={shown} text={text} setText={setText} busy={busy} approval={approval}
-              onLonger={() => void write("longer", { previous: text })}
+              longer={length === "longer"}
+              onLength={() => void (length === "longer" ? write("usual") : write("longer", { previous: text }))}
               onAnswer={(yes) => {
                 setMention(yes ? "yes" : "no");
-                void write("usual", { mention: yes });
+                void write(length, { mention: yes });
               }}
-              onRewrite={() => void write("usual")} onApprove={() => void approve()} />
+              onRewrite={() => void write(length, { rewrite_of: text })} onApprove={() => void approve()} />
           ) : (
             <>
               <p className="note">Code sets the price and checks every draft before you see it.</p>
@@ -197,13 +207,14 @@ type DraftedProps = {
   setText: (text: string) => void;
   busy: boolean;
   approval: Approval | null;
-  onLonger: () => void;
+  longer: boolean;
+  onLength: () => void;
   onAnswer: (yes: boolean) => void;
   onRewrite: () => void;
   onApprove: () => void;
 };
 
-function Drafted({ draft, text, setText, busy, approval, onLonger, onAnswer, onRewrite, onApprove }: DraftedProps) {
+function Drafted({ draft, text, setText, busy, approval, longer, onLength, onAnswer, onRewrite, onApprove }: DraftedProps) {
   const [why, setWhy] = useState(false);
   const reading = draft.reading;
   const steps = [...reading.attempts, ...draft.attempts];
@@ -212,10 +223,13 @@ function Drafted({ draft, text, setText, busy, approval, onLonger, onAnswer, onR
       <div className="message">
         <textarea className="input" aria-label="Your message" value={text} maxLength={5000} onChange={(e) => setText(e.target.value)}
           placeholder="No draft passed the checks: write your own here." />
+        {draft.warnings.map((w) => <Warn key={w}>{w}</Warn>)}
         {draft.note && <p className="orange">{draft.note}</p>}
         {draft.reasons.map((r) => <p className="orange" key={r}>{r}</p>)}
         <p className="end">
-          <button type="button" className="link" onClick={onLonger} disabled={busy || !text.trim()}>Make it longer</button>
+          <button type="button" className="link" onClick={onLength} disabled={busy || !text.trim()}>
+            {longer ? "Make it shorter" : "Make it longer"}
+          </button>
         </p>
       </div>
 

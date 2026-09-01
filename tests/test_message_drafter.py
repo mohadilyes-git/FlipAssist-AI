@@ -430,3 +430,58 @@ def test_the_asking_price_said_back_is_never_a_habit():
     said_back = [{"my_message": "Hi mate, is this still available at £220? Any room on price?"},
                  {"my_message": "Hi mate, is this still available at £150? What's your lowest?"}]
     assert style_card(said_back)["phrases"]["offer"] is None
+
+
+# ── a title and description that name different models ─────────────────────
+
+def test_a_title_and_description_naming_different_models_is_a_warning():
+    odd = {**LISTING, "title": "iphone 15 pro max", "description": "iPhone 14 for sale. Few scratches on screen"}
+    result = draft_message(odd, style_card(PAST))
+    assert result["warnings"] == ["The title says iPhone 15 Pro Max but the description says iPhone 14: "
+                                  "check which it is"]
+    for fine in ({**odd, "title": "iphone 14"}, {**odd, "description": "Few scratches, fits iPhone 13 cases"},
+                 {**odd, "description": "Works perfectly"}):
+        assert draft_message(fine, style_card(PAST))["warnings"] == []
+
+
+# ── Rewrite: the same things in other words ─────────────────────────────────
+
+ON_SCREEN = "Hi mate, is this still available? Would you take £170 cash? Can collect today."
+REWORDED = {"message": "Hi mate, would £170 cash work for you? I can collect today."}
+
+
+def test_a_rewrite_asks_for_other_words_and_refuses_the_same_message():
+    local, api = FakeModel("gemma3:4b", {"message": ON_SCREEN}), FakeModel("claude-haiku-5-5", REWORDED)
+    result = ai_draft(LISTING, style_card(PAST), None, local, api, rewrite_of=ON_SCREEN)
+    assert result["attempts"][0]["problems"] == ["it's the message on screen again: a rewrite says it in other words"]
+    assert (result["status"], result["answer"], result["writer"]) == ("ready", REWORDED, "claude-haiku-5-5")
+    assert local.asked[0]["vary"] is True and f'from this message: "{ON_SCREEN}"' in local.asked[0]["user"]
+
+
+def test_a_first_draft_is_the_same_every_time():
+    local = FakeModel("gemma3:4b", GOOD)
+    ai_draft(LISTING, style_card(PAST), None, local)
+    assert local.asked[0]["vary"] is False and "Rewrite:" not in local.asked[0]["user"]
+
+
+def test_your_own_sentences_say_it_one_way_so_the_ai_rewords_a_rewrite():
+    yours = draft_message(LISTING, style_card(PAST))["answer"]["message"]  # the template's
+    local = FakeModel("gemma3:4b", REWORDED)
+    result = draft_message(LISTING, style_card(PAST), None, local, rewrite_of=yours)
+    assert (result["writer"], result["answer"]) == ("gemma3:4b", REWORDED)
+
+
+def test_with_no_ai_a_rewrite_gives_your_message_back_and_says_why():
+    yours = draft_message(LISTING, style_card(PAST))["answer"]["message"]
+    result = draft_message(LISTING, style_card(PAST), writer="template", rewrite_of=yours)
+    assert (result["status"], result["answer"]["message"]) == ("ready", yours)
+    assert result["warnings"] == ["Your own sentences say this one way only: choose AI for other words"]
+
+
+def test_when_no_other_wording_passes_your_own_message_stays():
+    yours = draft_message(LISTING, style_card(PAST))["answer"]["message"]
+    local, api = FakeModel("gemma3:4b", {"message": yours}), FakeModel("claude-haiku-5-5", {"message": yours})
+    result = draft_message(LISTING, style_card(PAST), None, local, api, rewrite_of=yours)
+    assert (result["status"], result["writer"], result["answer"]["message"], result["reasons"]) == \
+        ("ready", "template", yours, [])
+    assert result["warnings"] == ["No other wording passed the checks: this is your usual message"]

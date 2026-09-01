@@ -13,8 +13,8 @@ class FakeModel:
     def __init__(self, name, *replies):
         self.name, self.replies, self.asked = name, list(replies), []
 
-    def ask(self, system, user, photos, schema):
-        self.asked.append({"system": system, "user": user, "photos": photos, "schema": schema})
+    def ask(self, system, user, photos, schema, vary=False):
+        self.asked.append({"system": system, "user": user, "photos": photos, "schema": schema, "vary": vary})
         reply = self.replies.pop(0)
         return reply if isinstance(reply, Reply) else \
             Reply(self.name, answer=reply, tokens_in=1500, tokens_out=300, seconds=2.0)

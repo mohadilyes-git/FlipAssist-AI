@@ -96,7 +96,9 @@ class LocalModel:
     def __init__(self, name="gemma3:4b", url="http://127.0.0.1:11434", timeout=300, max_tokens=1000):
         self.name, self.url, self.timeout, self.max_tokens = name, url, timeout, max_tokens
 
-    def ask(self, system, user, photos, schema):
+    def ask(self, system, user, photos, schema, vary=False):
+        """vary: for a rewrite, a different wording each time, not the same answer
+        to the same question (temperature 0.9, no fixed seed)."""
         body = {
             "model": self.name,
             "stream": False,
@@ -104,8 +106,8 @@ class LocalModel:
             "keep_alive": "30m",  # stay loaded between items
             # Ollama's defaults are a random answer (temperature 1) and a short
             # memory (4,096 tokens). Same input, same answer; room for photos.
-            "options": {"temperature": 0, "seed": 42, "num_ctx": 8192, "num_predict": self.max_tokens,
-                        "stop": CURLY_ENDS},
+            "options": {"temperature": 0.9 if vary else 0, **({} if vary else {"seed": 42}), "num_ctx": 8192,
+                        "num_predict": self.max_tokens, "stop": CURLY_ENDS},
             "messages": [{"role": "system", "content": system},
                          {"role": "user", "content": user, "images": list(photos)}],
         }
@@ -148,7 +150,9 @@ class ApiModel:
     def __init__(self, name="claude-haiku-5-5", client=None):
         self.name, self.client = name, client  # the client is made on first use
 
-    def ask(self, system, user, photos, schema):
+    def ask(self, system, user, photos, schema, vary=False):
+        """vary is the local model's: this API takes no temperature, and the
+        prompt already asks a rewrite for other words."""
         started = time.monotonic()
         try:
             self.client = self.client or anthropic.Anthropic()  # reads ANTHROPIC_API_KEY

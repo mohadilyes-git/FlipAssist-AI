@@ -42,11 +42,18 @@ ATTITUDE = re.compile(r"\b(?:don'?t|do not|doesn'?t|does not)\s+(?:mind|bother m
 # an offer at the asking price says you don't mind the flaw, not just names it
 DONT_MIND = re.compile(r"\b(?:don'?t|do not) mind\b|\bnot (?:too |that |really |at all )?(?:bothered|fussed|worried)\b"
                        r"|\bno (?:problem|bother|issue|worries)\b|\b(?:fine|happy|ok|okay|alright) with\b|\beven with\b"
-                       r"|\bdespite\b|\bregardless of\b|\bdoesn'?t (?:bother|matter)\b", re.IGNORECASE)
+                       r"|\bdespite\b|\bregardless of\b"
+                       # "the scratches don't bother me", "won't put me off", "aren't a problem", "I can live with"
+                       r"|\b(?:doesn'?t|don'?t|does not|do not|won'?t|wouldn'?t) (?:bother|matter|put me off|worry)\b"
+                       r"|\b(?:isn'?t|aren'?t|is not|are not|not) (?:a |an )?(?:problem|issue|concern|deal ?breaker)\b"
+                       r"|\bcan live with\b|\bfine (?:by|for) me\b", re.IGNORECASE)
 # in the offer's own question, what follows these isn't said: "would you take
 # £170 IF the screen's cracked?", "would you take £170 AND IS the back broken?"
 HYPOTHETICAL = re.compile(r"\b(?:if|whether|unless)\b.*|\band (?:is|are|does|do|did|has|have|any|can|could|would|will)\b.*",
                           re.IGNORECASE)
+# in a statement, what follows these is a condition, not a claim: "happy to take it as listed if the
+# battery is in good shape" says nothing about the battery
+CONDITIONAL = re.compile(r"\b(?:if|unless|whether|as long as|provided|assuming)\b.*", re.IGNORECASE)
 # "a time that works for you" isn't a claim that the item works
 WORKS_FOR = re.compile(r"\bwork(?:s|ing)? (?:for|with) (?:you|me|us)\b", re.IGNORECASE)
 # a listing read one part at a time: sentences, and what follows "but", "which"...
@@ -170,16 +177,18 @@ def question_for(kind, point):
 # ── checking a message ──────────────────────────────────────────────────────
 
 def said_in(message, offer=None):
-    """The clauses of a message that say something: its statements, and the
-    question that makes the offer, where the reason often sits ("would you
-    take £170 to allow for the broken back?"), up to an "if" or a second
-    question."""
+    """The clauses of a message that say something: its statements up to a
+    condition ("…if the battery is in good shape"), and the question that
+    makes the offer, where the reason often sits ("would you take £170 to
+    allow for the broken back?"), up to an "if" or a second question."""
     found = []
     for clause, asks in clauses(message):
         if asks and offer is not None and offer in prices_in(clause):
             clause = HYPOTHETICAL.sub("", clause)
         elif asks:
             continue
+        else:
+            clause = CONDITIONAL.sub("", clause)
         if len(words(clause)) > 1:
             found.append(clause)
     return found
@@ -219,6 +228,11 @@ def mostly_said(part, text):
     return any(pair in pairs for pair in zip(keys, keys[1:]))
 
 
+# a problem word said not to be one: "no problem", "the scratches aren't a problem", "can't see any issue"
+NEGATED_BEFORE = re.compile(r"\b(?:no|not|never|without|zero|cannot|(?:is|are|was|were|does|do|did|wo|would|has|have|ca)"
+                            r"n'?t)\s+(?:\w+\s+){0,2}$", re.IGNORECASE)
+
+
 def check_reasons(message, listing_text):
     """What a message says about the item uses only the listing's words for
     what's wrong with it: "given the stiff hinge" or "Shame about the stiff
@@ -233,7 +247,7 @@ def check_reasons(message, listing_text):
     said = stated_parts(message) + [m.group("reason") for m in REASON_SAID.finditer(message)]
     unbacked = [m.group() for part in said for m in PROBLEM.finditer(part)
                 if not condition_said(m.group()) and not {w[:5] for w in words(m.group())} <= listed
-                and not re.search(r"\b(?:no|not|never|without|zero)\s+(?:\w+\s+)?$", part[:m.start()], re.IGNORECASE)]
+                and not NEGATED_BEFORE.search(part[:m.start()])]
     problems = [f"the message says what's wrong with it in words the listing doesn't: "
                 f"{', '.join(dict.fromkeys(w.lower() for w in unbacked))}"] if unbacked else []
     story = copied_story(message, listing_text)

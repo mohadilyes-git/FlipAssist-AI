@@ -31,7 +31,11 @@ export type MessageRequest = {
   length: "usual" | "longer";
   previous?: string | null;
   writer: Writer;
+  /** the message on screen, for Rewrite: the new one says it in other words */
+  rewrite_of?: string | null;
 };
+
+export type Length = "usual" | "longer";
 
 export type MessageDraft = {
   draft_id: number;
@@ -48,6 +52,8 @@ export type MessageDraft = {
   questions: string[];
   reading: Reading;
   reasons: string[];
+  /** worth knowing before you send: a title and description naming different models, a rewrite with no other words */
+  warnings: string[];
   attempts: Attempt[];
   cost_pence: number;
 };

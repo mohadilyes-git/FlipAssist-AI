@@ -10,7 +10,7 @@ const DRAFT: MessageDraft = {
   draft_id: 7, status: "ready", written_by: "template", kind: "lower", offer: "£185", offer_pence: 18500,
   message: "Hi mate, would you take £185 cash, given the black dot on the screen? Can collect from Leeds LS6 today.",
   note: 'The seller says: "Price is firm, no offers"', ask: null, point: ["Black dot on the screen"], mentioned: true,
-  questions: [], reasons: [], cost_pence: 0,
+  questions: [], reasons: [], warnings: [], cost_pence: 0,
   attempts: [{ model: "template", problems: [], seconds: 0.001, cost_pence: 0 }],
   reading: { flaws: ["Black dot on the screen"], pickup: "Leeds LS6", no_offers: "Price is firm, no offers",
     read_by: "gemma3:4b", attempts: [{ model: "gemma3:4b", problems: [], seconds: 1.2, cost_pence: 0 }] },
@@ -118,6 +118,37 @@ describe("AI message", () => {
     await user.click(screen.getByRole("button", { name: "Make it longer" }));
     const body = sent(fetch, "POST /api/messages/draft", 1);
     expect([body.length, body.previous]).toEqual(["longer", DRAFT.message + " Cheers"]);
+  });
+
+  it("flips Make it longer to Make it shorter, and a rewrite keeps the length on screen", async () => {
+    const LONGER = { ...DRAFT, draft_id: 8, message: DRAFT.message + " Is it unlocked? Does it come with a charger?" };
+    const fetch = serve({ "POST /api/messages/draft": [[200, DRAFT], [200, LONGER], [200, { ...LONGER, draft_id: 9 }],
+      [200, { ...DRAFT, draft_id: 10 }]] });
+    const user = userEvent.setup();
+    render(<MessageScreen />);
+    await draft(user);
+    await user.click(screen.getByRole("button", { name: "Make it longer" }));
+    expect(await screen.findByDisplayValue(LONGER.message!)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Rewrite" }));
+    const rewrite = sent(fetch, "POST /api/messages/draft", 2);
+    expect([rewrite.length, rewrite.rewrite_of, rewrite.previous]).toEqual(["longer", LONGER.message, null]);
+    await user.click(await screen.findByRole("button", { name: "Make it shorter" }));
+    const shorter = sent(fetch, "POST /api/messages/draft", 3);
+    expect([shorter.length, shorter.previous, shorter.rewrite_of]).toEqual(["usual", null, null]);
+    expect(await screen.findByRole("button", { name: "Make it longer" })).toBeTruthy();
+  });
+
+  it("keeps your message when no new wording passes, and shows what's worth knowing", async () => {
+    const warned = { ...DRAFT, warnings: ["The title says iPhone 15 Pro Max but the description says iPhone 14: check which it is"] };
+    serve({ "POST /api/messages/draft": [[200, warned], [200, { ...DRAFT, draft_id: 8, status: "needs you", message: null,
+      written_by: null, reasons: ["no answer passed the checks"] }]] });
+    const user = userEvent.setup();
+    render(<MessageScreen />);
+    await draft(user);
+    expect(screen.getByText(/The title says iPhone 15 Pro Max but the description says iPhone 14/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Rewrite" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("No new wording passed the checks, so your message is unchanged");
+    expect(screen.getByDisplayValue(DRAFT.message!)).toBeTruthy();
   });
 
   it("asks before mentioning the flaw, and redrafts with your answer", async () => {

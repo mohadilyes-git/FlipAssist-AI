@@ -205,6 +205,19 @@ def models_named(text, catalogue):
     return {m[2]["id"] for m in name_matches(words(text, breaks=True), catalogue)}
 
 
+def models_disagree(title, description, catalogue):
+    """A warning when the title and the description name different models, and
+    neither names the other's ("iphone 15 pro max" over "iPhone 14 for sale"),
+    or None. A listing like that may be a mistake, or bait: worth asking about
+    before offering on it. Accessories don't count ("fits iPhone 13 cases")."""
+    in_title, in_description = models_named(title or "", catalogue), models_named(description or "", catalogue)
+    if not in_title or not in_description or in_title & in_description:
+        return None
+    named = {m["id"]: m["model"] for m in catalogue}
+    says = lambda ids: " or ".join(sorted(named[i] for i in ids))
+    return f"The title says {says(in_title)} but the description says {says(in_description)}: check which it is"
+
+
 def sizes_in(text_words):
     """Every '<number> gb/tb' in the text: "128 gb" -> "128GB". A bare "128"
     could be a price, so it doesn't count."""

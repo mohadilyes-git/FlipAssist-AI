@@ -82,6 +82,8 @@ class MessageRequest(BaseModel):
     previous: str | None = Field(None, max_length=1000, description='the draft on screen, to make longer: only with '
                                                                     '"length": "longer"')
     writer: Literal["auto", "template", "ai"] = Field("auto", description="auto: your past messages decide")
+    rewrite_of: str | None = Field(None, max_length=5000, description="the message on screen, for Rewrite: the new "
+                                                                      "one says it in other words")
     offer: str | None = Field(None, pattern=MONEY, description="the price you picked, in pounds; leave it out and code "
                                                                 "starts from its own (15% under, or 5% over, asking)")
     mode: Mode = "auto"
@@ -118,6 +120,8 @@ class MessageDraft(BaseModel):
     questions: list[str]
     reading: Reading
     reasons: list[str] = Field(description="why it needs you, if it does")
+    warnings: list[str] = Field(description="worth knowing before you send: a title and description that name "
+                                            "different models, a rewrite that couldn't find other words")
     attempts: list[Attempt]
     cost_pence: float = Field(description="reading and drafting together")
 
@@ -380,7 +384,7 @@ def draft_a_message(request: MessageRequest, s: Setup = Depends(setup), book: St
     try:
         result = draft_message(listing, book.card(), book.index, s.local, s.api, request.mode, s.log, kind=request.kind,
                                mention=request.mention, length=request.length, previous=request.previous,
-                               reading=reading, writer=request.writer, offer=offer)
+                               reading=reading, writer=request.writer, offer=offer, rewrite_of=request.rewrite_of)
     except Refused as e:  # anything else is a fault here, not the caller's: a 500
         raise HTTPException(422, str(e))
     answer = result["answer"] or {}
@@ -393,7 +397,8 @@ def draft_a_message(request: MessageRequest, s: Setup = Depends(setup), book: St
         mentioned=result["mentioned"], questions=result["questions"],
         reading=Reading(flaws=reading["flaws"], pickup=reading["pickup"], no_offers=reading["no_offers"],
                         read_by=reading["read_by"], attempts=read),
-        reasons=result["reasons"], attempts=tried, cost_pence=round(sum(a.cost_pence for a in tried + read), 4))
+        reasons=result["reasons"], warnings=result["warnings"], attempts=tried,
+        cost_pence=round(sum(a.cost_pence for a in tried + read), 4))
 
 
 @app.post("/listings/draft", response_model=ListingDraft, dependencies=[Depends(key)])
