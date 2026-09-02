@@ -94,6 +94,9 @@ SAME_AS = [
 # "is it unlocked?" open. Read on the part's words, so "don't" is "don t"
 NOT_SURE = re.compile(r" (?:not sure|unsure|don t know|dont know|do not know|no idea|not certain|can t confirm|"
                     r"cannot confirm|can t say|unknown) ")
+# a case or screen protector it was always kept in says how it was looked after, not that it comes
+# with it: "Always had screen protector and phone case on it" leaves "does it come with the case?" open
+LOOKED_AFTER = re.compile(r" (?:always (?:had|been|kept|used|in)|kept in|been in a|used with a) ")
 HARMLESS = ["perfect for", "perfect gift", "new owner", "new home", "since new", "from new",
             "works with", "working with", "compatible with", "games console", "games consoles", "game console",
             "stand out", "stands out"]
@@ -356,6 +359,8 @@ def promises_in(text):
         for i, word in enumerate(part_words):
             promise = KEYWORDS.get(singular(word))
             if not promise:
+                continue
+            if promise in ("case", "screen protector") and LOOKED_AFTER.search(part):
                 continue
             if promise == "new" and set(part_words[i + 1:i + 3]) & PARTS:
                 continue  # "new battery fitted": the battery is new, not the item

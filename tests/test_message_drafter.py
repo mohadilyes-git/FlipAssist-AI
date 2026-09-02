@@ -202,7 +202,7 @@ def test_a_longer_draft_says_more_with_the_questions_the_listing_doesnt_answer()
 def test_a_longer_draft_that_isnt_longer_gets_one_try_on_the_api():
     result = ai_draft(LISTING, style_card(PAST), local=FakeModel("gemma3:4b", GOOD),
                       api=FakeModel("claude-haiku-5-5", LONG), length="longer")
-    assert result["attempts"][0]["problems"] == ["the message is 14 words, but a longer one needs at least 23"]
+    assert result["attempts"][0]["problems"] == ["the message is 14 words, but a longer one needs at least 20"]
     assert result["status"] == "ready"
 
 

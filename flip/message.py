@@ -43,7 +43,7 @@ def main():
                         help="say what the listing gives this offer: its flaw, or its good condition "
                              "(default: your style decides)")
     parser.add_argument("--longer", action="store_true",
-                        help="aim for about twice your usual length, 30 to 70 words (three quarters of the aim passes)")
+                        help="aim for about twice your usual length, 30 to 70 words (two thirds of the aim passes)")
     parser.add_argument("--previous", help="the draft to make longer, as it was drafted (implies --longer)")
     parser.add_argument("--discount", type=float, default=15, help="percent under the asking price (default 15)")
     parser.add_argument("--writer", choices=WRITERS, default="auto",

@@ -182,10 +182,9 @@ def check_reading(answer, text):
                if q.strip() and not in_listing(q, text)]
     if made_up:
         problems.append(f"the reading quotes words that aren't in the listing: {', '.join(map(repr, made_up))}")
-    denied = [q for q in answer["flaws"] if q.strip() and in_listing(q, text) and not flaws_in(q, text)
-              and any(judge(piece, text) == "denied" for piece in parts_of(q))]  # "no stick drift" as a flaw
-    if denied:
-        problems.append(f"the reading gives as flaws what the seller says isn't so: {', '.join(map(repr, denied))}")
+    said_not = [q for q in answer["flaws"] if denied(q, text)]  # "no stick drift" as a flaw
+    if said_not:
+        problems.append(f"the reading gives as flaws what the seller says isn't so: {', '.join(map(repr, said_not))}")
     said = answer["no_offers"].strip()
     if said and not no_offers_ok(said, text):
         problems.append(f"\"{said}\" doesn't say the seller won't take offers")
@@ -245,19 +244,29 @@ def reading_from(answer, text, read_by):
             "no_offers": said if said and no_offers_ok(said, text) else code_no_offers(text), "read_by": read_by}
 
 
-def without_echoes(reply, text):
-    """A reading without what the model copied from its own instructions
-    rather than the listing: "each fault, damage, mark or sign of wear the
-    listing mentions" as a flaw, the example "Leeds LS6" as the pickup place.
-    That isn't the seller's word, so it's dropped and the rest is checked as
-    usual: failing the whole reading for it paid the API for a reading that
-    was otherwise right. A quote that's in the listing too always stays."""
+def denied(quote, text):
+    """A flaw the seller says isn't so: "no scratches", "no stick drift"."""
+    return bool(quote.strip()) and in_listing(quote, text) and not flaws_in(quote, text) \
+        and any(judge(piece, text) == "denied" for piece in parts_of(quote))
+
+
+def tidied(reply, text):
+    """A reading without what code can tell for sure is no flaw of the listing's:
+    1. what the model copied from its own instructions rather than the listing:
+       "each fault, damage, mark or sign of wear the listing mentions" as a
+       flaw, the example "Leeds LS6" as the pickup place;
+    2. a flaw the seller says isn't so: "no scratches" (a small model lists
+       every condition word it sees).
+    Each is dropped and the rest is checked as usual: failing the whole
+    reading for it paid the API to read the listing again. A quote that's in
+    the listing too stays; anything else wrong still fails the reading."""
     answer = reply.answer
     echo = lambda quote: isinstance(quote, str) and bool(quote.strip()) and in_listing(quote, READING_SYSTEM) \
         and not in_listing(quote, text)
     if isinstance(answer, dict):
         if isinstance(answer.get("flaws"), list):
-            answer = {**answer, "flaws": [f for f in answer["flaws"] if not echo(f)]}
+            answer = {**answer, "flaws": [f for f in answer["flaws"]
+                                          if not echo(f) and not (isinstance(f, str) and denied(f, text))]}
         answer = {**answer, **{key: "" for key in ("pickup", "no_offers") if echo(answer.get(key))}}
         reply.answer = answer
     return reply
@@ -272,7 +281,7 @@ def read_listing_with_ai(listing, local=None, api=None, mode="auto", log=None):
     result = {"item_id": listing.get("id"), "reasons": [], "attempts": []}
     system, user = reading_prompt(listing)
     answer = try_models(mode, {"local": local, "api": api},
-                        ask=lambda ai: without_echoes(ai.ask(system, user, [], READING_SCHEMA), text),
+                        ask=lambda ai: tidied(ai.ask(system, user, [], READING_SCHEMA), text),
                         check=lambda found: check_reading(found, text), result=result, log=log)
     reading = code_reading(text) if answer is None else reading_from(answer, text, result["attempts"][-1]["model"])
     return {**reading, "attempts": result["attempts"], "reasons": result["reasons"]}

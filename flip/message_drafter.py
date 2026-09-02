@@ -177,7 +177,7 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     disagree = models_disagree(title, listing.get("description"), load_catalogue())
     if disagree:
         result["warnings"].append(disagree)
-    at_least = math.ceil(longer["words"] * 3 / 4) if longer else 0  # a little short of the aim still counts
+    at_least = math.ceil(longer["words"] * 2 / 3) if longer else 0  # a little short of the aim still counts
     if previous:
         at_least = max(at_least, len(previous.split()) + 1)  # longer than the draft on screen, never shorter
         if at_least > LONGEST:

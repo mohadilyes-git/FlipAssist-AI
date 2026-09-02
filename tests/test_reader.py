@@ -270,12 +270,12 @@ def test_no_offers_in_more_of_the_ways_sellers_say_it(text, said):
 # ── what a model copies from its own instructions is dropped, not failed ────
 
 def test_a_line_copied_from_the_instructions_is_dropped_and_the_rest_still_counts():
-    from flip.reader import without_echoes
+    from flip.reader import tidied
     text = "iPhone 14. Few scratches on screen but does not effect. A small mark on the back. No offers"
     reply = Reply("gemma3:4b", answer={"flaws": ["each fault, damage, mark or sign of wear the listing mentions",
                                                  "Few scratches on screen but does not effect", "mark"],
                                        "pickup": "Leeds LS6", "no_offers": "No offers"})
-    assert without_echoes(reply, text).answer == {"flaws": ["Few scratches on screen but does not effect", "mark"],
+    assert tidied(reply, text).answer == {"flaws": ["Few scratches on screen but does not effect", "mark"],
                                                   "pickup": "", "no_offers": "No offers"}  # "mark" is the seller's too
 
 
@@ -288,3 +288,22 @@ def test_a_reading_with_an_echo_passes_on_this_mac_without_asking_the_api():
     reading = read_listing_with_ai(listing, FakeModel("gemma3:4b", echoed), api)
     assert reading["read_by"] == "gemma3:4b" and api.asked == []
     assert reading["flaws"] == ["Few scratches on screen"] and reading["no_offers"] == "No offers"  # the aside trimmed
+
+
+# a real listing (2 Sep): Gemma read "no scratches" as a flaw on every try, and Haiku was paid to read it again
+LIKE_NEW = {"title": "iphone 14 pro gold 128gb", "description": "iPhone 14 Pro Gold 128GB\n80% battery health.\n"
+            "Used but like new. Perfect condition, no scratches,\nAlways had screen protector and phone case on it."}
+
+
+def test_a_flaw_the_seller_denies_is_dropped_and_the_reading_stays_on_this_mac():
+    gemma = {"flaws": ["no scratches"], "pickup": "", "no_offers": ""}
+    api = FakeModel("claude-haiku-5-5")  # it has no answers: asking it would fail the test
+    reading = read_listing_with_ai(LIKE_NEW, FakeModel("gemma3:4b", gemma), api)
+    assert (reading["read_by"], reading["flaws"], api.asked) == ("gemma3:4b", [], [])
+
+
+def test_a_made_up_flaw_still_fails_the_reading():
+    gemma = {"flaws": ["cracked screen"], "pickup": "", "no_offers": ""}
+    haiku = {"flaws": [], "pickup": "", "no_offers": ""}
+    reading = read_listing_with_ai(LIKE_NEW, FakeModel("gemma3:4b", gemma), FakeModel("claude-haiku-5-5", haiku))
+    assert reading["read_by"] == "claude-haiku-5-5"

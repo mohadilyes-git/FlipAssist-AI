@@ -100,3 +100,12 @@ def test_an_unsure_line_claims_nothing(unsure):
 def test_a_sure_line_still_answers():
     assert "unlocked" in answered("Unlocked to all networks") and "unlocked" in answered("Locked to EE")
     assert "box" in answered("Not sure about the cable, comes boxed")  # each part of the line on its own
+
+
+def test_a_case_it_was_always_kept_in_doesnt_say_it_comes_with_one():
+    looked_after = "Used but like new. Perfect condition, no scratches,\nAlways had screen protector and phone case on it."
+    assert not {"case", "screen protector"} & answered(looked_after)
+    asks = "Hi, I can pay £280 for it. Does it come with the case and the screen protector?"
+    assert check_no_answered_questions(asks, looked_after) == []
+    for says in ("Screen protector on it, comes with the case", "Has a screen protector on it"):
+        assert answered(says) & {"screen protector"}  # fitted, or included: that answers it
