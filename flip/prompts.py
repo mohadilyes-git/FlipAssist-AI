@@ -74,13 +74,15 @@ Rules:
 4. Sound like the reseller: follow their style notes and write like their example messages. In the examples, £[OFFER] stands for whatever they offered that time.
 5. No contact details, links, or paying or dealing outside the platform. No flattery.
 6. Never make up anything about the reseller: who it's for, why they want it, or where they live.
-7. British English."""
+7. Never repeat what the seller says about themselves or why they're selling: the message is from the buyer.
+8. British English."""
 
 # the offer line, for each kind of offer
 OFFER_LINES = {"lower": "{offer}, under their asking price",
                "asking": "{offer}, their full asking price: say plainly that the reseller will pay it",
                "more": "{offer}, more than their asking price, to beat other buyers: say plainly that the reseller "
-                       "can pay it, never as a question, and nothing pushy like \"to secure it\""}
+                       "can pay it if the seller holds it for them (for example \"I can pay £170 if you can hold it "
+                       "for me\"), never as a question, and nothing pushy like \"to secure it\""}
 # the condition line, when the listing gives the offer something to say (flip.offers)
 CONDITION_LINES = {"lower": "give this flaw from the listing, once, plainly and politely, as the reason for the "
                             "offer: {says}. Never say what a repair costs",

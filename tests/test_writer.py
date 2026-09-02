@@ -48,7 +48,7 @@ def test_your_own_sentences_with_the_new_price_and_the_sellers_words(kind, offer
 def test_with_no_past_messages_it_is_plain_and_promises_nothing():
     assert write_offer(None, "lower", 18500, FLAW, item="iPhone 13") == \
         "Hi, would you take £185 for it, given the black dot on the screen? Thanks."
-    assert write_offer({}, "more", 42000, item="iPhone 13") == "Hi, I can pay £420 for it. Thanks."
+    assert write_offer({}, "more", 42000, item="iPhone 13") == "Hi, I can pay £420 if you can hold it for me. Thanks."
 
 
 def test_the_pickup_place_goes_in_only_where_you_say_youll_collect():
@@ -162,7 +162,7 @@ def test_an_offer_at_or_over_asking_is_never_called_low():
     cheeky = style_card([{"my_message": "Hi mate, would you take £170? I know it's a bit cheeky."},
                          {"my_message": "Hi mate, would you take £90? I know it's a bit cheeky."}])
     assert "cheeky" in write_offer(cheeky, "lower", 17000, item="PS5")
-    assert write_offer(cheeky, "more", 21000, item="PS5") == "Hi mate, I can pay £210."
+    assert write_offer(cheeky, "more", 21000, item="PS5") == "Hi mate, I can pay £210 if you can hold it for me."
 
 
 def test_a_greeting_inside_the_offer_stays_first_in_a_longer_message():
@@ -211,4 +211,4 @@ def test_a_question_the_draft_already_asks_isnt_asked_again_in_a_merged_one():
 def test_less_than_youre_asking_isnt_said_with_an_offer_over_asking():
     card = style_card([{"my_message": "Hi mate, would you take £170? I know it's less than you're asking."},
                        {"my_message": "Hi mate, would you take £90? I know it's less than you're asking."}])
-    assert write_offer(card, "more", 21000, item="PS5") == "Hi mate, I can pay £210."
+    assert write_offer(card, "more", 21000, item="PS5") == "Hi mate, I can pay £210 if you can hold it for me."

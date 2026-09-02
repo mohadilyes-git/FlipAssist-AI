@@ -15,13 +15,13 @@ back"), it writes nothing and the AI gets its turn.
 
 import re
 
-from flip.checks import ASKS_YOU, PROBLEM, SIGN_OFF, ends_asking
+from flip.checks import ASKS_YOU, HOLD, PROBLEM, SIGN_OFF, ends_asking
 from flip.prompts import offer_words
 from flip.style import opening
 
 # the offer in plain words, for when your messages have no habit for it
 NEUTRAL = {"lower": "would you take £[OFFER] for it?", "asking": "I can pay £[OFFER] for it.",
-           "more": "I can pay £[OFFER] for it."}
+           "more": "I can pay £[OFFER] if you can hold it for me."}
 GREETING, THANKS = "Hi", "Thanks."
 FILLER = "Let me know what you think."
 MAX_FLAW = 12  # words of the seller's to say back
@@ -174,6 +174,13 @@ def as_statement(sentence):
     return f"{greeting + ', ' if greeting else ''}I can pay £[OFFER]{tail}.{' ' + sign if sign else ''}"
 
 
+def held(sentence):
+    """Over asking, the reason to pay more: "I can pay £[OFFER] cash." -> "I can
+    pay £[OFFER] cash if you can hold it for me.", before any sign-off."""
+    core, sign = split_sign_off(sentence)
+    return f"{core.rstrip(' .!?')} if you can hold it for me.{' ' + sign if sign else ''}"
+
+
 def with_reason(sentence, kind, point):
     """The listing's point in the offer sentence (lower, more) or after it
     (asking), before any sign-off the sentence ends with. None if the
@@ -272,6 +279,8 @@ def write_offer(card, kind, offer, point=None, questions=(), at_least=0, item="i
             offer_sentence = NEUTRAL[kind]
         opener = opener if not LOWBALL.search(opener) else f"{card.get('greeting') or GREETING},"
         closing = closing if not LOWBALL.search(closing) else ""
+    if kind == "more" and not point and not HOLD.search(offer_sentence):
+        offer_sentence = held(offer_sentence)  # paying over asking says why
     if not opener:  # "Hi mate, would you take £185?": anything added goes after "Hi mate,"
         opener, offer_sentence = greeting_apart(offer_sentence)
     reasoned = with_reason(offer_sentence, kind, point)

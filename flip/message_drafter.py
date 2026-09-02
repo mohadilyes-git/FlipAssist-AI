@@ -31,14 +31,14 @@ import time
 from flip.ai import Reply
 from flip.attempts import try_models
 from flip.catalogue import fill_from_catalogue, load_catalogue, models_disagree, words
-from flip.checks import check_message, check_no_unasked_promises, names_other_model, promised_in
+from flip.checks import HOLD, check_message, check_no_unasked_promises, ends_asking, names_other_model, promised_in
 from flip.money import offer_for, to_pence
-from flip.offers import check_condition_talk, point_for, question_for, says_point
+from flip.offers import check_condition_talk, copied_question, point_for, question_for, says_point
 from flip.prompts import MESSAGE_SCHEMA, message_prompt
-from flip.questions import check_no_answered_questions, open_questions
+from flip.questions import check_no_answered_questions, load_questions, open_questions
 from flip.reader import code_reading, in_listing
 from flip.retrieval import listing_text
-from flip.style import describe
+from flip.style import SENTENCES, describe, without_prices
 from flip.writer import make_longer, repeats, write_offer
 
 USUAL_WORDS = 15  # how long a message is before you have past messages to go by
@@ -106,6 +106,21 @@ def offer_to_draft(kind, asking, offer=None, discount_percent=15):
     return picked(kind, asking, offer) if offer is not None else offer_for(kind, asking, discount_percent)
 
 
+# questions that fit any listing, whoever they were asked of before
+ANY_LISTING = re.compile(r"\b(?:still (?:available|for sale|up for grabs|there|around|going)|is it (?:still )?available|"
+                         r"(?:has it|is it) (?:been )?sold|sold yet)\b", re.IGNORECASE)
+
+
+def asked_once(message, asks):
+    """What a past message asked about its own listing only: a question
+    that's neither one you ask every time (asks: in 2 or more of your
+    messages) nor one that fits any listing ("still available?"). Copied into
+    a message about another listing, "Does it still work perfectly fine?"
+    makes no sense, so the AI never sees it, and the checks refuse it."""
+    return [s.strip() for s in SENTENCES.split(message.strip()) if s.strip() and ends_asking(s)
+            and not ANY_LISTING.search(s) and " ".join(words(without_prices(s))) not in asks]
+
+
 def habits(card, examples):
     """How you buy, in your own words: what your messages promise (collecting,
     cash, postage), as your style card records it and your example messages
@@ -163,6 +178,11 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     query = listing_text(title, listing.get("marketplace") or "")
     examples = index.similar(query, leave_out=leave_out) if index else []
     allowed = habits(card, examples)
+    once = [q for e in examples for q in asked_once(e["my_message"], set(card.get("asks", [])))]
+    shown = [{**e, "my_message": " ".join(s.strip() for s in SENTENCES.split(e["my_message"].strip())
+                                          if s.strip() and s.strip() not in once)} for e in examples]
+    pool = load_questions()
+    code_asks = " ".join(q["ask"] for q in [*pool.get(found.get("category"), []), *pool["any"]])
     pickup = reading["pickup"] if "collecting" in allowed else ""  # only if you'd say you'll collect
     result = {"item_id": listing.get("id"), "status": "needs you", "reasons": [], "kind": kind, "offer": offer,
               "listing": {key: listing.get(key) or "" for key in ("title", "asking_price", "marketplace")},
@@ -200,6 +220,11 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
             sentences = re.split(r"(?<=[.!?])\s+|\n+", message)
             if model and any(names_other_model(words(sentence), model, catalogue) for sentence in sentences):
                 problems.append("the message names a different item from the listing's")
+            copied = copied_question(message, once, f"{sources} {code_asks}")
+            if copied:
+                problems.append(f"the message asks what you asked about another listing: \"{copied}\"")
+            if kind == "more" and not HOLD.search(message) and not (point and mention):
+                problems.append("an offer over asking says why: that it's if they'll hold it for you")
             made_up = [m.group(1) for m in COLLECT_FROM.finditer(message) if not in_listing(m.group(1), sources)]
             if made_up:
                 problems.append(f"the message says it'll collect from a place the listing doesn't: {', '.join(made_up)}")
@@ -223,7 +248,7 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
                 log.draft(result)
             return result
 
-    system, user = message_prompt(listing, offer, describe(card, longer["words"] if longer else None), examples,
+    system, user = message_prompt(listing, offer, describe(card, longer["words"] if longer else None), shown,
                                   kind, point if mention else None, longer, pickup or None, rewrite_of or None)
     result["answer"] = try_models(
         mode, {"local": local, "api": api},

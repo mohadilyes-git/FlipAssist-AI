@@ -90,6 +90,9 @@ SAME_AS = [
     ("scuff free", "no scuff"), ("crack free", "no crack"), ("free from", "no"), ("free of", "no"),
 ]
 # phrases that contain a claim word but aren't a claim
+# why an offer over asking is made: so they'll hold it for you, or take the listing down
+HOLD = re.compile(r"\b(?:hold|reserve|keep it for|put it aside|set it aside|take (?:it|the (?:ad|advert|listing|post)) "
+                  r"down|off the market)\b", re.IGNORECASE)
 # a seller who isn't sure claims nothing, yes or no: "not sure if locked or not" leaves
 # "is it unlocked?" open. Read on the part's words, so "don't" is "don t"
 NOT_SURE = re.compile(r" (?:not sure|unsure|don t know|dont know|do not know|no idea|not certain|can t confirm|"

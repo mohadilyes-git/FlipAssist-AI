@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from flip.catalogue import words
-from flip.checks import promised_in
+from flip.checks import ends_asking, promised_in
 
 EMOJI = re.compile("[\U0001F300-\U0001FAFF☀-➿]")
 GREETING_WORDS = {"hi", "hiya", "hello", "hey", "alright", "morning", "afternoon", "evening", "yo"}
@@ -93,8 +93,16 @@ def style_card(messages):
     if greeting and times / len(texts) >= SHARE:
         card["greeting"] = greeting
     card["phrases"] = phrasebook([m for m in messages if m.get("my_message")])
+    asked = Counter(q for t in texts for q in set(questions_in(t)))
+    card["asks"] = sorted(q for q, n in asked.items() if n >= HABIT)  # questions you ask every time
     card["promises"] = sorted(set().union(*(promised_in(t) for t in texts)))
     return card
+
+
+def questions_in(text):
+    """A message's questions in their plain words, prices left out:
+    "Would you take £185? Still available?" -> ["would you take offer", "still available"]."""
+    return [" ".join(words(without_prices(s))) for s in SENTENCES.split(text.strip()) if s.strip() and ends_asking(s)]
 
 
 def phrasebook(messages):

@@ -256,6 +256,20 @@ def check_reasons(message, listing_text):
     return problems
 
 
+def copied_question(message, questions, allowed_text, run=4):
+    """Words a message repeats, at least run in a row, from a question you
+    asked about another listing ("does it still work perfectly fine"), unless
+    this listing (or code's own question) says them too. "" if none."""
+    said, allowed = words(message), words(allowed_text)
+    for question in questions:
+        told = words(question)
+        for start in range(len(told) - run + 1):
+            piece = told[start:start + run]
+            if contains(said, piece) and not contains(allowed, piece):
+                return " ".join(piece)
+    return ""
+
+
 def copied_story(message, listing_text, run=4):
     """Words the seller wrote about themselves ("I dropped it and cracked the
     back") that a message repeats, at least run words of it in a row."""

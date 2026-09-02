@@ -178,7 +178,8 @@ def test_a_flawed_item_is_never_praised_for_paying_more():
     assert result["point"] == [] and result["status"] == "needs you"
     assert result["attempts"][0]["problems"] == [
         "the message talks about the condition, but this draft leaves that out",
-        "the message says things about the condition the listing doesn't: good"]
+        "the message says things about the condition the listing doesn't: good",
+        "an offer over asking says why: that it's if they'll hold it for you"]
 
 
 # ── a longer message ────────────────────────────────────────────────────────
@@ -487,3 +488,49 @@ def test_when_no_other_wording_passes_your_own_message_stays():
     assert (result["status"], result["writer"], result["answer"]["message"], result["reasons"]) == \
         ("ready", "template", yours, [])
     assert result["warnings"] == ["No other wording passed the checks: this is your usual message"]
+
+
+
+# ── a question you asked about one listing isn't asked about another ────────
+
+WORKS_FINE = [{"id": "s1", "listing_title": "iphone 15 pro max", "my_message": "Hi, I can pay £400 for it. Does it still "
+               "work perfectly fine?"},
+              {"id": "s2", "listing_title": "iphone 14 pro", "my_message": "Hi, I can pay £280 for it. Is it still available?"}]
+BLUE = {"id": "b", "title": "iphone 13 Blue", "asking_price": "110", "marketplace": "facebook",
+        "description": "iPhone 13 blue\n128gb\nUpgraded my phone hence the sale\nOriginal screen\nBattery 91% health"}
+
+
+class Past:
+    """A search that finds the given past messages, nearest first."""
+    def __init__(self, messages):
+        self.messages = messages
+
+    def similar(self, text, n=3, leave_out=None):
+        return self.messages[:n]
+
+
+def test_a_question_asked_about_another_listing_is_never_shown_to_the_ai_or_copied():
+    """A real draft (2 Sep): "Does it still work perfectly fine?" from a message about another phone."""
+    copied = {"message": "Hi, I can pay £110 for it. Does it still work perfectly fine?"}
+    plain = {"message": "Hi, I can pay £110 for it. Is it still available?"}
+    local, api = FakeModel("gemma3:4b", copied), FakeModel("claude-haiku-5-5", plain)
+    result = ai_draft(BLUE, style_card(WORKS_FINE), Past(WORKS_FINE), local, api, kind="asking")
+    assert "perfectly fine" not in local.asked[0]["user"] and "Is it still available?" in local.asked[0]["user"]
+    assert result["attempts"][0]["problems"] == [
+        'the message asks what you asked about another listing: "does it still work"']
+    assert (result["status"], result["answer"]) == ("ready", plain)
+
+
+def test_a_question_this_listing_or_code_would_ask_is_never_counted_as_copied():
+    asked = [{"id": "s1", "listing_title": "PS5", "my_message": "Hi, would you take £300? Does it come with a charger?"}]
+    local = FakeModel("gemma3:4b", {"message": "Hi, I can pay £110 for it. Does it come with a charger?"})
+    result = ai_draft(BLUE, style_card(asked), Past(asked), local, kind="asking")
+    assert result["status"] == "ready"
+
+
+def test_an_offer_over_asking_says_why():
+    over = {"message": "Hi, I can pay £120 for it."}
+    held = {"message": "Hi, I can pay £120 if you can hold it for me."}
+    result = ai_draft(BLUE, {}, None, FakeModel("gemma3:4b", over, held), kind="more", offer=12000)
+    assert result["attempts"][0]["problems"] == ["an offer over asking says why: that it's if they'll hold it for you"]
+    assert draft_message(BLUE, {}, kind="more")["answer"]["message"].endswith("if you can hold it for me. Thanks.")
