@@ -534,3 +534,13 @@ def test_an_offer_over_asking_says_why():
     result = ai_draft(BLUE, {}, None, FakeModel("gemma3:4b", over, held), kind="more", offer=12000)
     assert result["attempts"][0]["problems"] == ["an offer over asking says why: that it's if they'll hold it for you"]
     assert draft_message(BLUE, {}, kind="more")["answer"]["message"].endswith("if you can hold it for me. Thanks.")
+
+
+def test_your_offer_sentence_is_your_style_not_a_question_about_another_listing():
+    """A real draft (2 Sep): your own sentences were refused for "for it given the"."""
+    mine = [{"id": "s1", "listing_title": "iPhone 13 128GB Blue", "my_message":
+             "Hi, would you take £185 for it, given the black dot on the screen? Thanks. Cheers"}]
+    faulty = {**BLUE, "description": BLUE["description"].replace("Original screen", "Original screen one issue with "
+                                                                  "the screen it turns on and off sometimes")}
+    result = draft_message(faulty, {}, Past(mine), kind="lower", mention=True, writer="template")
+    assert result["status"] == "ready", result["attempts"]

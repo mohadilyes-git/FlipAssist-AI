@@ -38,7 +38,7 @@ from flip.prompts import MESSAGE_SCHEMA, message_prompt
 from flip.questions import check_no_answered_questions, load_questions, open_questions
 from flip.reader import code_reading, in_listing
 from flip.retrieval import listing_text
-from flip.style import SENTENCES, describe, without_prices
+from flip.style import OLD_PRICE, SENTENCES, describe, without_prices
 from flip.writer import make_longer, repeats, write_offer
 
 USUAL_WORDS = 15  # how long a message is before you have past messages to go by
@@ -118,6 +118,7 @@ def asked_once(message, asks):
     a message about another listing, "Does it still work perfectly fine?"
     makes no sense, so the AI never sees it, and the checks refuse it."""
     return [s.strip() for s in SENTENCES.split(message.strip()) if s.strip() and ends_asking(s)
+            and not OLD_PRICE.search(s)  # "would you take £185 for it?" is how you word an offer: style
             and not ANY_LISTING.search(s) and " ".join(words(without_prices(s))) not in asks]
 
 

@@ -273,7 +273,8 @@ def copied_question(message, questions, allowed_text, run=4):
         told = words(question)
         for start in range(len(told) - run + 1):
             piece = told[start:start + run]
-            if contains(said, piece) and not contains(allowed, piece):
+            meaningful = [w for w in piece if w not in SMALL_WORDS and not w.isdigit()]
+            if len(meaningful) >= 2 and contains(said, piece) and not contains(allowed, piece):  # not "for it given the"
                 return " ".join(piece)
     return ""
 
