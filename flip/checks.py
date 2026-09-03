@@ -141,8 +141,18 @@ FAULTS = re.compile(r"\b(?:not working|broken|drift|drifts|drifting|faulty|fault
                     r"dead pixels?|(?:is|totally|completely|went|now) dead|dead (?:battery|phone|console|unit|on arrival)|"
                     r"battery (?:is )?dead|"
                     r"won t (?:turn on|switch on|charge|connect|pair|boot)|doesn t (?:turn on|charge|connect|pair)|"
-                    r"not charging|no sound|no power)\b")
-NOT_A_FAULT = re.compile(r"\b(?:no|not|never|without)\s+(?:been\s+)?(?:any\s+)?(?:\w+\s+)?"
+                    r"not charging|no sound|no power|"
+                    # a part with an issue, and a fault that comes and goes: "one issue with the screen it
+                    # turns on and off sometimes", "keeps restarting", "cuts out" (but not "issues with collection")
+                    r"(?:issues?|problems?|faults?) with (?:the |its |my )?(?:screen|display|battery|charging|charger port|"
+                    r"camera|cameras|speakers?|mic|microphone|buttons?|face id|touch id|wifi|bluetooth|signal|sound|audio|"
+                    r"power|port|sim|network|touch ?screen|keyboard|trackpad|joycons?|sticks?|controllers?|disc drive)|"
+                    r"turns? (?:itself )?(?:on and off|off and on|off by itself|off on its own|off randomly)|"
+                    r"turning (?:on and off|off and on|itself off)|"
+                    r"(?:switch|switches|shuts?) (?:itself )?(?:off|down) (?:by itself|on its own|randomly)|"
+                    r"keeps? (?:turning|switching|shutting) (?:off|down)|keeps? restarting|restarts? (?:by itself|on its own|randomly)|"
+                    r"randomly (?:restarts|shuts down|turns off|switches off)|cuts? out|intermittent\w*|stops? working)\b")
+NOT_A_FAULT = re.compile(r"\b(?:no|not|never|without|zero|(?:hasn|haven|hadn|didn|doesn|isn|wasn) t)\s+(?:been\s+)?(?:\w+\s+){0,3}"
                          r"(?:broken|drift\w*|faults?|faulty|glitch\w*|dead pixels?|issues?|problems?)\b"
                          r"|\bnot\s+(?:for\s+)?(?:spares|repairs|parts)\b")
 FOR_PARTS = "7000"

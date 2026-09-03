@@ -35,6 +35,11 @@ VERB_INSIDE = re.compile(r"\b(?:is|are|was|were|has|have|doesn'?t|don'?t|won'?t|
                          re.IGNORECASE)
 # "It's cracked", "There's a crack": the subject the sentence gets from the seller
 SUBJECT = re.compile(r"^(?:(it'?s|it is)|(it has|it'?s got|has got)|(there'?s|there is|there are))\s+", re.IGNORECASE)
+# a seller's run-on: a second clause with no full stop, "the screen it turns on and off" -> "the screen – it turns..."
+RUN_ON = re.compile(r"(?<=\w) (it|which) (?=(?:turns|keeps|won'?t|doesn'?t|can'?t|goes|stops|cuts|switches|shuts|"
+                    r"restarts|freezes|lags|flickers|drains|dies|has|had|needs)\b)", re.IGNORECASE)
+# "one issue with the screen" says "the issue": "given one issue..." doesn't read
+ONE_ISSUE = re.compile(r"^(?:one|1)\s+(issue|problem|fault)\b", re.IGNORECASE)
 # a seller's own story ("I dropped it", "my son cracked it") isn't yours to say
 FIRST_PERSON = re.compile(r"\b(?:I|I'?ve|I'?m|I'?d|[Mm]y|[Mm]e|[Mm]ine|[Ww]e|[Ww]e'?ve|[Oo]ur|us)\b")
 SPARES = re.compile(r"\bfor parts\b|\bspares(?:\s*(?:or|and|/|&)\s*repairs?)?\b|\brepairs?\b", re.IGNORECASE)
@@ -93,6 +98,7 @@ def flaw_phrase(part):
     part = part.strip().rstrip(".!")
     if not part or FIRST_PERSON.search(part) or len(part.split()) > MAX_FLAW:
         return None
+    part = RUN_ON.sub(r" – \1 ", ONE_ISSUE.sub(r"the \1", part))
     spares = SPARES.search(part)
     if spares:  # in the seller's own words: "for parts", "spares or repairs"
         return None if NEGATED_SPARES.search(part) else \

@@ -307,3 +307,9 @@ def test_a_made_up_flaw_still_fails_the_reading():
     haiku = {"flaws": [], "pickup": "", "no_offers": ""}
     reading = read_listing_with_ai(LIKE_NEW, FakeModel("gemma3:4b", gemma), FakeModel("claude-haiku-5-5", haiku))
     assert reading["read_by"] == "claude-haiku-5-5"
+
+
+def test_a_screen_that_turns_on_and_off_is_read_as_a_flaw_said_whole():
+    text = ("iphone 13 Blue. 128gb\nUpgraded my phone hence the sale\nOriginal screen one issue with the screen it turns "
+            "on and off sometimes\nBattery 91% health")
+    assert code_reading(text)["flaws"] == ["one issue with the screen it turns on and off"]

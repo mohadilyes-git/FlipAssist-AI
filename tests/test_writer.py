@@ -212,3 +212,12 @@ def test_less_than_youre_asking_isnt_said_with_an_offer_over_asking():
     card = style_card([{"my_message": "Hi mate, would you take £170? I know it's less than you're asking."},
                        {"my_message": "Hi mate, would you take £90? I know it's less than you're asking."}])
     assert write_offer(card, "more", 21000, item="PS5") == "Hi mate, I can pay £210 if you can hold it for me."
+
+
+def test_a_sellers_run_on_flaw_reads_as_a_sentence():
+    """A real listing (2 Sep): "one issue with the screen it turns on and off sometimes"."""
+    point = {"about": "flaw", "says": ["one issue with the screen it turns on and off"]}
+    assert write_offer({}, "lower", 9000, point) == \
+        "Hi, would you take £90 for it, given the issue with the screen – it turns on and off? Thanks."
+    assert write_offer({}, "asking", 11000, point) == \
+        "Hi, I can pay £110 for it. I don't mind the issue with the screen – it turns on and off. Thanks."

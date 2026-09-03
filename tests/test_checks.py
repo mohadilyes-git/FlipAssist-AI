@@ -731,3 +731,19 @@ def test_a_row_of_emojis_mid_sentence_is_checked_at_once():
                   18500, f"Back glass cracked {hearts} still works fine. Collection only.", 22000)
     split_sign_off(f"Hi {hearts} mate")
     assert time.monotonic() - started < 2
+
+
+# ── faults said in everyday words (a real listing, 2 Sep) ──────────────────
+
+@pytest.mark.parametrize("fault", ["Original screen one issue with the screen it turns on and off sometimes",
+                                   "Screen cuts out now and then", "Keeps restarting", "Turns off by itself",
+                                   "Problems with the speaker", "intermittent charging", "Stopped working last week"])
+def test_a_fault_that_comes_and_goes_is_a_fault(fault):
+    assert has_fault(fault)
+
+
+@pytest.mark.parametrize("fine", ["No issues with the screen", "never had any problems with the battery",
+                                  "hasn't had any issues with the screen", "Any issues with collection message me",
+                                  "Turns on fine, works perfectly"])
+def test_no_fault_said_in_everyday_words_is_no_fault(fine):
+    assert not has_fault(fine)

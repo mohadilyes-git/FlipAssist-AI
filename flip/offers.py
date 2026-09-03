@@ -19,7 +19,7 @@ must say the point, not ask it. Asking about the condition is otherwise fine
 import re
 
 from flip.catalogue import contains, words
-from flip.checks import (LEVELS, MARKS, NEGATIONS, NEW_SEALED, PROBLEM, clauses, has_fault, prices_in,
+from flip.checks import (FAULTS, LEVELS, MARKS, NEGATIONS, NEW_SEALED, PROBLEM, clauses, has_fault, prices_in,
                          promises_in, stated_parts)
 
 # the seller says the price already allows for the flaw: a lower offer mustn't use it again
@@ -60,6 +60,7 @@ WORKS_FOR = re.compile(r"\bwork(?:s|ing)? (?:for|with) (?:you|me|us)\b", re.IGNO
 LISTING_PARTS = re.compile(r"[,.;!?\n()]|\s[-–—]\s|\b(?:but|which|though|although|otherwise|however|hence)\b",
                            re.IGNORECASE)
 MAX_QUOTE = 8  # words of the seller's to show: enough to recognise, short enough to read
+MAX_FAULT_QUOTE = 12  # words, when a fault phrase runs past MAX_QUOTE
 # words that don't say which flaw it is: "a bit of", "on the"
 SMALL_WORDS = {"a", "an", "the", "on", "in", "of", "to", "at", "it", "is", "its", "has", "have", "with", "and",
                "from", "bit", "some", "slight", "slightly", "small", "little", "very", "quite", "few", "s"}
@@ -127,7 +128,14 @@ def quote(part, kinds):
         says = lambda start, end: condition_said(" ".join(tokens[start:end])) & kinds
         end = next(e for e in range(1, len(tokens) + 1) if says(0, e))
         start = max(0, next(s for s in range(end - 1, -1, -1) if says(s, end)) - 1)
-        tokens = tokens[start:start + MAX_QUOTE]
+        cut = start + MAX_QUOTE
+        # a fault the cut would end halfway through is said whole: "...it turns on" -> "...it turns on and off"
+        plain = lambda end: " ".join(words(" ".join(tokens[start:end])))
+        said, whole = plain(cut), plain(start + MAX_FAULT_QUOTE)
+        reach = max((m.end() for m in FAULTS.finditer(whole) if m.start() < len(said) < m.end()), default=0)
+        while reach and cut < len(tokens) and len(plain(cut)) < reach:
+            cut += 1
+        tokens = tokens[start:cut]
     return " ".join(tokens).strip(" *-–—:")
 
 
