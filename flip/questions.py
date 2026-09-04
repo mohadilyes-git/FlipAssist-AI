@@ -48,7 +48,7 @@ def answered(text, flaws=None):
     question too, and "no scratches" the marks question. flaws: the listing's
     flaws as flip.reader read them ("black dot on the screen"), which answer
     the marks question even when code has no word for them."""
-    found = set(promises_in(text))
+    found = set(promises_in(text, typos=True))
     read = read_listing(text)
     if flaws or condition_said(text) or read["flaws"] or read["good"] or \
             {key.split()[0] for key in found} & CONDITION_ANSWERS:

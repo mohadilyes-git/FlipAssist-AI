@@ -80,7 +80,47 @@ def test_a_failed_check_gets_one_try_on_the_api():
 
 def test_both_wrong_means_needs_you():
     result = draft(local=FakeModel("gemma3:4b", BAD), api=FakeModel("claude-haiku-5-5", BAD))
-    assert (result["status"], result["reasons"]) == ("needs you", ["no answer passed the checks"])
+    assert (result["status"], result["reasons"]) == ("needs you", ["no answer passed the checks", "fill in: colour"])
+    assert result["title"] == "Apple iPhone 13 128GB Unlocked"  # code's part stands without the AI's
+
+
+# the 2 Sep listing, with what Gemma and Haiku answered for it
+PRO_MAX = {"id": "t2", "original_title": "iphone 14 pro max", "original_description": "I phone 14promax128gb",
+           "my_notes": "battery 85% , unlocked , few scraches"}
+GEMMA_PRO_MAX = {"colour": "Space Black", "condition_id": "3000",
+                 "condition_note": "The phone has a few scratches on the screen and back.",
+                 "description": "This is an Apple iPhone 14 Pro Max. The phone is unlocked and has an 85% battery health."}
+HAIKU_PRO_MAX = {"colour": "Deep Purple", "condition_id": "3000",
+                 "condition_note": "Battery health is 85%. There are a few scratches on the device.",
+                 "description": "Apple iPhone 14 Pro Max with a 6.7 inch screen, A16 Bionic processor and 5G "
+                                "connectivity. It is unlocked and runs iOS. The phone has a few scratches and the "
+                                "battery health is 85%."}
+
+
+def test_a_slip_in_your_notes_doesnt_fail_a_right_answer_but_a_made_up_place_does():
+    result = draft(PRO_MAX, local=FakeModel("gemma3:4b", GEMMA_PRO_MAX), api=FakeModel("claude-haiku-5-5", HAIKU_PRO_MAX))
+    assert [a["problems"] for a in result["attempts"]] == \
+        [["condition_note says where marks are when your notes don't: back, screen"], []]
+    assert (result["item"]["colour"], result["title"], result["reasons"]) == \
+        ("Deep Purple", "Apple iPhone 14 Pro Max Deep Purple Unlocked", ["fill in: storage"])
+
+
+def test_your_notes_typed_in_a_hurry_back_gemmas_answer():
+    # the 2 Sep iPhone 13 mini: Gemma's answer was right, and failed only on "baterray" and "scraches"
+    entry = {"id": "t3", "original_title": "iphone 13 mini 128gb unlocked to any sim",
+             "original_description": "Available right now with a good price in good condition coming with 12 warranty "
+                                     "as well\nCollection only",
+             "my_notes": "baterray 88 , few scraches on back , crack on front"}
+    gemma = {"colour": "unsure", "condition_id": "3000",
+             "condition_note": "The phone has a crack on the front screen and a few scratches on the back. "
+                               "Battery health is 88%.",
+             "description": "This is an Apple iPhone 13 mini with 128GB of storage and is unlocked. The phone is used and "
+                            "has a crack on the front screen and a few scratches on the back. It is sold with a battery "
+                            "health of 88%."}
+    api = FakeModel("claude-haiku-5-5")
+    result = draft(entry, local=FakeModel("gemma3:4b", gemma), api=api)
+    assert (result["attempts"][0]["problems"], api.asked, result["reasons"]) == ([], [], ["fill in: colour"])
+    assert result["title"] == "Apple iPhone 13 mini 128GB Unlocked"
 
 
 def test_a_broken_answer_counts_as_wrong():

@@ -68,6 +68,12 @@ LEVELS = {"excellent": ["excellent", "flawless"], "flawless": ["flawless"]}
 # "chip" after one of these is the processor, not damage: "A15 Bionic chip"
 PROCESSOR_WORDS = {"bionic", "pro", "fusion", "tensor", "exynos", "snapdragon", "gen", "processor", "silicon"}
 KEYWORDS = {word: promise for promise, keywords in {**PROMISES, **CONDITION_PROMISES}.items() for word in keywords}
+# what people type is read with one slip allowed ("few scraches" is scratches), for
+# claim words of 6 letters or more: shorter ones have too many real neighbours
+SLIP_LENGTH = 6
+# real words one slip from a claim word, read as themselves: "holds charge" has no
+# charger, "making calls" no marks. Found by checking every word in macOS's dictionary
+NOT_SLIPS = {"charge", "making", "scratchy", "crackled", "unblocked"}
 # phrases rewritten before reading claims: same meaning, one way of writing it.
 # Applied in this order, so longer phrases go first
 SAME_AS = [
@@ -113,6 +119,18 @@ NEGATED_AFTER = {"missing", "lost", "none", "excluded"}
 INCLUDED = {"included", "supplied", "provided", "present"}
 # words that join a list a "no" after it covers: "box AND charger not included"
 LIST_WORDS = {"and", "or", "nor", "the", "original", "its", "a"}
+# where a mark can be, one name each ("display" and "front" are the screen). A draft may say
+# where a mark is only where your notes do: "few scratches" isn't "on the screen"
+PLACES = {"screen": "screen", "display": "screen", "front": "screen", "back": "back", "rear": "back",
+          "side": "side", "frame": "frame", "edge": "edge", "corner": "corner",
+          "camera": "camera", "lens": "camera", "bezel": "bezel", "housing": "housing", "case": "case",
+          "box": "box", "controller": "controller", "headband": "headband", "cushion": "cushion", "pad": "cushion",
+          "stem": "stem", "port": "port", "button": "button"}
+# "scratches on the screen, BACK AND SIDES": a part of only these goes on with the marks before it
+PLACE_LIST_WORDS = LIST_WORDS | {"on", "of", "in", "at", "to", "around", "both", "all"}
+# a draft's place counts as a mark's when it's this many words from the mark or fewer:
+# "the screen is in great condition with a light scratch on the back" puts it on the back only
+MARK_REACH = 5
 # "new" right before one of these is about a part, not the item: "new battery fitted"
 PARTS = {"battery", "screen", "display", "glass", "back", "housing", "camera", "lens", "port", "speaker",
          "speakers", "case", "charger", "cable", "strap", "pads", "cushions", "tips", "box", "protector",
@@ -157,8 +175,12 @@ NOT_A_FAULT = re.compile(r"\b(?:no|not|never|without|zero|(?:hasn|haven|hadn|did
                          r"|\bnot\s+(?:for\s+)?(?:spares|repairs|parts)\b")
 FOR_PARTS = "7000"
 PERCENT = re.compile(r"(\d+(?:\.\d+)?)\s?(?:%|per ?cent\b)", re.IGNORECASE)
-# a battery health written without a % sign: "battery health 86"
-BATTERY_FIGURE = re.compile(r"\b(?:battery|health|capacity)\b(?:\s+[a-z]+){0,2}\s+(\d{2,3}(?:\.\d+)?)\b"
+# "battery" the ways people type it: "batery", "battry", "baterray", "batt". And "bh",
+# but only on its own: "bh 88%" is battery health, "collection from BH21" a postcode
+TYPED_BATTERY = r"(?:bat{1,2}[aeiouy]?r{1,2}[aeiouy]{0,2}|batt)"
+BH = re.compile(r"\bbh\b")
+# a battery health written without a % sign: "battery health 86", "baterray 88", "bh 88"
+BATTERY_FIGURE = re.compile(rf"\b(?:{TYPED_BATTERY}|bh|health|capacity)\b(?:\s+[a-z]+){{0,2}}(?:\s*:\s*|\s+)(\d{{2,3}}(?:\.\d+)?)\b"
                             r"(?!\s?(?:gb|tb|mah|hours?|hrs?|mins?|minutes?|days?))", re.IGNORECASE)
 
 NUMBER = re.compile(r"\d+(?:,\d{3})*(?:\.\d+)?")
@@ -344,16 +366,51 @@ def singular(word):
     return word
 
 
-def promises_in(text):
+def one_slip(typed, word):
+    """True if typed is word with one slip: a letter left out ("scrach"), one
+    too many ("chargerr") or two next to each other swapped ("chrager")."""
+    if len(typed) == len(word):
+        at = [i for i, (a, b) in enumerate(zip(typed, word)) if a != b]
+        return len(at) == 2 and at[1] == at[0] + 1 and typed[at[0]] == word[at[1]] and typed[at[1]] == word[at[0]]
+    short, long = sorted((typed, word), key=len)
+    return len(long) - len(short) == 1 and any(long[:i] + long[i + 1:] == short for i in range(len(long)))
+
+
+def slipped(word):
+    """The claim word a typed word misses by one slip, plural or not
+    ("scraches" -> "scratch", "batery" -> "battery"), or None. Words of 6
+    letters or more that start with the same letter, never one of NOT_SLIPS.
+    "battery" is typed so many ways it has its own pattern ("baterray", "batt")."""
+    if re.fullmatch(TYPED_BATTERY, word):
+        return "battery"
+    if len(word) < SLIP_LENGTH:
+        return None
+    for ending, replacement in (("", ""), ("ies", "y"), ("es", ""), ("s", "")):
+        if not word.endswith(ending):
+            continue
+        typed = word[:len(word) - len(ending)] + replacement
+        if typed in NOT_SLIPS:
+            return None
+        for keyword in KEYWORDS:
+            if len(keyword) >= SLIP_LENGTH and keyword[0] == typed[0] and one_slip(typed, keyword):
+                return keyword
+    return None
+
+
+def promises_in(text, typos=False):
     """Each claim the text makes, and whether it says yes or no to it.
 
     "Boxed, no charger" -> {"box": {"yes"}, "charger": {"no"}}
     "box: no", "charger not included" and "free from scratches" are all a no.
     A condition word next to a part is about that part only: "screen perfect"
-    -> {"flawless screen": {"yes"}}, not a flawless item.
+    -> {"flawless screen": {"yes"}}, not a flawless item. With typos (for what
+    people type: your notes, the seller's listing) a claim word with one slip
+    counts: "few scraches" says scratches. The AI's own words are read as written.
     """
     found = {}
     text = text.lower()
+    if typos:
+        text = BH.sub("battery", text)
     # "box: no", "charger - none" -> "no box", "no charger"; "box: yes" -> "box"
     text = re.sub(r"\b([a-z]+(?: [a-z]+)?)\s*[:=\-–—]\s*(?:no|none|nope|missing|not included)\s*(?=[,.;\n]|$)",
                   r"no \1", text)
@@ -370,7 +427,7 @@ def promises_in(text):
             part = part.replace(f" {phrase} ", " ")
         part_words = part.split()
         for i, word in enumerate(part_words):
-            promise = KEYWORDS.get(singular(word))
+            promise = KEYWORDS.get(singular(word)) or (typos and KEYWORDS.get(slipped(word)))
             if not promise:
                 continue
             if promise in ("case", "screen protector") and LOOKED_AFTER.search(part):
@@ -449,7 +506,7 @@ def new_conditions_allowed(notes):
     Opened - never used: "never used" or "unused" (or sealed), with no sign of use.
     """
     text = " ".join(words(notes))
-    claims = promises_in(notes)
+    claims = promises_in(notes, typos=True)
     if "no" in claims.get("new", set()) | claims.get("sealed", set()):
         return set()
     if USED_SIGNS.search(UNUSED.sub(" ", text)):  # "never used" isn't a sign of use
@@ -596,7 +653,7 @@ def check_no_invented_promises(what, text, sources, notes):
     Condition claims only by your notes. Anything else by your notes if they
     mention it ("no box" beats the seller's "boxed"), otherwise by any input.
     And nothing is "working" when your notes mention a fault."""
-    from_inputs, from_notes = promises_in(sources), promises_in(notes)
+    from_inputs, from_notes = promises_in(sources, typos=True), promises_in(notes, typos=True)
     faulty = has_fault(notes)
     unbacked, unbacked_condition = [], []
     for promise, saids in sorted(promises_in(text).items()):
@@ -616,6 +673,51 @@ def check_no_invented_promises(what, text, sources, notes):
     if unbacked_condition:
         problems.append(f"{what} says things about the condition your notes don't: {', '.join(unbacked_condition)}")
     return problems
+
+
+def place_of(word):
+    """The place a word names, plural or not ("sides" -> "side"), or None."""
+    for ending in ("", "s", "es"):
+        if word.endswith(ending) and word[:len(word) - len(ending)] in PLACES:
+            return PLACES[word[:len(word) - len(ending)]]
+    return None
+
+
+def is_mark(word, typos=False):
+    promise = KEYWORDS.get(singular(word)) or (typos and KEYWORDS.get(slipped(word)))
+    return promise in MARKS
+
+
+def mark_places(text, typos=False, reach=None):
+    """Where a text says there are marks: the places in each part of a sentence
+    that says there is one ("no scratches on the screen" says none). With
+    reach, only places that close to a mark word. "Light scratch on the back,
+    corners and sides" -> {"back", "corner", "side"}."""
+    found, marked = set(), False
+    for part in re.split(r"[,.;:!?\n()]|\b(?:but|while|whereas|except)\b", text.lower()):
+        part_words = words(part)
+        places = [place_of(word) for word in part_words]
+        if part_words and all(place or word in PLACE_LIST_WORDS for word, place in zip(part_words, places)):
+            if marked:  # the list of places goes on
+                found |= {place for place in places if place}
+            continue
+        claims = promises_in(part, typos=typos)
+        marked = any("yes" in claims.get(mark, set()) for mark in MARKS)
+        if not marked:
+            continue
+        at = [i for i, word in enumerate(part_words) if is_mark(word, typos)]
+        found |= {place for i, place in enumerate(places)
+                  if place and (reach is None or any(abs(i - j) <= reach for j in at))}
+    return found
+
+
+def check_mark_places(what, text, notes):
+    """Where a mark is comes from your notes too: your "few scratches" doesn't
+    say they're on the screen and back."""
+    extra = mark_places(text, reach=MARK_REACH) - mark_places(notes, typos=True)
+    if extra:
+        return [f"{what} says where marks are when your notes don't: {', '.join(sorted(extra))}"]
+    return []
 
 
 def check_matches_item(what, text, item, catalogue, colour, sources=""):
@@ -685,7 +787,7 @@ def check_message_claims(message, sources):
     """A message may say the item comes with a box, charger, warranty... or is
     unlocked only when the listing says so. Asking is fine: "does it come with
     the box?"."""
-    listed = promises_in(sources)
+    listed = promises_in(sources, typos=True)
     made_up = sorted({promise for part in stated_parts(message) for promise, saids in promises_in(part).items()
                       if promise in PROMISES and "yes" in saids and "yes" not in listed.get(promise, set())})
     if made_up:
@@ -774,6 +876,7 @@ def check_listing_answer(answer, item, catalogue, conditions, sources, notes):
             problems += check_no_invented_numbers(what, text, sources)
             problems += check_no_invented_percentages(what, text, notes or "", sources)
             problems += check_no_invented_promises(what, text, sources, notes or "")
+            problems += check_mark_places(what, text, notes or "")
             problems += check_matches_item(what, text, item, catalogue, colour, sources)
             problems += check_no_prices(what, text)
             problems += check_no_off_platform(what, text)

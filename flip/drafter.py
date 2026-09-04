@@ -7,7 +7,8 @@
    the paid model if a check fails, and never the API in place of a local
    model that can't be reached.
 4. A draft is "ready" only when nothing is missing. Anything the AI was unsure
-   of, or code couldn't fill, is listed for you to fill in.
+   of, or code couldn't fill, is listed for you to fill in. If no answer
+   passes, code's title and that list still stand.
 """
 
 from flip.attempts import try_models
@@ -39,21 +40,20 @@ def draft_listing(entry, catalogue, conditions, local=None, api=None, mode="auto
         ask=lambda ai: ai.ask(system, user, list(photos), schema),
         check=lambda answer: check_listing_answer(answer, item, catalogue, allowed, sources, notes),
         result=result, log=log)
-    if result["answer"] is None:
-        return finish(result, log)
 
     # a colour the AI picked from the photos, once checked, completes the item; one code read stays.
     # With no photos it had nothing to look at, so its pick is a guess: the colour stays for you
-    colour = result["answer"].get("colour")
+    colour = (result["answer"] or {}).get("colour")
     if photos and not item.get("colour") and colour and str(colour).strip().lower() != UNSURE:
         item = {**item, "colour": canonical(colour, model["colours"], model.get("colour_aliases")),
                 "missing": [field for field in item["missing"] if field != "colour"]}
         result["colour_from"] = "photos"
+    # code's title and what's left to fill in stand even when no answer passed
     result["item"] = item
     result["title"] = build_title(item)
     if item["missing"]:
         result["reasons"].append(f"fill in: {', '.join(item['missing'])}")
-    else:
+    elif result["answer"] is not None:
         result["status"] = "ready"
     return finish(result, log)
 

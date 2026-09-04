@@ -277,6 +277,18 @@ describe("List on eBay", () => {
     expect(await screen.findByText("Copied and saved: title, condition and description.")).toBeTruthy();
     expect(await navigator.clipboard.readText()).toContain("Condition: Used");
   });
+
+  it("keeps code's title when no answer passed, and says the colour wasn't drafted rather than unsure", async () => {
+    serve({ "POST /api/listings/draft": [200, { ...LISTED, condition_id: null, condition_note: null, description: null,
+      ebay_title: "Apple iPhone 14 Pro Max Unlocked", reasons: ["no answer passed the checks", "fill in: storage, colour"] }] });
+    const user = userEvent.setup();
+    render(<ListingScreen />);
+    await user.type(screen.getByLabelText("The seller's title"), "iphone 14 pro max");
+    await user.click(screen.getByRole("button", { name: "Draft listing" }));
+    expect(await screen.findByDisplayValue("Apple iPhone 14 Pro Max Unlocked")).toBeTruthy();
+    expect(screen.getAllByText("Not drafted")).toHaveLength(2); // condition and colour
+    expect(screen.queryByText("Unsure from the photos: check it")).toBeNull();
+  });
 });
 
 describe("the app", () => {

@@ -156,8 +156,10 @@ function Drafted({ draft, ebayTitle, setEbayTitle, text, setText }: DraftedProps
   const [code, setCode] = useState(false);
   const [why, setWhy] = useState(false);
   const ready = draft.status === "ready";
-  const colour = !draft.colour ? "Unsure from the photos: check it"
-    : draft.colour_from === "photos" ? `${draft.colour} (from the photos)` : draft.colour;
+  // no colour: no answer passed (like the condition), the AI was unsure from the photos, or there were none
+  const colour = draft.colour ? (draft.colour_from === "photos" ? `${draft.colour} (from the photos)` : draft.colour)
+    : !draft.condition_id ? "Not drafted"
+    : draft.photo_count ? "Unsure from the photos: check it" : "Not in the title or notes: fill it in";
   return (
     <section className="card" aria-label="Your eBay draft" aria-live="polite">
       <p className="status-row">

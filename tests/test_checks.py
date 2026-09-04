@@ -122,6 +122,78 @@ def test_no_scratches_when_your_notes_say_scratch_fails():
         ["condition_note says things about the condition your notes don't: no scratch"]
 
 
+def test_a_slip_in_your_notes_still_backs_the_claim():
+    # the 2 Sep listing: "few scraches" in the notes failed Gemma's and Haiku's "A few scratches."
+    assert problems(notes="battery 87% , unlocked , few scraches", condition_note="A few scratches. Battery 87%.",
+                    description="Apple iPhone 13 128GB in Midnight, unlocked. A few scratches.") == []
+    assert problems(notes="boxed, batery 87%, light scrach on the back") == []
+    assert problems(notes="boxd, battery 87%, no scratchs", condition_note="No scratches. Battery 87%.",
+                    description="Apple iPhone 13 128GB in Midnight, unlocked. No scratches.") == []
+
+
+@pytest.mark.parametrize("typed, claim", [
+    ("few scraches", "scratch"), ("batery 85%", "battery"), ("comes with chrager", "charger"),
+    ("orignal packagng", None), ("light scratchs", "scratch"), ("bateries fine", "battery"),
+    ("unlcoked to all networks", "unlocked"), ("scuffs", "scuff"), ("comes with a cse", None),
+])
+def test_one_slip_counts_in_what_people_type(typed, claim):
+    assert ({claim} if claim else set()) <= set(promises_in(typed, typos=True))
+    if claim and claim not in promises_in(typed):
+        assert promises_in(typed) == {}  # without typos, the slip says nothing
+
+
+@pytest.mark.parametrize("notes", ["baterray 88", "batery 88%", "battry: 88", "batt 88", "bh 88%", "BH: 88"])
+def test_battery_typed_any_way_backs_the_battery_health(notes):
+    notes = f"{notes}, light scratch on the back"
+    assert problems(notes=notes, sources=sources_text(TITLE, DESCRIPTION, notes, ITEM),
+                    condition_note="Light scratch on the back. Battery 88%.",
+                    description="Apple iPhone 13 128GB in Midnight, unlocked. Battery health 88%.") == []
+
+
+def test_a_postcode_is_never_a_battery_health():
+    assert promises_in("collection from BH21, cash only", typos=True) == {}
+    notes = "light scratch on the back"
+    assert problems(notes=notes, sources=sources_text(TITLE, "Collection from BH21, cash only", notes, ITEM),
+                    condition_note="Light scratch on the back. Battery 21%.",
+                    description="Apple iPhone 13 128GB in Midnight, unlocked.") == \
+        ["condition_note has a percentage your notes don't: 21%",
+         "condition_note says things about the condition your notes don't: battery"]
+
+
+@pytest.mark.parametrize("typed", [
+    "holds charge all day", "making calls is fine", "speaker sounds scratchy", "IMEI unblocked", "crackled sound",
+    "charges fine",
+])
+def test_real_words_next_to_a_claim_word_stay_themselves(typed):
+    assert promises_in(typed, typos=True) == {}
+
+
+@pytest.mark.parametrize("note, notes, problem", [
+    ("A few scratches on the screen and back.", "few scraches", "back, screen"),
+    ("Light scratch on the back.", "light scratch on the back", None),
+    ("Light scratch on the back corner.", "light scratch on the back", "corner"),
+    ("Scratches on the screen, back and sides.", "scratches on the screen, back and sides", None),
+    ("Scratches on the back and sides.", "scratches on screen, back, sides", None),
+    ("Light scratch on the display.", "scratch on the screen", None),
+    ("The screen is in great condition with a light scratch on the back.", "scratch on back", None),
+    ("No scratches on the screen. Light scuff on the back.", "scuff on the back, no scratches", None),
+    ("A few scratches on the screen.", "screen original, few scratches", "screen"),
+    ("Small crack in the corner of the screen.", "small crack in the top left corner of the screen", None),
+])
+def test_where_a_mark_is_comes_from_your_notes(note, notes, problem):
+    found = problems(notes=f"{notes}, battery 87%", condition_note=note,
+                     description="Apple iPhone 13 128GB in Midnight, unlocked.")
+    assert found == ([f"condition_note says where marks are when your notes don't: {problem}"] if problem else [])
+
+
+def test_the_ais_own_words_are_read_as_written():
+    # your "scraches" backs its "scratches"; its own "scraches" isn't read as a claim at all
+    assert promises_in("A few scraches.") == {}
+    assert problems(notes="few scraches", condition_note="No scratches.",
+                    description="Apple iPhone 13 128GB in Midnight, unlocked.") == \
+        ["condition_note says things about the condition your notes don't: no scratch"]
+
+
 def test_harmless_phrases_are_not_claims():
     assert problems(description="iPhone 13, perfect for gaming, ready for its new owner.") == []
 
