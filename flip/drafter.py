@@ -1,8 +1,9 @@
 """The listing drafter: one item in, one draft out.
 
 1. Code fills every fact it can from the catalogue.
-2. The AI is asked only for what's left: colour (when code couldn't fill it),
-   condition, condition note and description.
+2. Code sets eBay's condition from your notes (flip.checks.condition_for).
+   The AI is asked only for what's left: colour (when code couldn't fill it),
+   condition note and description, held to that one condition.
 3. The checks decide, model by model (flip.attempts): local first, one try on
    the paid model if a check fails, and never the API in place of a local
    model that can't be reached.
@@ -13,7 +14,7 @@
 
 from flip.attempts import try_models
 from flip.catalogue import fill_from_catalogue
-from flip.checks import UNSURE, canonical, check_listing_answer, sources_text
+from flip.checks import UNSURE, canonical, check_listing_answer, condition_for, sources_text
 from flip.prompts import answer_schema, listing_prompt
 from flip.title import build_title
 
@@ -31,9 +32,11 @@ def draft_listing(entry, catalogue, conditions, local=None, api=None, mode="auto
         return finish(result, log)
 
     model = next(m for m in catalogue if m["id"] == item["model_id"])
-    allowed = conditions[item["category"]]
+    # the one condition your notes back: the AI's answer can't hold another
+    condition = condition_for(notes)
+    allowed = [c for c in conditions[item["category"]] if c["id"] == condition] or conditions[item["category"]]
     schema = answer_schema(item, model, allowed)
-    system, user = listing_prompt(item, model, entry, len(photos))
+    system, user = listing_prompt(item, model, entry, len(photos), allowed[0] if len(allowed) == 1 else None)
     sources = sources_text(title, description, notes, item)
     result["answer"] = try_models(
         mode, {"local": local, "api": api},

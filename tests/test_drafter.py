@@ -182,6 +182,21 @@ def test_colour_is_asked_for_only_when_code_couldnt_fill_it():
     assert "colour" not in answer_schema(known, IPHONE_13, CONDITIONS["phones"])["properties"]
 
 
+@pytest.mark.parametrize("notes, condition", [
+    ("baterray 88 , few scraches on back , crack on front", "3000"),  # a crack is wear, not a fault
+    ("battery 85%, face id not working", "7000"),
+    ("brand new sealed", "1000"),
+    ("never used, box opened to check", "1500"),
+    ("", "3000"),
+])
+def test_code_sets_the_condition_and_the_ai_can_answer_no_other(notes, condition):
+    local = FakeModel("gemma3:4b", {**GOOD, "condition_id": condition})
+    draft({**ENTRY, "my_notes": notes}, local=local)
+    asked = local.asked[0]
+    assert asked["schema"]["properties"]["condition_id"]["enum"] == [condition]
+    assert f"(condition_id {condition})" in asked["user"]
+
+
 def test_the_prompt_gives_your_notes_and_marks_the_sellers_text_as_background():
     item = fill_from_catalogue(ENTRY["original_title"], ENTRY["my_notes"], CATALOGUE)
     system, user = listing_prompt(item, IPHONE_13, ENTRY, 2)
@@ -237,6 +252,21 @@ def test_gemmas_curly_end_is_closed_instead_of_running_to_the_limit(monkeypatch)
     reply = LocalModel(max_tokens=300).ask("s", "u", [], {"type": "object"})
     assert (reply.answer, reply.error) == ({"message": "Hi mate, I’d like to offer £185. Does it come with a charger?"}, "")
     assert sent["options"]["num_predict"] == 300 and "”}" in sent["options"]["stop"]
+
+
+def test_gemmas_curly_quotes_in_a_row_stop_it_too(monkeypatch):
+    # 2 Sep, live: '...on the back.”””  1000” 1500” 7000” 3000”...' for 64 seconds, to the token limit
+    sent = {}
+
+    def fake_urlopen(request, timeout):
+        sent.update(json.loads(request.data))
+        content = '{"colour": "unsure", "condition_id": "3000", "condition_note": "", "description": "Scratches on the back.'
+        return FakeOllamaResponse(json.dumps({"message": {"content": content}, "done_reason": "stop"}).encode())
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    reply = LocalModel().ask("s", "u", [], {"type": "object"})
+    assert (reply.answer["description"], reply.error) == ("Scratches on the back.", "")
+    assert "””" in sent["options"]["stop"]
 
 
 def test_a_complete_local_answer_is_left_alone():

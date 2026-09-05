@@ -19,9 +19,10 @@ import anthropic
 
 # Gemma sometimes ends its JSON with a curly quote (”}) instead of a straight
 # one. JSON doesn't take ” as the end of the text, so it would write filler
-# ("✉️ ✉️ ✉️") until the token limit, half a minute later. It stops there
-# instead, and the text is closed for it (ollama_text)
-CURLY_ENDS = ["”}", "”\n}", "” }"]
+# ("✉️ ✉️ ✉️") until the token limit, half a minute later. Or it writes them
+# twice or more (.”””) and lists condition codes for a minute. It stops at
+# either instead, and the text is closed for it (ollama_text)
+CURLY_ENDS = ["”}", "”\n}", "” }", "””"]
 
 
 @dataclass

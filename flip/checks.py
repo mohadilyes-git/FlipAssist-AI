@@ -519,6 +519,17 @@ def new_conditions_allowed(notes):
     return allowed
 
 
+def condition_for(notes):
+    """eBay's condition, decided by code from your notes: For parts or not
+    working (7000) if they mention a fault, New (1000) or Opened - never used
+    (1500) if they back it, otherwise Used (3000). A crack or scratch on its own
+    is wear, not a fault. The AI writes the note and description to match."""
+    if has_fault(notes or ""):
+        return FOR_PARTS
+    allowed = new_conditions_allowed(notes or "")
+    return "1000" if "1000" in allowed else "1500" if "1500" in allowed else "3000"
+
+
 def has_fault(notes):
     """True if your notes mention a fault: "face id broken", "stopped working",
     "left joycon drift", "won't charge". "No faults" and "no drift" don't count,
