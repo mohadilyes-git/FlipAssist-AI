@@ -7,7 +7,9 @@
 3. The checks decide, model by model (flip.attempts): local first, one try on
    the paid model if a check fails, and never the API in place of a local
    model that can't be reached.
-4. A draft is "ready" only when nothing is missing. Anything the AI was unsure
+4. eBay's category and fields ("item specifics") come from the same facts, in
+   eBay's own words (flip.ebay): "Apple iPhone 13", "128 GB", "Black".
+5. A draft is "ready" only when nothing is missing. Anything the AI was unsure
    of, or code couldn't fill, is listed for you to fill in. If no answer
    passes, code's title and that list still stand.
 """
@@ -15,6 +17,7 @@
 from flip.attempts import try_models
 from flip.catalogue import fill_from_catalogue
 from flip.checks import UNSURE, canonical, check_listing_answer, condition_for, sources_text
+from flip.ebay import item_specifics
 from flip.prompts import answer_schema, listing_prompt
 from flip.title import build_title
 
@@ -25,7 +28,7 @@ def draft_listing(entry, catalogue, conditions, local=None, api=None, mode="auto
     title, description, notes = (entry.get(k) or "" for k in ("original_title", "original_description", "my_notes"))
     item = fill_from_catalogue(title, notes, catalogue, description)
     result = {"item_id": entry.get("id"), "status": "needs you", "reasons": [], "warnings": item["warnings"],
-              "item": item, "answer": None, "title": None, "attempts": [],
+              "item": item, "answer": None, "title": None, "attempts": [], "ebay": None,
               "colour_from": "listing" if item.get("colour") else None}
     if not item["model_id"]:
         result["reasons"].append("the model isn't in the catalogue")
@@ -54,6 +57,7 @@ def draft_listing(entry, catalogue, conditions, local=None, api=None, mode="auto
     # code's title and what's left to fill in stand even when no answer passed
     result["item"] = item
     result["title"] = build_title(item)
+    result["ebay"] = item_specifics(item, model, result["colour_from"])  # eBay's own fields, in its words
     if item["missing"]:
         result["reasons"].append(f"fill in: {', '.join(item['missing'])}")
     elif result["answer"] is not None:

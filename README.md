@@ -16,20 +16,28 @@ Drafts eBay listings and offer messages for a reseller. Plain code does everythi
   - Anything code isn't sure about goes on a "missing" list.
   - Parts, accessories, wanted ads and listings that name two products aren't matched at all.
 - **Builds the eBay title** from a template, within eBay's 80-character limit.
+- **Fills eBay's own fields in eBay's own words** (phones so far, `flip/ebay.py`):
+  - the category (Mobile & Smart Phones) and the four fields eBay won't list a phone without: Brand, Model, Storage Capacity and Colour;
+  - then what the catalogue and the reseller's notes already know: network, 4G/5G, operating system, screen size and chip;
+  - spelt as eBay's lists spell them ("Apple iPhone 13", "128 GB", "Apple A15 Bionic"); each colour becomes one of eBay's 16 plain colours, the one UK sellers pick for it (Midnight is Black, Rose Gold is Pink: `data/ebay_map.json`, with the counts);
+  - eBay's lists come from its own API (`python -m flip.ebay --refresh` writes `data/ebay_fields.json`), and a test holds every phone in the catalogue to them.
+- **Sets eBay's condition from the reseller's notes:** For parts or not working for a fault, New or Opened - never used only when the notes back it, Used otherwise. A crack or scratch on its own is wear, not a fault. The AI writes the condition note to match and can't answer another condition.
 - **Does the money in pence:** profit after fees, and an offer price rounded to a tidy number.
 - **Checks an AI answer before it's used:**
   - the agreed shape and allowed values;
   - no numbers the inputs don't contain;
   - no yes/no claims about the box, charger, cable, case, controller, dock, game, screen protector, receipt, warranty or network lock that the inputs don't back up, with the reseller's notes beating the seller's text;
   - condition claims (new, sealed, working, flawless, battery, scratches and other marks) only when the reseller's own notes back them, and "For parts or not working" whenever the notes mention a fault;
+  - where a mark is ("on the back") only when the notes say where;
+  - what people type is read with typos allowed ("few scraches", "baterray 88", "bh 88%"), the AI's own words as written;
   - nothing that contradicts the item: another model, colour, storage size or edition;
   - no prices, contact details or paying off the platform;
   - length limits.
 - **Drafts the rest with AI** (`python -m flip.draft`):
-  - Gemma 3 4B runs on the reseller's own machine through Ollama. It's asked only for what code couldn't fill: the colour (from that model's real colours, or "unsure"), the condition, a condition note and a description, held to an exact answer shape.
+  - Gemma 3 4B runs on the reseller's own machine through Ollama. It's asked only for what code couldn't fill: the colour (from that model's real colours, or "unsure"), a condition note and a description, held to an exact answer shape.
   - The checks decide. An answer that fails gets one try on Claude Haiku. If that fails too, the item is marked "needs you".
   - If the local model isn't running, nothing is sent to the API instead.
-  - If Gemma ends its answer with a curly quote (”), it's stopped there and the answer closed, instead of running on for half a minute.
+  - If Gemma ends its answer with a curly quote (”), or writes two in a row, it's stopped there and the answer closed, instead of running on for a minute.
   - A draft is "ready" only when nothing is missing.
   - Every attempt goes into a private audit log with its tokens, seconds and cost.
 - **Drafts offer messages in the reseller's own style** (`python -m flip.message`):
@@ -175,7 +183,9 @@ The self-test opens the window, checks every kind of call (files, JSON, photo up
 |---|---|
 | Model, storage, specs, title | Code, from `data/catalogue.json` |
 | Colour | Code if the text names it; otherwise the AI from the photo |
-| Condition, condition note, description | The AI, then checked by code |
+| eBay's category and fields (Brand, Model, Storage Capacity, Colour...) | Code, in eBay's words (`data/ebay_fields.json`, `data/ebay_map.json`); phones so far |
+| Condition | Code, from the reseller's notes |
+| Condition note, description | The AI, then checked by code |
 | Offer price, profit | Code |
 | The listing's flaws, pickup place, "no offers" | The AI, held word for word to the listing by code |
 | What to say about the condition | Code picks it from that reading; the reseller's style or the reseller decides |

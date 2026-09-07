@@ -1,10 +1,11 @@
 // List on eBay: photos and your notes on the left, the checked eBay draft on
 // the right. Code fills what the catalogue knows (model, storage, specs, the
-// title), the AI the colour from the photos, the condition and the
-// description, and the checks hold it to your notes. Nothing is listed from
-// here: you copy it into eBay.
+// title), eBay's condition from your notes, and eBay's own fields in eBay's
+// words (phones so far); the AI the colour from the photos, the condition note
+// and the description, and the checks hold it to your notes. Nothing is listed
+// from here: you copy it into eBay.
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { api, type ListingDraft } from "../api";
+import { api, type ItemSpecific, type ListingDraft } from "../api";
 import { CONDITIONS, cost, seconds, writerName } from "../format";
 import { CameraIcon, CheckIcon, ChevronIcon, CrossIcon, Head, Steps, TagIcon, Warn, WarningIcon } from "../ui";
 
@@ -23,6 +24,7 @@ export function ListingScreen() {
   const [photos, setPhotos] = useState<File[]>([]);
   const [draft, setDraft] = useState<ListingDraft | null>(null);
   const [ebayTitle, setEbayTitle] = useState("");
+  const [specifics, setSpecifics] = useState<Record<string, string>>({});
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -53,6 +55,7 @@ export function ListingScreen() {
       const found = await api.draftListing(form);
       setDraft(found);
       setEbayTitle(found.ebay_title ?? "");
+      setSpecifics(Object.fromEntries(found.item_specifics.map((s) => [s.name, s.value ?? ""])));
       setText(found.description ?? "");
     } catch (e) {
       setError((e as Error).message);
@@ -64,7 +67,10 @@ export function ListingScreen() {
   async function approve() {
     if (!draft || !text.trim()) return;
     const condition = draft.condition_id ? CONDITIONS[draft.condition_id] ?? draft.condition_id : "";
-    const all = [ebayTitle, condition && `Condition: ${condition}`, draft.condition_note, text].filter(Boolean).join("\n\n");
+    const fields = draft.ebay_category ? [`Category: ${draft.ebay_category.name}`, ...draft.item_specifics
+      .filter((s) => specifics[s.name]?.trim()).map((s) => `${s.name}: ${specifics[s.name].trim()}`)].join("\n") : "";
+    const all = [ebayTitle, condition && `Condition: ${condition}`, draft.condition_note, fields, text]
+      .filter(Boolean).join("\n\n");
     let ok = true;
     try {
       await navigator.clipboard.writeText(all);
@@ -114,7 +120,8 @@ export function ListingScreen() {
         <div className="stack">
           {draft ? (
             <>
-              <Drafted draft={draft} ebayTitle={ebayTitle} setEbayTitle={setEbayTitle} text={text} setText={setText} />
+              <Drafted draft={draft} ebayTitle={ebayTitle} setEbayTitle={setEbayTitle} text={text} setText={setText}
+                specifics={specifics} setSpecific={(name, value) => setSpecifics((now) => ({ ...now, [name]: value }))} />
               <div className="buttons">
                 <button type="button" className="second" aria-busy={busy} disabled={busy} onClick={() => void submit()}>
                   {busy ? "Drafting…" : "Redraft"}
@@ -126,7 +133,7 @@ export function ListingScreen() {
               {copied !== null && (
                 <p className={copied ? "done-line" : "done-line warn"} role="status">
                   {copied ? <CheckIcon size={14} stroke={2.6} /> : <WarningIcon size={14} stroke={2.2} />}
-                  {copied ? "Copied and saved: title, condition and description."
+                  {copied ? `Copied and saved: title, condition${draft.ebay_category ? ", eBay's fields" : ""} and description.`
                     : "Couldn't copy: select the text and copy it by hand."}
                 </p>
               )}
@@ -150,9 +157,11 @@ type DraftedProps = {
   setEbayTitle: (title: string) => void;
   text: string;
   setText: (text: string) => void;
+  specifics: Record<string, string>;
+  setSpecific: (name: string, value: string) => void;
 };
 
-function Drafted({ draft, ebayTitle, setEbayTitle, text, setText }: DraftedProps) {
+function Drafted({ draft, ebayTitle, setEbayTitle, text, setText, specifics, setSpecific }: DraftedProps) {
   const [code, setCode] = useState(false);
   const [why, setWhy] = useState(false);
   const ready = draft.status === "ready";
@@ -177,8 +186,25 @@ function Drafted({ draft, ebayTitle, setEbayTitle, text, setText }: DraftedProps
       <div className="rows">
         <Row name="Condition" value={draft.condition_id ? CONDITIONS[draft.condition_id] ?? draft.condition_id : "Not drafted"} />
         {draft.condition_note && <Row name="Condition note" value={draft.condition_note} />}
-        <Row name="Colour" value={colour} warn={!draft.colour} />
+        {!draft.ebay_category && <Row name="Colour" value={colour} warn={!draft.colour} />}
       </div>
+      {draft.ebay_category && (
+        <section className="ebay-fields" aria-label="eBay's fields">
+          <div className="row category">
+            <span className="row-name">Category</span>
+            <span className="row-value">{draft.ebay_category.name}<small>{draft.ebay_category.path}</small></span>
+          </div>
+          {[true, false].map((needed) => (
+            <Fragment key={String(needed)}>
+              <p className="caps">{needed ? "eBay needs these" : "More details"}</p>
+              {draft.item_specifics.filter((s) => s.required === needed).map((s) => (
+                <Specific key={s.name} specific={s} value={specifics[s.name] ?? ""} onChange={(v) => setSpecific(s.name, v)}
+                  empty={s.name === "Colour" ? colour : "eBay needs this: fill it in"} />
+              ))}
+            </Fragment>
+          ))}
+        </section>
+      )}
       <label className="field">
         <span>Description</span>
         <textarea className="input" rows={5} value={text} onChange={(e) => setText(e.target.value)} />
@@ -204,6 +230,27 @@ function Drafted({ draft, ebayTitle, setEbayTitle, text, setText }: DraftedProps
         {why && <Steps attempts={draft.attempts} />}
       </div>
     </section>
+  );
+}
+
+/** One of eBay's fields, in eBay's words: yours to change, with eBay's values to pick from. */
+function Specific({ specific, value, onChange, empty }: { specific: ItemSpecific; value: string; onChange: (value: string) => void; empty: string }) {
+  const id = `ebay-${specific.name.toLowerCase().replace(/[^a-z]+/g, "-")}`;
+  const note = !value.trim() ? (specific.required ? empty : "")
+    : value !== (specific.value ?? "") ? "your edit" : specific.source ? `from ${specific.source}` : "";
+  return (
+    <div className="specific">
+      <label className="row-name" htmlFor={id}>{specific.name}</label>
+      <span className="specific-value">
+        <input className="input" id={id} value={value} list={specific.options.length ? `${id}-values` : undefined}
+          onChange={(e) => onChange(e.target.value)} aria-invalid={specific.required && !value.trim()}
+          aria-describedby={note ? `${id}-note` : undefined} />
+        {specific.options.length > 0 && (
+          <datalist id={`${id}-values`}>{specific.options.map((o) => <option key={o} value={o} />)}</datalist>
+        )}
+        {note && <small id={`${id}-note`} className={!value.trim() ? "warn" : undefined}>{note}</small>}
+      </span>
+    </div>
   );
 }
 

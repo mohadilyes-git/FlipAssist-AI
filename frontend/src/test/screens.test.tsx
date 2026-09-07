@@ -223,6 +223,7 @@ describe("List on eBay", () => {
     condition_note: "Light scratch on the back.", description: "Apple iPhone 13 128GB in Midnight.", colour: null,
     colour_from: null,
     filled_by_code: { brand: "Apple", model: "iPhone 13", storage: "128GB", specs: { "Screen Size": "6.1 in" } },
+    ebay_category: null, item_specifics: [],
     warnings: [], reasons: ["Fill in: colour"], photo_count: 2,
     attempts: [{ model: "gemma3:4b", problems: [], seconds: 9.5, cost_pence: 0 }], cost_pence: 0,
   };
@@ -276,6 +277,41 @@ describe("List on eBay", () => {
     await user.click(screen.getByRole("button", { name: "Copy & approve" }));
     expect(await screen.findByText("Copied and saved: title, condition and description.")).toBeTruthy();
     expect(await navigator.clipboard.readText()).toContain("Condition: Used");
+  });
+
+  it("shows eBay's category and fields in eBay's words, yours to change, and copies them", async () => {
+    const field = (name: string, value: string | null, required: boolean, source: string | null, options: string[] = []) =>
+      ({ name, value, required, source, options });
+    serve({ "POST /api/listings/draft": [200, { ...LISTED, ebay_title: "Apple iPhone 13 128GB Unlocked",
+      ebay_category: { id: "9355", name: "Mobile & Smart Phones", path: "Mobile Phones & Communication" },
+      item_specifics: [
+        field("Brand", "Apple", true, "the catalogue", ["Apple"]),
+        field("Model", "Apple iPhone 13", true, "the catalogue", ["Apple iPhone 13", "Apple iPhone 13 mini"]),
+        field("Storage Capacity", "128 GB", true, "your title or notes", ["128 GB", "256 GB", "512 GB"]),
+        field("Colour", null, true, null, ["Black", "Blue", "White"]),
+        field("Network", "Unlocked", false, "your title or notes", ["Unlocked", "EE"]),
+        field("Screen Size", "6.1 in", false, "the catalogue"),
+      ] }],
+      "POST /api/drafts/3/approve": [200, { draft_id: 3, edited: false, at: "now", saved_to_style: false }] });
+    const user = userEvent.setup();
+    render(<ListingScreen />);
+    await user.type(screen.getByLabelText("The seller's title"), "iphone 13 128gb unlocked");
+    await user.click(screen.getByRole("button", { name: "Draft listing" }));
+    const fields = within(await screen.findByRole("region", { name: "eBay's fields" }));
+    expect(fields.getByText("Mobile & Smart Phones")).toBeTruthy();
+    expect(fields.getByText("eBay needs these")).toBeTruthy();
+    expect((fields.getByLabelText("Model") as HTMLInputElement).value).toBe("Apple iPhone 13");
+    expect((fields.getByLabelText("Storage Capacity") as HTMLInputElement).value).toBe("128 GB");
+    expect(fields.getAllByText("from the catalogue")).toHaveLength(3);
+    expect(fields.getByText("Unsure from the photos: check it")).toBeTruthy(); // eBay needs a colour nobody saw
+    expect(screen.queryByText("Colour", { selector: ".rows .row-name" })).toBeNull(); // no second colour row
+    await user.type(fields.getByLabelText("Colour"), "Black");
+    expect(fields.getByText("your edit")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Copy & approve" }));
+    expect(await screen.findByText("Copied and saved: title, condition, eBay's fields and description.")).toBeTruthy();
+    const copied = await navigator.clipboard.readText();
+    expect(copied).toContain("Category: Mobile & Smart Phones\nBrand: Apple\nModel: Apple iPhone 13\nStorage Capacity: 128 GB");
+    expect(copied).toContain("Colour: Black\nNetwork: Unlocked\nScreen Size: 6.1 in");
   });
 
   it("keeps code's title when no answer passed, and says the colour wasn't drafted rather than unsure", async () => {

@@ -1161,6 +1161,63 @@ textarea.input {
   color: var(--or);
 }
 
+/* eBay's fields (List on eBay): a name, then the value in eBay's words, yours to change */
+.ebay-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ebay-fields .caps {
+  margin: 6px 0 0;
+}
+
+.row.category .row-value small {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--tx2);
+}
+
+.specific {
+  display: grid;
+  grid-template-columns: minmax(120px, 34%) 1fr;
+  align-items: start;
+  gap: 10px;
+  font-size: 13.5px;
+}
+
+.specific .row-name {
+  padding-top: 9px;
+}
+
+.specific-value {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.specific-value .input {
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  line-height: 20px;
+}
+
+.specific-value .input[aria-invalid="true"] {
+  border-color: var(--or);
+}
+
+.specific-value small {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--tx2);
+}
+
+.specific-value small.warn {
+  color: var(--or);
+}
+
 .code-toggle {
   display: flex;
   align-items: center;

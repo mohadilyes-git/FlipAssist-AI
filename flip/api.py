@@ -126,6 +126,20 @@ class MessageDraft(BaseModel):
     cost_pence: float = Field(description="reading and drafting together")
 
 
+class EbayCategory(BaseModel):
+    id: str = Field(description="eBay UK's category id: 9355 for Mobile & Smart Phones")
+    name: str
+    path: str = Field(description="the categories above it, as eBay shows them")
+
+
+class ItemSpecific(BaseModel):
+    name: str = Field(description="eBay's name for the field: Brand, Model, Storage Capacity...")
+    value: str | None = Field(description="in eBay's own words; null when nobody knows it")
+    required: bool = Field(description="eBay won't list without it")
+    source: str | None = Field(description="the catalogue, your title or notes, or the photos (with the exact colour)")
+    options: list[str] = Field(description="eBay's values to pick from")
+
+
 class ListingDraft(BaseModel):
     draft_id: int
     status: Literal["ready", "needs you"]
@@ -138,6 +152,8 @@ class ListingDraft(BaseModel):
     colour_from: Literal["listing", "photos"] | None = Field(
         description="listing: code read it from the title, description or notes; photos: the AI picked it from them")
     filled_by_code: dict = Field(description="model, storage, network, specs...: from the catalogue, no AI")
+    ebay_category: EbayCategory | None = Field(description="eBay UK's category; phones so far")
+    item_specifics: list[ItemSpecific] = Field(description="eBay's fields filled by code, in eBay's order and words")
     warnings: list[str]
     reasons: list[str]
     photo_count: int
@@ -441,6 +457,8 @@ def draft_a_listing(title: str = Form(min_length=1, max_length=300), description
         colour_from=result["colour_from"],
         filled_by_code={k: v for k, v in item.items()  # code's facts only: a colour from the photos is the AI's
                         if k not in ("warnings", "missing") and not (k == "colour" and result["colour_from"] == "photos")},
+        ebay_category=(result.get("ebay") or {}).get("category"),
+        item_specifics=(result.get("ebay") or {}).get("specifics", []),
         warnings=result["warnings"], reasons=result["reasons"], photo_count=len(encoded), attempts=tried,
         cost_pence=round(sum(a.cost_pence for a in tried), 4))
 

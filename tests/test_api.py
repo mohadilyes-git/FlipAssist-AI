@@ -142,6 +142,18 @@ def test_a_listing_drafted_from_the_form_and_photos(client):
         ("ready", "Apple iPhone 13 128GB Midnight Unlocked", 1)
     assert draft["filled_by_code"]["model"] == "iPhone 13" and draft["condition_id"] == "3000"
     assert len(local.asked[0]["photos"]) == 1
+    # eBay's own fields, in its words: the colour the AI saw is eBay's plain one, with the exact name
+    assert draft["ebay_category"] == {"id": "9355", "name": "Mobile & Smart Phones", "path": "Mobile Phones & Communication"}
+    fields = {f["name"]: (f["value"], f["required"], f["source"]) for f in draft["item_specifics"]}
+    assert fields["Model"] == ("Apple iPhone 13", True, "the catalogue")
+    assert fields["Storage Capacity"] == ("128 GB", True, "your title or notes")
+    assert fields["Colour"] == ("Black", True, "the photos: Midnight")
+
+
+def test_a_listing_outside_phones_has_no_ebay_fields_yet(client):
+    client.use(local=FakeModel("gemma3:4b", {**LISTED, "colour": "White"}))
+    draft = client.post("/listings/draft", data={"title": "PS5 Slim digital 1TB", "notes": "boxed"}).json()
+    assert (draft["ebay_category"], draft["item_specifics"]) == (None, [])
 
 
 def test_a_listing_needs_photos_that_are_photos(client):
