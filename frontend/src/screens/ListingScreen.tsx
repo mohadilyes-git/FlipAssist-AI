@@ -236,7 +236,7 @@ function Drafted({ draft, ebayTitle, setEbayTitle, text, setText, specifics, set
 /** One of eBay's fields, in eBay's words: yours to change, with eBay's values to pick from. */
 function Specific({ specific, value, onChange, empty }: { specific: ItemSpecific; value: string; onChange: (value: string) => void; empty: string }) {
   const id = `ebay-${specific.name.toLowerCase().replace(/[^a-z]+/g, "-")}`;
-  const note = !value.trim() ? (specific.required ? empty : "")
+  const note = !value.trim() ? (specific.hint ? `eBay needs this: ${specific.hint}, check it` : specific.required ? empty : "")
     : value !== (specific.value ?? "") ? "your edit" : specific.source ? `from ${specific.source}` : "";
   return (
     <div className="specific">

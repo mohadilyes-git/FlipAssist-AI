@@ -138,6 +138,7 @@ class ItemSpecific(BaseModel):
     required: bool = Field(description="eBay won't list without it")
     source: str | None = Field(description="the catalogue, your title or notes, or the photos (with the exact colour)")
     options: list[str] = Field(description="eBay's values to pick from")
+    hint: str | None = Field(None, description="for an empty field, what the seller's description says, to check")
 
 
 class ListingDraft(BaseModel):

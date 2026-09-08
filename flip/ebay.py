@@ -63,6 +63,22 @@ def spelt(values, wanted):
     return next((value for value in values if value.lower() == lower), None)
 
 
+def seller_sizes(description, model):
+    """The model's storage sizes the seller's description names, in eBay's
+    words: "128 also when i..." -> ["128 GB"]. A bare number counts from 64 GB
+    up ("16" alone could be anything), and never a price ("£128")."""
+    text, found = (description or "").lower(), []
+    for size in (model or {}).get("storage", []):
+        number, unit = re.fullmatch(r"(\d+)([KMGT]B)", size).groups()
+        named = rf"\s*(?:{unit.lower()}|{unit[0].lower()}|gigs?)\b"
+        # "128 also...", but not "128 days", "128 quid" or "128 ono"
+        alone = r"|(?![\d%]|[.,]\d)(?!\s*(?:days?|weeks?|months?|years?|hours?|hrs?|mins?|mah|hz|mp|fps|quid|pounds?|gbp|ono|ovno)\b)" \
+            if unit == "GB" and int(number) >= 64 else ""
+        if re.search(rf"(?<![\d.,£$€]){number}(?:{named}{alone})", text):
+            found.append(ebay_size(size))
+    return found
+
+
 def model_value(item, values, models):
     """eBay's name for the catalogue's model: the map's, or the brand and the model."""
     return models.get(item["model"]) or spelt(values, f"{item['brand']} {item['model']}") \
@@ -79,12 +95,14 @@ def chipset_value(brand, chip, values):
         or f"{brand} {chip}"
 
 
-def item_specifics(item, model=None, colour_from=None, fields=None, emap=None):
+def item_specifics(item, model=None, colour_from=None, description="", fields=None, emap=None):
     """eBay's category and fields for one item (fill_from_catalogue's), filled
     from what code knows, or None for a category not done yet. model is its
     catalogue entry. Each field: {"name", "value" (None if nobody knows it),
-    "required", "source", "options" (eBay's values to pick from)}, in eBay's
-    order: the ones eBay needs, then the ones filled."""
+    "required", "source", "options" (eBay's values to pick from), "hint" (for
+    an empty one, what the seller's description says)}, in eBay's order: the
+    ones eBay needs, then the ones filled. description: the seller's, read
+    only for hints: your title and notes fill the fields."""
     if not item.get("model_id") or item.get("category") not in FILLED:
         return None
     fields, emap = fields or load_fields(), emap or load_map()
@@ -93,14 +111,18 @@ def item_specifics(item, model=None, colour_from=None, fields=None, emap=None):
     specs = item.get("specs", {})
     sizes = [ebay_size(size) for size in (model or {}).get("storage", [])]
     colour = item.get("colour")
+    plain = emap["colours"].get(colour) if colour else None
+    said = seller_sizes(description, model) if not item.get("storage") else []
+    hints = {"Storage Capacity": f"the seller says {said[0]}"} if len(said) == 1 else {}
+    if hints:
+        sizes = [said[0], *[size for size in sizes if size != said[0]]]
     filled = {
         "Brand": (item["brand"], CATALOGUE, [item["brand"]]),
         "Model": (model_value(item, known["Model"]["values"], emap["models"]), CATALOGUE,
                   [v for v in known["Model"]["values"] if v.startswith(f"{item['brand']} ")]),
         "Storage Capacity": (ebay_size(item.get("storage")), TEXT, sizes),
-        "Colour": (emap["colours"].get(colour) if colour else None,
-                   f"{PHOTOS if colour_from == 'photos' else TEXT}: {colour}" if colour else None,
-                   known["Colour"]["values"]),
+        "Colour": (plain, (PHOTOS if colour_from == "photos" else TEXT) + (f": {colour}" if colour != plain else "")
+                   if colour else None, known["Colour"]["values"]),
         "Network": (item.get("network"), TEXT, [v for v in UK_NETWORKS if spelt(known["Network"]["values"], v)]),
         "Connectivity": (specs.get("Connectivity"), CATALOGUE, []),
         "Operating System": (specs.get("Operating System"), CATALOGUE, []),
@@ -113,7 +135,8 @@ def item_specifics(item, model=None, colour_from=None, fields=None, emap=None):
         value, source, options = filled.get(field["name"], (None, None, []))
         if field["required"] or value:
             specifics.append({"name": field["name"], "value": value, "required": field["required"],
-                              "source": source if value else None, "options": options})
+                              "source": source if value else None, "options": options,
+                              "hint": None if value else hints.get(field["name"])})
     return {"category": {key: category[key] for key in ("id", "name", "path")}, "specifics": specifics}
 
 

@@ -21,6 +21,7 @@ Drafts eBay listings and offer messages for a reseller. Plain code does everythi
   - then what the catalogue and the reseller's notes already know: network, 4G/5G, operating system, screen size and chip;
   - spelt as eBay's lists spell them ("Apple iPhone 13", "128 GB", "Apple A15 Bionic"); each colour becomes one of eBay's 16 plain colours, the one UK sellers pick for it (Midnight is Black, Rose Gold is Pink: `data/ebay_map.json`, with the counts);
   - eBay's lists come from its own API (`python -m flip.ebay --refresh` writes `data/ebay_fields.json`), and a test holds every phone in the catalogue to them.
+- **Says what to check in the seller's words:** a fault the seller's description mentions ("sometimes it does not focus") that the reseller's notes don't is quoted back to check before listing, and an empty field eBay needs gets the seller's word as a hint ("the seller says 128 GB"), never filled from it.
 - **Sets eBay's condition from the reseller's notes:** For parts or not working for a fault, New or Opened - never used only when the notes back it, Used otherwise. A crack or scratch on its own is wear, not a fault. The AI writes the condition note to match and can't answer another condition.
 - **Does the money in pence:** profit after fees, and an offer price rounded to a tidy number.
 - **Checks an AI answer before it's used:**

@@ -84,6 +84,27 @@ def test_the_colour_says_its_exact_name_and_where_it_came_from():
     assert {s["name"]: s["source"] for s in found["specifics"]}["Colour"] == "the photos: (PRODUCT)RED"
 
 
+def test_a_colour_eBay_spells_the_same_way_doesnt_repeat_it():
+    item = {**fill_from_catalogue("iPhone 13 128GB", "", CATALOGUE), "colour": "Blue"}
+    found = ebay.item_specifics(item, next(m for m in CATALOGUE if m["id"] == "iphone-13"), "photos")
+    assert {s["name"]: s["source"] for s in found["specifics"]}["Colour"] == "the photos"
+
+
+@pytest.mark.parametrize("description, sizes", [
+    ("128 also when i OPEN THE CAMERA AND TAKE a pic sometimes it does not focuse", ["128 GB"]),
+    ("storage 128.", ["128 GB"]), ("256gb blue", ["256 GB"]), ("512 g", ["512 GB"]),
+    ("£128 ono", []), ("128 quid", []), ("had it 128 days", []), ("128.5 hours", []),
+    ("128 or 256, can't remember", ["128 GB", "256 GB"]),  # two: no hint
+])
+def test_the_sellers_storage_is_a_hint_never_a_fill(description, sizes):
+    phone = next(m for m in CATALOGUE if m["id"] == "iphone-13")
+    assert ebay.seller_sizes(description, phone) == sizes
+    found = ebay.item_specifics(fill_from_catalogue("iPhone 13", "", CATALOGUE), phone, None, description)
+    storage = {s["name"]: s for s in found["specifics"]}["Storage Capacity"]
+    assert storage["value"] is None
+    assert storage["hint"] == (f"the seller says {sizes[0]}" if len(sizes) == 1 else None)
+
+
 def test_other_categories_and_unknown_models_get_no_fields_yet():
     ps5 = fill_from_catalogue("PS5 Slim digital", "", CATALOGUE)
     assert ebay.item_specifics(ps5, next(m for m in CATALOGUE if m["id"] == ps5["model_id"])) is None

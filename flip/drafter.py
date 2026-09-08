@@ -10,13 +10,16 @@
 4. eBay's category and fields ("item specifics") come from the same facts, in
    eBay's own words (flip.ebay): "Apple iPhone 13", "128 GB", "Black".
 5. A draft is "ready" only when nothing is missing. Anything the AI was unsure
-   of, or code couldn't fill, is listed for you to fill in. If no answer
-   passes, code's title and that list still stand.
+   of, or code couldn't fill, is listed for you to fill in, and so is a fault
+   the seller mentions that your notes don't. If no answer passes, code's
+   title and that list still stand.
 """
 
+import re
+
 from flip.attempts import try_models
-from flip.catalogue import fill_from_catalogue
-from flip.checks import UNSURE, canonical, check_listing_answer, condition_for, sources_text
+from flip.catalogue import fill_from_catalogue, words
+from flip.checks import UNSURE, canonical, check_listing_answer, condition_for, has_fault, sources_text
 from flip.ebay import item_specifics
 from flip.prompts import answer_schema, listing_prompt
 from flip.title import build_title
@@ -57,12 +60,41 @@ def draft_listing(entry, catalogue, conditions, local=None, api=None, mode="auto
     # code's title and what's left to fill in stand even when no answer passed
     result["item"] = item
     result["title"] = build_title(item)
-    result["ebay"] = item_specifics(item, model, result["colour_from"])  # eBay's own fields, in its words
+    result["ebay"] = item_specifics(item, model, result["colour_from"], description)  # eBay's own fields, in its words
+    checks = seller_faults(description, notes)
     if item["missing"]:
         result["reasons"].append(f"fill in: {', '.join(item['missing'])}")
-    elif result["answer"] is not None:
+    result["reasons"] += checks
+    if not item["missing"] and not checks and result["answer"] is not None:
         result["status"] = "ready"
     return finish(result, log)
+
+
+# the parts a fault can be about: your notes naming one means you've looked at it
+FAULT_PARTS = {"camera", "cameras", "lens", "screen", "display", "touch", "battery", "charging", "charger", "port",
+               "speaker", "speakers", "mic", "microphone", "face", "button", "buttons", "wifi", "bluetooth", "signal",
+               "sim", "network", "sound", "audio", "volume", "power", "keyboard", "trackpad", "controller", "controllers",
+               "joycon", "joycons", "stick", "sticks", "disc", "drive", "fan", "hdmi", "earbud", "earbuds", "buds"}
+MAX_QUOTE = 25  # words of the seller's sentence to quote
+
+
+def seller_faults(description, notes):
+    """What to check: each fault the seller's description mentions and your
+    notes don't, in the seller's own sentence. The draft follows your notes
+    (they beat the seller's words), but an untested camera is a return waiting
+    to happen. Your notes naming the part ("camera fine") means you've looked."""
+    noted = set(words(notes or ""))
+    found = []
+    for sentence in re.split(r"[.!?;\n]+", description or ""):
+        if not sentence.strip() or not has_fault(sentence):
+            continue
+        parts = set(words(sentence)) & FAULT_PARTS
+        if (parts & noted) or (not parts and has_fault(notes or "")):
+            continue
+        said = sentence.split()
+        quote = " ".join(said[:MAX_QUOTE]) + ("…" if len(said) > MAX_QUOTE else "")
+        found.append(f'The seller says "{quote}": your notes don\'t mention it. Check it before you list it.')
+    return found
 
 
 def finish(result, log):

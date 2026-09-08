@@ -186,6 +186,35 @@ def test_where_a_mark_is_comes_from_your_notes(note, notes, problem):
     assert found == ([f"condition_note says where marks are when your notes don't: {problem}"] if problem else [])
 
 
+@pytest.mark.parametrize("text", [
+    "128 also when i OPEN THE CAMERA AND TAKE a pic sometimes it does not focuse",  # the 2 Sep listing
+    "camera doesnt focus", "won't read discs", "not responding to touch", "doesn't hold charge",
+    "face id doesn't always work", "speaker doesn’t play sound",
+])
+def test_a_part_that_doesnt_do_its_job_is_a_fault(text):
+    assert has_fault(text)
+
+
+@pytest.mark.parametrize("text", [
+    "not connected to icloud", "not played much", "not ready yet", "not unlocked", "doesn't come with a charger",
+    "never used", "not charged it in a while", "no faults, works perfectly", "not updated", "does not include the box",
+])
+def test_harmless_nots_are_not_faults(text):
+    assert not has_fault(text)
+
+
+@pytest.mark.parametrize("note, notes, problem", [
+    # the 2 Sep iPhone 13: "battery 78" in the notes, "good condition at 78%" from Gemma
+    ("The battery is in good condition at 87%. Light scratch on the back.", NOTES, True),
+    ("Good battery life, 87%. Light scratch on the back.", NOTES, True),
+    ("Battery health 87%. Light scratch on the back.", NOTES, False),
+    ("The battery is good at 87%. Light scratch on the back.", "boxed, battery good 87%, light scratch on the back", False),
+])
+def test_only_your_notes_call_the_battery_good(note, notes, problem):
+    found = problems(notes=notes, condition_note=note, description="Apple iPhone 13 128GB in Midnight, unlocked.")
+    assert found == (["condition_note calls the battery good, and your notes only give its figure"] if problem else [])
+
+
 def test_the_ais_own_words_are_read_as_written():
     # your "scraches" backs its "scratches"; its own "scraches" isn't read as a claim at all
     assert promises_in("A few scraches.") == {}

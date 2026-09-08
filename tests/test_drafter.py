@@ -105,6 +105,27 @@ def test_a_slip_in_your_notes_doesnt_fail_a_right_answer_but_a_made_up_place_doe
         ("Deep Purple", "Apple iPhone 14 Pro Max Deep Purple Unlocked", ["fill in: storage"])
 
 
+def test_a_fault_the_seller_mentions_and_your_notes_dont_is_for_you_to_check():
+    # the 2 Sep iPhone 13: the seller's camera "does not focuse"; the notes only say battery and scratches
+    entry = {"id": "t4", "original_title": "iphone 13 blue unlocked",
+             "original_description": "128 also when i OPEN THE CAMERA AND TAKE a pic sometimes it does not focuse",
+             "my_notes": "battery 78 , few scratches on screen"}
+    answer = {"colour": "Blue", "condition_id": "3000",
+              "condition_note": "The phone has a few scratches on the screen and the battery is at 78%.",
+              "description": "Apple iPhone 13, unlocked. A few scratches on the screen, battery health 78%."}
+    result = draft(entry, local=FakeModel("gemma3:4b", answer))
+    assert result["attempts"][0]["problems"] == [] and result["status"] == "needs you"
+    assert result["reasons"] == ["fill in: storage",
+                                 'The seller says "128 also when i OPEN THE CAMERA AND TAKE a pic sometimes it does not '
+                                 'focuse": your notes don\'t mention it. Check it before you list it.']
+    storage = {s["name"]: s for s in result["ebay"]["specifics"]}["Storage Capacity"]
+    assert (storage["value"], storage["hint"], storage["options"][0]) == (None, "the seller says 128 GB", "128 GB")
+    # your notes naming the camera means you've looked: then it's yours to say, and nothing to check
+    looked = draft({**entry, "my_notes": "battery 78, few scratches on screen, camera focuses fine"},
+                   local=FakeModel("gemma3:4b", answer))
+    assert looked["reasons"] == ["fill in: storage"]
+
+
 def test_your_notes_typed_in_a_hurry_back_gemmas_answer():
     # the 2 Sep iPhone 13 mini: Gemma's answer was right, and failed only on "baterray" and "scraches"
     entry = {"id": "t3", "original_title": "iphone 13 mini 128gb unlocked to any sim",

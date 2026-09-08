@@ -314,6 +314,19 @@ describe("List on eBay", () => {
     expect(copied).toContain("Colour: Black\nNetwork: Unlocked\nScreen Size: 6.1 in");
   });
 
+  it("says what the seller's description says for an empty field eBay needs", async () => {
+    serve({ "POST /api/listings/draft": [200, { ...LISTED,
+      ebay_category: { id: "9355", name: "Mobile & Smart Phones", path: "Mobile Phones & Communication" },
+      item_specifics: [{ name: "Storage Capacity", value: null, required: true, source: null,
+        options: ["128 GB", "256 GB", "512 GB"], hint: "the seller says 128 GB" }] }] });
+    const user = userEvent.setup();
+    render(<ListingScreen />);
+    await user.type(screen.getByLabelText("The seller's title"), "iphone 13");
+    await user.click(screen.getByRole("button", { name: "Draft listing" }));
+    expect(await screen.findByText("eBay needs this: the seller says 128 GB, check it")).toBeTruthy();
+    expect((screen.getByLabelText("Storage Capacity") as HTMLInputElement).value).toBe(""); // a hint, never filled
+  });
+
   it("keeps code's title when no answer passed, and says the colour wasn't drafted rather than unsure", async () => {
     serve({ "POST /api/listings/draft": [200, { ...LISTED, condition_id: null, condition_note: null, description: null,
       ebay_title: "Apple iPhone 14 Pro Max Unlocked", reasons: ["no answer passed the checks", "fill in: storage, colour"] }] });

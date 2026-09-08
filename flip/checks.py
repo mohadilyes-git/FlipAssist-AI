@@ -155,6 +155,14 @@ NEW_PROBLEMS = {"1000": "condition is New, but your notes don't say it's brand n
                 "1500": "condition is Opened - never used, but your notes don't say it's unused"}
 # a fault in your notes means the item is "For parts or not working", and no
 # draft may call it fully working. "No faults", "no drift" aren't faults
+# what a part does when it works, for "doesn't FOCUS", "won't READ discs", "not RESPONDING". Not
+# "not connected to iCloud", "not played much", "not ready", "not unlocked": those aren't faults
+JOBS = (r"(?:focus\w*|work|works|charge|charges|charging|turn on|turning on|switch on|power on|connect|connects|"
+        r"connecting|pair|pairs|pairing|boot|boots|booting|load|loads|loading|respond\w*|register|registers|"
+        r"registering|detect|detects|detecting|recogni[sz]e|recogni[sz]es|recogni[sz]ing|read|reads|reading|"
+        r"ring|rings|ringing|vibrate|vibrates|vibrating|play|plays|playing|click|clicks|clicking|"
+        r"hold (?:a |its )?charge|holding (?:a |its )?charge)")
+NOT_DOING = rf"(?:always |properly |really |even |sometimes |fully |seem to |seems to )?{JOBS}"
 FAULTS = re.compile(r"\b(?:not working|broken|drift|drifts|drifting|faulty|fault|faults|glitch\w*|for parts|spares|"
                     r"dead pixels?|(?:is|totally|completely|went|now) dead|dead (?:battery|phone|console|unit|on arrival)|"
                     r"battery (?:is )?dead|"
@@ -169,7 +177,10 @@ FAULTS = re.compile(r"\b(?:not working|broken|drift|drifts|drifting|faulty|fault
                     r"turning (?:on and off|off and on|itself off)|"
                     r"(?:switch|switches|shuts?) (?:itself )?(?:off|down) (?:by itself|on its own|randomly)|"
                     r"keeps? (?:turning|switching|shutting) (?:off|down)|keeps? restarting|restarts? (?:by itself|on its own|randomly)|"
-                    r"randomly (?:restarts|shuts down|turns off|switches off)|cuts? out|intermittent\w*|stops? working)\b")
+                    r"randomly (?:restarts|shuts down|turns off|switches off)|cuts? out|intermittent\w*|stops? working|"
+                    # a part that doesn't do its job: "sometimes it does not focus", "won't read discs"
+                    rf"(?:does not|doesn t|doesnt|do not|don t|dont|did not|didn t|didnt|will not|won t|wont|can not|"
+                    rf"cannot|can t|cant|isn t|isnt|is not|not|never) {NOT_DOING})\b")
 NOT_A_FAULT = re.compile(r"\b(?:no|not|never|without|zero|(?:hasn|haven|hadn|didn|doesn|isn|wasn) t)\s+(?:been\s+)?(?:\w+\s+){0,3}"
                          r"(?:broken|drift\w*|faults?|faulty|glitch\w*|dead pixels?|issues?|problems?)\b"
                          r"|\bnot\s+(?:for\s+)?(?:spares|repairs|parts)\b")
@@ -284,7 +295,9 @@ PROBLEM = re.compile(
     r"replaced|replacement|repaired|spares|for parts|cosmetic|blemish\w*|imperfection\w*|cloudy|hazy|bleed\w*|"
     r"bubbl\w*|weak|noisy|noise|smell\w*|locked|blacklisted|bad|poor|cracking|"
     r"(?:isn'?t|is not|not) (?:perfect|great|good|the best|mint|working properly)|"
-    r"no (?:sound|power|picture|signal|display|image|wifi|charge|charging|service|audio|video|bluetooth))\b",
+    r"no (?:sound|power|picture|signal|display|image|wifi|charge|charging|service|audio|video|bluetooth)|"
+    rf"(?:does not|doesn['’]?t|do not|don['’]?t|did not|didn['’]?t|will not|won['’]?t|can ?not|can['’]?t|isn['’]?t|"
+    rf"is not|not|never) {NOT_DOING})\b",
     re.IGNORECASE)
 
 # how you'll buy: a message may promise it only the way your own messages do (check_no_unasked_promises).
@@ -722,6 +735,21 @@ def mark_places(text, typos=False, reach=None):
     return found
 
 
+# calling the battery good: a judgement only your notes can make. "78%" is a figure, and below
+# 80% an iPhone itself says the battery needs service. Within a few words, in one sentence
+PRAISE = r"(?:good|great|healthy|excellent|strong|decent|solid|perfect|amazing|fantastic|brilliant)"
+BATTERY_PRAISE = re.compile(rf"\bbatter(?:y|ies)\b[^.!?\n]{{0,20}}?\b{PRAISE}\b|\b{PRAISE}\b[^.!?\n]{{0,12}}?\bbatter(?:y|ies)\b",
+                            re.IGNORECASE)
+
+
+def check_battery_praise(what, text, notes):
+    """Only your notes can call the battery good: "battery 78" doesn't make
+    "the battery is in good condition at 78%"."""
+    if BATTERY_PRAISE.search(text) and not BATTERY_PRAISE.search(notes):
+        return [f"{what} calls the battery good, and your notes only give its figure"]
+    return []
+
+
 def check_mark_places(what, text, notes):
     """Where a mark is comes from your notes too: your "few scratches" doesn't
     say they're on the screen and back."""
@@ -888,6 +916,7 @@ def check_listing_answer(answer, item, catalogue, conditions, sources, notes):
             problems += check_no_invented_percentages(what, text, notes or "", sources)
             problems += check_no_invented_promises(what, text, sources, notes or "")
             problems += check_mark_places(what, text, notes or "")
+            problems += check_battery_praise(what, text, notes or "")
             problems += check_matches_item(what, text, item, catalogue, colour, sources)
             problems += check_no_prices(what, text)
             problems += check_no_off_platform(what, text)

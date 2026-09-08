@@ -82,8 +82,11 @@ export type ListingDraft = {
 
 export type EbayCategory = { id: string; name: string; path: string };
 
-/** value: null when nobody knows it. source: "the catalogue", "your title or notes" or "the photos: Midnight" */
-export type ItemSpecific = { name: string; value: string | null; required: boolean; source: string | null; options: string[] };
+/** value: null when nobody knows it. source: "the catalogue", "your title or notes" or "the photos: Midnight".
+ * hint: for an empty field, what the seller's description says ("the seller says 128 GB") */
+export type ItemSpecific = {
+  name: string; value: string | null; required: boolean; source: string | null; options: string[]; hint?: string | null;
+};
 
 /** saved_to_style: an approved message joins the messages your style is learned from */
 export type Approved = { draft_id: number; edited: boolean; at: string; saved_to_style: boolean };
