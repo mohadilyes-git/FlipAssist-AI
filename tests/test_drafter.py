@@ -126,6 +126,22 @@ def test_a_fault_the_seller_mentions_and_your_notes_dont_is_for_you_to_check():
     assert looked["reasons"] == ["fill in: storage"]
 
 
+def test_a_battery_figure_on_its_own_in_your_notes_is_told_to_the_ai_and_backs_its_answer():
+    # "78" with nothing next to it in a phone's notes is its battery health; "128" in the
+    # title is a size the iPhone 13 comes in (flip.numbers)
+    entry = {"id": "t5", "original_title": "iPhone 13 128 blue unlocked", "original_description": "",
+             "my_notes": "78 , few scratches on screen"}
+    answer = {"condition_id": "3000", "condition_note": "Battery health is 78%. A few scratches on the screen.",
+              "description": "Apple iPhone 13 128GB in Blue, unlocked. A few scratches on the screen, battery "
+                             "health 78%."}
+    local = FakeModel("gemma3:4b", answer)
+    result = draft(entry, local=local)
+    assert "- Battery health: 78% (from the reseller's notes)" in local.asked[0]["user"]
+    assert (result["attempts"][0]["problems"], result["status"]) == ([], "ready")
+    assert (result["item"]["storage"], result["item"]["battery"], result["title"]) == \
+        ("128GB", "78", "Apple iPhone 13 128GB Blue Unlocked")
+
+
 def test_your_notes_typed_in_a_hurry_back_gemmas_answer():
     # the 2 Sep iPhone 13 mini: Gemma's answer was right, and failed only on "baterray" and "scraches"
     entry = {"id": "t3", "original_title": "iphone 13 mini 128gb unlocked to any sim",

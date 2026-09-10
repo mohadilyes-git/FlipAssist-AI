@@ -12,6 +12,13 @@ Drafts eBay listings and offer messages for a reseller. Plain code does everythi
   - options such as Disc or Digital;
   - network lock;
   - specs.
+- **Reads numbers by what the product can be** (`flip/numbers.py`). Once the model is known, so are its possible answers:
+  - storage: an iPhone 13 comes in 128, 256 or 512 GB, so "iPhone 13 128", "128g", "128 gig" and "128 go" are all 128GB, while "64" isn't a size it comes in;
+  - battery health, from the reseller's notes however it's written ("battery 84", "84 battery health", "%84 BH", "84🔋", or "78" on its own), handed to the AI as a settled fact;
+  - numbers that belong to something else are taken out first: the model's name (the 13 in "iPhone 13"), prices ("£128", "128 ono", "bought 128"), times ("90 days"), addresses ("77 High Street"), codes ("BH21"), charge cycles ("256 cycles") and phone numbers;
+  - each battery word belongs to one figure, so in "iPhone 13 128 Battery 87%" the 128 is still the storage;
+  - on 2,091 real UK phone titles, storage is filled in 1,067 instead of 1,028, with none lost or changed, and every battery figure read from real listings has a battery word or a % sign next to it;
+  - two test agents wrote 436 messy cases to break it; the 73 real failures they found are fixed and kept as tests.
 - **Leaves gaps instead of guessing.**
   - Anything code isn't sure about goes on a "missing" list.
   - Parts, accessories, wanted ads and listings that name two products aren't matched at all.
@@ -183,6 +190,7 @@ The self-test opens the window, checks every kind of call (files, JSON, photo up
 | Field | Filled by |
 |---|---|
 | Model, storage, specs, title | Code, from `data/catalogue.json` |
+| Battery health | Code, from the reseller's notes (`flip/numbers.py`) |
 | Colour | Code if the text names it; otherwise the AI from the photo |
 | eBay's category and fields (Brand, Model, Storage Capacity, Colour...) | Code, in eBay's words (`data/ebay_fields.json`, `data/ebay_map.json`); phones so far |
 | Condition | Code, from the reseller's notes |

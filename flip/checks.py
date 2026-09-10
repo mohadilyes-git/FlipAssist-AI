@@ -13,6 +13,7 @@ from decimal import Decimal
 from flip.catalogue import (COMMON_COLOURS, PLUS_MEANS_AND, colours_named, find_phrase, item_colour_mentioned,
                             options_named, sizes_in, words)
 from flip.money import pounds, to_pence
+from flip.numbers import TYPED_BATTERY, battery_worded
 
 MAX_CONDITION_NOTE = 1000  # eBay's limit for the condition description
 MAX_DESCRIPTION = 1500     # our own limit: short listings read better and cost fewer tokens
@@ -186,13 +187,9 @@ NOT_A_FAULT = re.compile(r"\b(?:no|not|never|without|zero|(?:hasn|haven|hadn|did
                          r"|\bnot\s+(?:for\s+)?(?:spares|repairs|parts)\b")
 FOR_PARTS = "7000"
 PERCENT = re.compile(r"(\d+(?:\.\d+)?)\s?(?:%|per ?cent\b)", re.IGNORECASE)
-# "battery" the ways people type it: "batery", "battry", "baterray", "batt". And "bh",
-# but only on its own: "bh 88%" is battery health, "collection from BH21" a postcode
-TYPED_BATTERY = r"(?:bat{1,2}[aeiouy]?r{1,2}[aeiouy]{0,2}|batt)"
+# "battery" typed any way is TYPED_BATTERY (flip.numbers). And "bh", but only on its
+# own: "bh 88%" is battery health, "collection from BH21" a postcode
 BH = re.compile(r"\bbh\b")
-# a battery health written without a % sign: "battery health 86", "baterray 88", "bh 88"
-BATTERY_FIGURE = re.compile(rf"\b(?:{TYPED_BATTERY}|bh|health|capacity)\b(?:\s+[a-z]+){{0,2}}(?:\s*:\s*|\s+)(\d{{2,3}}(?:\.\d+)?)\b"
-                            r"(?!\s?(?:gb|tb|mah|hours?|hrs?|mins?|minutes?|days?))", re.IGNORECASE)
 
 NUMBER = re.compile(r"\d+(?:,\d{3})*(?:\.\d+)?")
 # number words count as numbers. Not "one": "this one", "one of the best"
@@ -505,10 +502,9 @@ def stated_parts(message):
 
 
 def condition_figures(text):
-    """Every battery-health style figure, written one way: "87%", "87 per cent"
-    and "battery health 87" are all "87"."""
-    found = PERCENT.findall(text) + BATTERY_FIGURE.findall(text)
-    return {f"{Decimal(n).normalize():f}" for n in found}
+    """Every battery-health style figure, written one way: "87%", "87 per cent",
+    "battery health 87", "87 battery health", "battery %87" and "87🔋" are all "87"."""
+    return {f"{Decimal(n).normalize():f}" for n in PERCENT.findall(text)} | battery_worded(text)
 
 
 def new_conditions_allowed(notes):
@@ -661,23 +657,29 @@ def check_no_invented_numbers(what, text, sources):
     return []
 
 
-def check_no_invented_percentages(what, text, notes, sources):
+def check_no_invented_percentages(what, text, notes, sources, battery=None):
     """A percentage, like battery health, is about this item's condition: it
     must come from your notes, not the seller's words, with or without the %
-    sign. (One that isn't in any input at all is already reported by the
-    numbers check.)"""
-    extra = (condition_figures(text) - condition_figures(notes)) & numbers_in(sources)
+    sign. battery: the battery health code read from your notes, which may be
+    a number on its own there ("78, few scratches"). (One that isn't in any
+    input at all is already reported by the numbers check.)"""
+    noted = condition_figures(notes) | ({battery} if battery else set())
+    extra = (condition_figures(text) - noted) & numbers_in(sources)
     if extra:
         return [f"{what} has a percentage your notes don't: {', '.join(f'{p}%' for p in sorted(extra))}"]
     return []
 
 
-def check_no_invented_promises(what, text, sources, notes):
+def check_no_invented_promises(what, text, sources, notes, battery=None):
     """Every claim in the text must be backed, with the same yes or no.
     Condition claims only by your notes. Anything else by your notes if they
     mention it ("no box" beats the seller's "boxed"), otherwise by any input.
-    And nothing is "working" when your notes mention a fault."""
+    And nothing is "working" when your notes mention a fault. battery: the
+    battery health code read from your notes ("78" on its own, "84🔋"): then
+    your notes speak about the battery without the word."""
     from_inputs, from_notes = promises_in(sources, typos=True), promises_in(notes, typos=True)
+    if battery:
+        from_notes = {**from_notes, "battery": from_notes.get("battery", set()) | {"yes"}}
     faulty = has_fault(notes)
     unbacked, unbacked_condition = [], []
     for promise, saids in sorted(promises_in(text).items()):
@@ -913,8 +915,8 @@ def check_listing_answer(answer, item, catalogue, conditions, sources, notes):
         problems += length_problems
         if not length_problems:
             problems += check_no_invented_numbers(what, text, sources)
-            problems += check_no_invented_percentages(what, text, notes or "", sources)
-            problems += check_no_invented_promises(what, text, sources, notes or "")
+            problems += check_no_invented_percentages(what, text, notes or "", sources, item.get("battery"))
+            problems += check_no_invented_promises(what, text, sources, notes or "", item.get("battery"))
             problems += check_mark_places(what, text, notes or "")
             problems += check_battery_praise(what, text, notes or "")
             problems += check_matches_item(what, text, item, catalogue, colour, sources)

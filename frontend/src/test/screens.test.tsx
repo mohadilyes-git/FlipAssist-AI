@@ -222,7 +222,7 @@ describe("List on eBay", () => {
     draft_id: 3, status: "needs you", ebay_title: "Apple iPhone 13 128GB Midnight Unlocked", condition_id: "3000",
     condition_note: "Light scratch on the back.", description: "Apple iPhone 13 128GB in Midnight.", colour: null,
     colour_from: null,
-    filled_by_code: { brand: "Apple", model: "iPhone 13", storage: "128GB", specs: { "Screen Size": "6.1 in" } },
+    filled_by_code: { brand: "Apple", model: "iPhone 13", storage: "128GB", battery: "78", specs: { "Screen Size": "6.1 in" } },
     ebay_category: null, item_specifics: [],
     warnings: [], reasons: ["Fill in: colour"], photo_count: 2,
     attempts: [{ model: "gemma3:4b", problems: [], seconds: 9.5, cost_pence: 0 }], cost_pence: 0,
@@ -274,6 +274,7 @@ describe("List on eBay", () => {
     expect(screen.getByText(`${LISTED.ebay_title!.length}/80`)).toBeTruthy();
     await user.click(screen.getByRole("button", { name: /Filled by code, no AI/ }));
     expect(screen.getByText("Screen Size")).toBeTruthy();
+    expect(screen.getByText("Battery health").nextElementSibling?.textContent).toBe("78%"); // read from the notes
     await user.click(screen.getByRole("button", { name: "Copy & approve" }));
     expect(await screen.findByText("Copied and saved: title, condition and description.")).toBeTruthy();
     expect(await navigator.clipboard.readText()).toContain("Condition: Used");

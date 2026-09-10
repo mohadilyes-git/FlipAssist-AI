@@ -50,6 +50,8 @@ def listing_prompt(item, model, entry, photo_count, condition=None):
         facts.append(f"Colour: not known. Pick from: {', '.join(model['colours'])}, or unsure")
     if item["category"] == "phones":
         facts.append(f"Network: {item['network'] or 'not known'}")
+        if item.get("battery"):  # read from the notes by code: "78, few scratches" is 78%
+            facts.append(f"Battery health: {item['battery']}% (from the reseller's notes)")
     facts += [f"{name}: {value or 'not known'}" for name, value in item["options"].items()]
     facts += [f"{name}: {value}" for name, value in item["specs"].items()]
     user = "\n".join([

@@ -86,8 +86,27 @@ def test_leaves_gaps_instead_of_guessing():
     assert item["missing"] == ["storage", "colour", "network"]
 
 
-def test_bare_number_is_not_storage():
-    assert fill("iPhone 13 128 £300")["storage"] is None
+def test_a_size_the_model_comes_in_is_storage_with_gb_or_without():
+    # flip.numbers: 128 is a size the iPhone 13 comes in; the £ marks the price
+    assert fill("iPhone 13 128 £300")["storage"] == "128GB"
+    assert fill("iPhone 13 128g Pink")["storage"] == "128GB"
+    assert fill("iPhone 13 £128")["storage"] is None
+    assert fill("iPhone 13 64")["storage"] is None  # it doesn't come in 64 GB
+
+
+def test_storage_in_your_notes_counts_too():
+    assert fill_from_catalogue("iPhone 13", "storage 256, minor scuffs", CATALOGUE)["storage"] == "256GB"
+    assert fill_from_catalogue("iPhone 13 128GB", "it's 256", CATALOGUE)["storage"] is None  # two sizes: for you
+
+
+def test_battery_health_comes_from_your_notes_only():
+    item = fill_from_catalogue("iPhone 13 128GB 87% battery", "78 , few scratches on screen", CATALOGUE)
+    assert item["battery"] == "78"  # the title's 87% is the seller's word
+    assert fill_from_catalogue("iPhone 13 128GB 87% battery", "", CATALOGUE)["battery"] is None
+    # a number on its own doesn't count when the notes already give the battery a figure
+    assert fill_from_catalogue("iPhone 13", "battery 84, was 90 in June", CATALOGUE)["battery"] == "84"
+    assert fill_from_catalogue("iPhone 13", "battery 84, then bh 90", CATALOGUE)["battery"] is None  # two: for you
+    assert "battery" not in fill_from_catalogue("PS5 disc", "battery 85", CATALOGUE)
 
 
 def test_storage_must_exist_for_that_model():

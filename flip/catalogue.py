@@ -7,6 +7,8 @@ import re
 import unicodedata
 from pathlib import Path
 
+from flip.numbers import read_numbers
+
 DATA = Path(__file__).resolve().parent.parent / "data"
 
 # a listing that's about parts or accessories, or isn't selling anything
@@ -80,7 +82,8 @@ def words(text, breaks=False):
     "iPhone13 128GB" -> ["iphone", "13", "128", "gb"], so "iphone13",
     "iPhone 13" and "IPHONE-13" all look the same. Accents are dropped
     ("Pokémon" -> "pokemon"). A "+" stuck to a name ("S23+") becomes "plus";
-    a "+" on its own ("phone + case") is dropped. "'s" is dropped, so
+    a "+" on its own ("phone + case") or between numbers ("8GB+256GB") is
+    dropped. "'s" is dropped, so
     "it's 23 months" can't read as an S23. With breaks, a comma or full stop
     becomes BREAK, so "Blue, screen perfect" keeps "blue" apart from "screen".
     Brackets aren't breaks: "AirPods Pro (2nd Generation)" is one name.
@@ -88,7 +91,7 @@ def words(text, breaks=False):
     text = unicodedata.normalize("NFKD", text.lower())
     text = "".join(ch for ch in text if not unicodedata.combining(ch))
     text = re.sub(r"(?<=[a-z0-9])['’ʼ]s\b", "", text)
-    text = re.sub(r"(?<=[a-z0-9])\+", " plus ", text)
+    text = re.sub(r"(?<=[a-z0-9])\+(?!\d)", " plus ", text)
     if not breaks:
         return re.findall(r"[a-z]+|\d+", text)
     return [BREAK if word in ",.;:!?\n" else word for word in re.findall(r"[a-z]+|\d+|[,.;:!?\n]", text)]
@@ -131,17 +134,17 @@ def mentioned(text_words, phrase, not_followed_by=(), skipping=(), not_after=())
 
 def rules_out(text_words, not_if):
     """True if a word that means a different model appears: "pro" rules out the
-    iPhone 13. Not "plus" meaning "and" ("plus a charger"), not "max" in
-    "battery max capacity", not "pm" in "after 5pm"."""
+    iPhone 13. Not "plus" meaning "and" ("plus a charger", "plus 2 cases"), not
+    "max" in "battery max capacity" or "86% max cap", not "pm" in "after 5pm"."""
     for i, word in enumerate(text_words):
         if word not in not_if:
             continue
         after = text_words[i + 1] if i + 1 < len(text_words) else ""
         before = text_words[i - 1] if i > 0 else ""
-        if word == "plus" and after in PLUS_MEANS_AND:
-            continue
-        if word == "max" and (after == "capacity" or before in ("battery", "health")):
-            continue
+        if word == "plus" and (after in PLUS_MEANS_AND or (after.isdigit() and int(after) < 10)):
+            continue  # "plus a charger", "plus 2 cases"
+        if word == "max" and (after in ("capacity", "cap") or before in ("battery", "health")):
+            continue  # "max capacity 86%", "86% max cap"
         if word == "pm" and before.isdigit():
             continue  # "collect after 5pm" isn't a Pro Max
         return True
@@ -219,23 +222,30 @@ def models_disagree(title, description, catalogue):
 
 
 def sizes_in(text_words):
-    """Every '<number> gb/tb' in the text: "128 gb" -> "128GB". A bare "128"
-    could be a price, so it doesn't count."""
+    """Every '<number> gb/tb' in the text: "128 gb" -> "128GB". For text that
+    writes sizes properly, like an AI's description; a listing's own numbers
+    are read by flip.numbers."""
     return {number + unit.upper() for number, unit in zip(text_words, text_words[1:])
             if unit in ("gb", "tb") and number.isdigit()}
 
 
-def find_storage(text_words, model):
-    """The storage size, if the model only comes in one or the text names
-    exactly one real size for it."""
+def find_storage(read, model):
+    """The storage size, if the model only comes in one or the title and your
+    notes name exactly one real size for it. read: flip.numbers' reading of
+    each ("128", "128g" and "128GB" all name 128GB on an iPhone 13)."""
     allowed = model["storage"]
-    stated = sizes_in(text_words)
     if len(allowed) == 1:
         # only one size exists. If the text names a different one too ("+ 128GB
         # SD card"), something's off: leave it for you
+        stated = set().union(*(r["stated"] for r in read))
         return allowed[0] if stated <= set(allowed) else None
-    real = stated & set(allowed)  # ignores RAM ("8GB RAM 256GB")
-    return real.pop() if len(real) == 1 else None
+    named = set().union(*(r["storage"] for r in read))  # the model's sizes only: "8GB RAM 256GB" is 256GB
+    return named.pop() if len(named) == 1 else None
+
+
+def find_battery(read):
+    """Battery health from your notes (flip.numbers), if they give exactly one figure."""
+    return next(iter(read["battery"])) if len(read["battery"]) == 1 else None
 
 
 def item_colour_mentioned(text_words, name):
@@ -341,8 +351,11 @@ def fill_from_catalogue(title, notes, catalogue, description=""):
     it's left for you. The one exception: a family name in the title and an
     exact name in your notes ("PS5" and "PS5 Slim") mean the exact one. A name
     that fits two models needs a word that settles it ("PS5" alone could be the
-    Slim). Everything else is read from both together. The seller's description
-    is read for warnings only ("faulty", "iCloud"): it's too chatty to fill facts from.
+    Slim). Everything else is read from both together, numbers by what this
+    model's answers can be (flip.numbers: "iPhone 13 128" is 128GB). A phone's
+    battery health comes from your notes only: they're the truth about the item.
+    The seller's description is read for warnings only ("faulty", "iCloud"):
+    it's too chatty to fill facts from.
     """
     title, notes = title or "", notes or ""
     text = f"{title} {notes}"
@@ -368,17 +381,23 @@ def fill_from_catalogue(title, notes, catalogue, description=""):
     if model is None:
         return {"model_id": None, "missing": ["model"], "warnings": warnings}
 
+    # numbers in any model's name ("iPhone 13", "S23") are names, not sizes or figures.
+    # In your notes a number on its own can be battery health: "78, few scratches"
+    names = [alias for m in catalogue for alias in m["aliases"]]
+    read = [read_numbers(title, model, names), read_numbers(notes, model, names, alone=True)]
     filled = {
         "model_id": model["id"],
         "category": model["category"],
         "brand": model["brand"],
         "model": model["model"],
-        "storage": find_storage(text_words, model) if model["storage"] else None,
+        "storage": find_storage(read, model) if model["storage"] else None,
         "colour": find_colour(text_words, model),
         "options": find_options(text_words, model),
         "network": find_network(text) if model["category"] == "phones" else None,
         "specs": dict(model["specs"]),
     }
+    if model["category"] == "phones":
+        filled["battery"] = find_battery(read[1])
     # some editions only come one way: the Wolverine PS5 is Digital Edition, 825GB
     rule = model.get("colour_rules", {}).get(filled["colour"])
     if rule:

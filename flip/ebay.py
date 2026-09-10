@@ -26,6 +26,9 @@ from datetime import date
 from functools import lru_cache
 from pathlib import Path
 
+from flip.catalogue import load_catalogue
+from flip.numbers import read_numbers
+
 ROOT = Path(__file__).resolve().parent.parent
 FIELDS = ROOT / "data" / "ebay_fields.json"
 MAP = ROOT / "data" / "ebay_map.json"
@@ -63,20 +66,20 @@ def spelt(values, wanted):
     return next((value for value in values if value.lower() == lower), None)
 
 
+@lru_cache(maxsize=1)
+def model_names():
+    """Every model name in the catalogue: a size right after another model's name is that model's."""
+    return tuple(alias for model in load_catalogue() for alias in model["aliases"])
+
+
 def seller_sizes(description, model):
     """The model's storage sizes the seller's description names, in eBay's
-    words: "128 also when i..." -> ["128 GB"]. A bare number counts from 64 GB
-    up ("16" alone could be anything), and never a price ("£128")."""
-    text, found = (description or "").lower(), []
-    for size in (model or {}).get("storage", []):
-        number, unit = re.fullmatch(r"(\d+)([KMGT]B)", size).groups()
-        named = rf"\s*(?:{unit.lower()}|{unit[0].lower()}|gigs?)\b"
-        # "128 also...", but not "128 days", "128 quid" or "128 ono"
-        alone = r"|(?![\d%]|[.,]\d)(?!\s*(?:days?|weeks?|months?|years?|hours?|hrs?|mins?|mah|hz|mp|fps|quid|pounds?|gbp|ono|ovno)\b)" \
-            if unit == "GB" and int(number) >= 64 else ""
-        if re.search(rf"(?<![\d.,£$€]){number}(?:{named}{alone})", text):
-            found.append(ebay_size(size))
-    return found
+    words: "128 also when i..." -> ["128 GB"]. Read like your title and notes
+    (flip.numbers): "GB" typed any way or, from 64 GB up, not at all; never a
+    price ("£128"), a time ("128 days"), an address ("128 High Street") or
+    another model's size ("upgraded to an iPhone 15 Pro 256GB")."""
+    named = read_numbers(description or "", model or {}, model_names())["storage"]
+    return [ebay_size(size) for size in (model or {}).get("storage", []) if size in named]
 
 
 def model_value(item, values, models):

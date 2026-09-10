@@ -26,7 +26,8 @@ GOOD = {
 
 
 def problems(notes=NOTES, sources=SOURCES, **changes):
-    return check_listing_answer({**GOOD, **changes}, ITEM, CATALOGUE, CONDITIONS["phones"], sources, notes)
+    item = {**ITEM, "battery": fill_from_catalogue(TITLE, notes, CATALOGUE)["battery"]}  # as code reads these notes
+    return check_listing_answer({**GOOD, **changes}, item, CATALOGUE, CONDITIONS["phones"], sources, notes)
 
 
 def test_a_good_answer_passes():
@@ -454,6 +455,26 @@ def test_battery_figures_without_a_percent_sign():
     assert "description has a percentage your notes don't: 95%" in \
         answer_for(title, "battery 84%", "Apple iPhone 13 128GB in Blue, unlocked. Battery health 95.",
                    seller="battery health 95%")
+
+
+@pytest.mark.parametrize("notes", ["84 battery health, few scratches", "battery %84, few scratches",
+                                   "84🔋 few scratches", "84 bh, few scratches"])
+def test_a_battery_figure_with_its_word_after_backs_the_answer(notes):
+    # real listings put the word after the figure as often as before it
+    assert answer_for("iPhone 13 128GB Blue unlocked", notes,
+                      "Apple iPhone 13 128GB in Blue, unlocked. A few scratches, battery health 84%.") == []
+
+
+def test_a_figure_on_its_own_in_your_notes_backs_the_answer_as_the_battery():
+    # code reads "78" on its own in a phone's notes as battery health (flip.numbers)
+    title, notes = "iPhone 13 128GB Blue unlocked", "78 , few scratches on screen"
+    assert fill_from_catalogue(title, notes, CATALOGUE)["battery"] == "78"
+    assert answer_for(title, notes, "Apple iPhone 13 128GB in Blue, unlocked. A few scratches on the screen, "
+                                    "battery health 78%.") == []
+    # the seller's figure still isn't yours: on its own in their text, nothing reads it as the battery
+    assert "description has a percentage your notes don't: 78%" in \
+        answer_for(title, "few scratches on screen", "Apple iPhone 13 128GB in Blue, unlocked. A few scratches on "
+                                                     "the screen, battery health 78%.", seller="78 , collection only")
 
 
 def test_your_locked_or_out_of_warranty_beats_the_seller():

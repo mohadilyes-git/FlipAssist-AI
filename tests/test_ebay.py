@@ -95,6 +95,7 @@ def test_a_colour_eBay_spells_the_same_way_doesnt_repeat_it():
     ("storage 128.", ["128 GB"]), ("256gb blue", ["256 GB"]), ("512 g", ["512 GB"]),
     ("£128 ono", []), ("128 quid", []), ("had it 128 days", []), ("128.5 hours", []),
     ("128 or 256, can't remember", ["128 GB", "256 GB"]),  # two: no hint
+    ("256 gig, works fine", ["256 GB"]), ("collect from 128 High Street", []), ("iPhone 13 64", []),
 ])
 def test_the_sellers_storage_is_a_hint_never_a_fill(description, sizes):
     phone = next(m for m in CATALOGUE if m["id"] == "iphone-13")

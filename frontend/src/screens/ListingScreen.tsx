@@ -15,7 +15,10 @@ const TITLE_LIMIT = 80; // eBay's limit
 const LONG_TITLE = 74; // past this the counter turns orange
 const PHOTO_TYPE = /^image\/(jpeg|png|heic|heif|webp)$/;
 const PHOTO_NAME = /\.(jpe?g|png|heic|heif|webp)$/i; // a HEIC from the Mac can come with no type
-const FACTS = ["brand", "model", "storage", "network", "colour"];
+const FACTS = ["brand", "model", "storage", "network", "colour", "battery"];
+// how a fact is named and shown when its key alone won't do: battery is the health figure from your notes
+const FACT_NAMES: Record<string, string> = { battery: "Battery health" };
+const FACT_UNITS: Record<string, string> = { battery: "%" };
 
 export function ListingScreen() {
   const [title, setTitle] = useState("");
@@ -265,11 +268,11 @@ function Row({ name, value, warn }: { name: string; value: string; warn?: boolea
 
 /** What the catalogue filled in, by name: brand, model, storage, network, colour, then options and specs. */
 function facts(found: Record<string, unknown>): [string, string][] {
-  const named = (key: string) => key[0].toUpperCase() + key.slice(1);
-  const shown = (value: unknown) => (value === null || value === undefined || value === "" ? "–" : String(value));
+  const named = (key: string) => FACT_NAMES[key] ?? key[0].toUpperCase() + key.slice(1);
+  const shown = (value: unknown, unit = "") => (value === null || value === undefined || value === "" ? "–" : `${value}${unit}`);
   const group = (key: string) => Object.entries((found[key] ?? {}) as Record<string, unknown>);
   return [
-    ...FACTS.filter((key) => key in found).map((key): [string, string] => [named(key), shown(found[key])]),
+    ...FACTS.filter((key) => key in found).map((key): [string, string] => [named(key), shown(found[key], FACT_UNITS[key])]),
     ...group("options").map(([key, value]): [string, string] => [named(key), shown(value)]),
     ...group("specs").map(([key, value]): [string, string] => [key, shown(value)]),
   ];
