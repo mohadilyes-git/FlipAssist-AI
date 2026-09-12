@@ -13,6 +13,10 @@ export const MODEL = "gemma3:4b";
 export const LOGS = path.join(os.homedir(), "Library", "Logs", "FlipAssist");
 // opened from the Dock, a Mac app gets a bare PATH, so Ollama is looked for where it installs
 const OLLAMA_AT = ["/opt/homebrew/bin/ollama", "/usr/local/bin/ollama", "/Applications/Ollama.app/Contents/Resources/ollama"];
+// No prompt cache: it kept up to 8 GB of older prompts' work in memory (half this Mac's) to save a few
+// seconds on going back to an older listing, and helped freeze the Mac on 2 Sep. The last prompt's work
+// is still kept, so drafting the same listing again stays quick, and answers don't change.
+export const OLLAMA_ENV = { OLLAMA_HOST: "127.0.0.1:11434", LLAMA_ARG_CACHE_RAM: "0" };
 
 /** How Gemma came up: ready, or why drafts will use code only. */
 export type Gemma = "ready" | "no ollama" | "no model" | "failed";
@@ -55,7 +59,7 @@ export class Services {
     if (!(await up())) {
       const ollama = OLLAMA_AT.find((at) => existsSync(at));
       if (!ollama) return "no ollama";
-      const started = this.start("ollama", ollama, ["serve"], { OLLAMA_HOST: "127.0.0.1:11434" });
+      const started = this.start("ollama", ollama, ["serve"], OLLAMA_ENV);
       if (!(await until(up, 30, started))) return "failed";
     }
     const tags = (await ask(`${OLLAMA}/api/tags`)) as { models?: { name?: string }[] } | null;
