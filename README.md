@@ -49,36 +49,47 @@ Drafts eBay listings and offer messages for a reseller. Plain code does everythi
   - A draft is "ready" only when nothing is missing.
   - Every attempt goes into a private audit log with its tokens, seconds and cost.
 - **Drafts offer messages in the reseller's own style** (`python -m flip.message`):
+  - **Before the reseller has any past messages, it writes AlertFlip's.** These are the messages the AlertFlip app's AI writes, here written by code with no AI. On Facebook and Gumtree the reseller pays cash and comes to collect; on eBay and Vinted it's paid through the site, so neither is said. For an iPhone 14 Pro at £250 whose listing says "Battery Health: 80%":
+    - lower: *Hi, would you take £235 cash for it? I'm offering that because the battery health is 80%. I can come and collect.*
+    - asking: *Hi, is this still available? I'll pay the full £250 cash and can come and collect. Could you hold it for me?*
+    - more: *Hi, I'll pay £265 cash if you take the listing down and sell it to me. I can come and collect.*
+
+    Before this (12 Sep) the same listing got *Hi, would you take £235 for it? Thanks.* from code, and *I can pay £235* from Gemma, which passed the checks of the time.
   - Three kinds of offer, each priced by code. The AI never picks a price.
     - Lower: 15% under asking by default, rounded down to a tidy number.
     - The asking price.
     - More: asking plus 5%, rounded up to a tidy number and at least one step over.
   - **The listing is read by AI, held to the seller's own words by code.** Gemma reads the flaws, where to collect and whether the seller takes offers; Haiku gets one try when Gemma's reading fails a check. Code then:
     - keeps only quotes that are in the listing word for word (capitals, punctuation, apostrophes and hyphens aside), so a flaw can't be made up;
-    - counts a quote as a flaw only if it says what's wrong in so many words ("crack", "dot", "stiff", "drifts", "not working"...) and the seller doesn't deny it in the same clause. "Black spots" from "*No* black spots on the screen", "there aren't any dots" and "screen burn: none" fail the reading. Facts ("battery health 90%"), praise ("screen is perfect") and asides ("see pics") aren't flaws, and a seller's own story is cut to the flaw ("I dropped it and cracked the back" becomes "cracked the back");
+    - counts a quote as a flaw only if it says what's wrong in so many words ("crack", "dot", "stiff", "drifts", "not working"...) and the seller doesn't deny it in the same clause. "Black spots" from "*No* black spots on the screen", "there aren't any dots" and "screen burn: none" fail the reading. A "no" before a list that ends in "or" denies every item: "no scratches, scuffs or visible damage" has no flaw, while "No charger, cracked screen" still has a cracked screen. Facts ("battery health 90%"), praise ("screen is perfect") and asides ("see pics") aren't flaws, and a seller's own story is cut to the flaw ("I dropped it and cracked the back" becomes "cracked the back");
     - keeps every flaw code finds by itself, judged the same way: AI can add a flaw, never take one away. The more precise words win ("cracked back" over "Good condition apart from cracked back");
     - takes "no offers" only in words that say it ("price is firm"), and never from a listing that takes offers ("open to offers", "offers over £400") or only limits them ("no offers under £250").
 
     With no model, or none that passes, code reads the listing alone. Sellers' words code has no list for ("black dot on the screen", "hinge is stiff") are then missed.
   - **"No offers" never changes the offer.** The reseller still picks lower, asking or more; the draft carries a note with the seller's words to show under the message.
   - What's worth saying with each offer, in the seller's own words:
-    - a flaw ("broken back") is the reason for a lower offer, unless the seller says it's already priced in;
+    - a flaw ("broken back") is the reason for a lower offer, unless the seller says it's already priced in. With no flaw, a phone's battery health of 85% or less is ("I'm offering that because the battery health is 80%"), read by the same number reader as the reseller's notes;
     - at the asking price, the message says the reseller doesn't mind it;
     - good condition with no flaw is the reason for paying more.
-  - If the reseller's past messages usually mention condition, that point goes in by itself. Otherwise the draft leaves it out and asks: *The listing says "Broken back". Mention it as the reason for your offer?*
+  - If the reseller's past messages usually mention condition, that point goes in by itself. Otherwise the draft leaves it out and asks: *The listing says "Broken back". Mention it as the reason for your offer?* With no past messages it's AlertFlip's way: a lower offer gives its reason, and the others ask.
   - A longer message on request. It aims for about twice the reseller's usual length, between 30 and 70 words; three quarters of the aim passes, and it's never shorter than the draft it starts from. It says more only with their usual points and the questions the listing doesn't answer (battery health, unlocked, charger, box and so on, kept in `data/questions.json`). It can start from the draft on screen and keep its wording.
   - A style card worked out by code from the reseller's past messages: their usual greeting, length, questions, emojis and what they mention, plus their phrasebook (the opener, offer and closing they've written in at least two messages).
+  - **Everything it learned is listed, each thing the reseller's to remove**: the greeting, a habit such as paying cash, a sentence, a question asked every time. A removed one is off the style card and out of the past messages the AI is shown as examples, the AI is told never to write it, and a draft that writes it fails the checks. Put back, it's used again. Their messages themselves don't change.
   - **Who writes:**
     - If the reseller's messages repeat, or there are none yet, code writes the message with no AI. It uses their own sentences with the new price, the seller's words for the flaw, and the open questions. A habit is a sentence in at least two messages that names no item and carries no second price. If the seller's words don't fit a sentence it knows ("I dropped it and cracked the back"), or the draft fails a check, the AI writes instead.
     - If their messages vary, the AI writes. It's shown the past messages for the most similar listings, found by meaning (MiniLM embeddings in a Chroma vector database, all on this machine), with their old prices hidden.
-    - The pickup place from the listing goes in ("Can collect from Leeds LS6 today") only when the reseller's own messages talk about collecting.
+    - The pickup place from the listing goes in ("Can collect from Leeds LS6 today") only when the message says it'll collect: the reseller's own messages talk about collecting, or, with none yet, it's a Facebook or Gumtree listing.
+  - **The AI gets AlertFlip's rules too** (the app's own instructions to Claude), and code checks every draft against them, whoever wrote it:
+    - no asking about iCloud, Find My or locks (that's for once the seller replies), no paying before collecting, no "I'll pay" twice, no compliments about the item, at most two questions in a usual message, no emojis unless the reseller uses them;
+    - with no past messages: it opens with "Hi", stays under 250 characters, and says cash and collecting on Facebook and Gumtree; never cash on eBay or Vinted;
+    - nothing the reseller removed from their style.
   - The same checks and fallback as listings, plus checks of their own:
     - the exact offer and no other price;
     - an offer over asking is said, never asked ("would you take £210?" reads like asking for a discount);
     - the condition comes up only when it's meant to, and only as the listing says it: never a flaw it doesn't mention, never "working" for a faulty item. A question like "any scratches?" is fine;
     - nothing said to come with the item (box, charger, unlocked and so on) that the listing doesn't say, and no question the listing already answers;
     - a longer message has enough words;
-    - no promise about collecting, cash or posting that the reseller's own messages don't make ("I can arrange collection quickly" was the AI's most common invention). A "games collection" or a "Collector's Edition" isn't a promise;
+    - no promise about collecting, cash or posting that the reseller's own messages don't make, or, with none yet, AlertFlip's ("I can arrange collection quickly" was the AI's most common invention). A "games collection" or a "Collector's Edition" isn't a promise;
     - a reason about the item uses only the listing's words ("given the stiff hinge" fails on a listing that doesn't say it), and no other model is named;
     - the asking price is never misquoted, and a lower offer never offers more in words ("if not I can pay the full asking price");
     - no made-up story about the reseller in the common shapes: who it's for, why they want it, where they are, that they don't resell. A place name ("I'm in Leeds") still gets through;
@@ -117,6 +128,18 @@ So code writes unless the reseller's messages vary. All three judges agreed on t
 
 Without the checks, Gemma claimed flaws on 2 clean listings and said "no offers" on 21 that never did. The reader needed Haiku once in 24 tries, for 0.005p in total.
 
+**Messages before the reseller has a style (12 Sep).** Giving a lower offer's reason by itself, as AlertFlip does, means every misreading of the listing ends up in the message. So four test agents wrote 651 cases to break it, and a second agent re-ran every failure: 242 confirmed. They included:
+- labels with their answers ("Faults: none", "Scratches – no", "Any damage? Nope", "Scratches ❌") read as flaws;
+- lists the seller denies ("no scratches, dents, or marks", "never been dropped, cracked or repaired");
+- what guards against damage ("scratch resistant", "water damage indicator not triggered");
+- a "no" that took a real flaw with it ("no offers small crack on back");
+- a seller's "battery 80%" that was the charge, not the health;
+- reasons that read badly ("because of the screen cracked", "because of the • Cracked screen");
+- checks that let "transfer now" or "nice console!" through;
+- removed parts of a style that came back through the reseller's old examples.
+
+All 242 are fixed and kept as tests (`tests/test_message_cases.py`, `tests/test_style_book.py`).
+
 ## The API
 
 What AlertFlip calls, from a Supabase function, so the key never sits inside the phone app (`flip/api.py`, FastAPI):
@@ -132,7 +155,8 @@ What AlertFlip calls, from a Supabase function, so the key never sits inside the
 | `POST /listings/draft` | The listing's text, your notes and up to 8 photos (form fields and file uploads) in, the eBay draft out |
 | `POST /drafts/{id}/approve` | What you actually sent or listed, so the results can count how often a draft was right as it was. An approved message also joins the messages your style is learned from |
 | `GET /stats` | The cost meter: drafts, the share done on this machine, cost per 100 drafts, how often a draft was edited before sending |
-| `GET /style` | What it learned from your messages: the style card (habits in 40% or more of them) and the phrasebook (sentences in 2 or more) |
+| `GET /style` | What it learned from your messages: the style card (habits in 40% or more of them), the phrasebook (sentences in 2 or more), and everything it puts in a message, each with whether you still use it |
+| `POST /style/learned` | Remove one thing it learned, or put it back (`key`, `used`). A removed one is never written |
 | `GET`, `POST /style/messages`, `DELETE /style/messages/{id}` | The messages it learns from: list them, add one or many (`title`, `price`, `text`), or delete one. The search for the closest past messages follows at once, so the next draft already uses what you added |
 
 - **Who can call it.** It answers only on this machine (127.0.0.1) unless it's put online on purpose. Every endpoint but `/health` and the `/docs` pages (which only describe the API) needs `FLIP_API_KEY` from `.env` in an `X-API-Key` header. A key under 32 characters, like the example file's, counts as none, and the API then refuses every call.
@@ -148,11 +172,11 @@ curl -s http://127.0.0.1:8000/messages/draft -H "X-API-Key: $FLIP_API_KEY" -H "C
 ## The app
 
 A Mac-style window in AlertFlip's design (`frontend/`, React and TypeScript), light or dark:
-- **Set up your style**, on first launch: reply to 8 listings (each shows one habit, like whether you mention flaws), or paste messages you've already sent. Nothing gets trained: it learns from your own messages with plain code.
+- **Set up your style**, on first launch: reply to 8 listings (each shows one habit, like whether you mention flaws), or paste messages you've already sent. Nothing gets trained: it learns from your own messages with plain code. It ends with everything it learned, each with a Remove button.
 - **AI message:** price cards and a slider, the message with the seller's "no offers" note, what was read, and why, step by step.
 - **List on eBay:** photos, notes, and the draft to check.
 - **Home:** the cost meter, and whether Gemma, the backup and the key are ready.
-- **Your style:** the style card, the phrasebook, and the messages it learns from, each yours to delete.
+- **Your style:** the style card and the phrasebook, each thing yours to remove or use again, and the messages it learns from, each yours to delete.
 
 ```bash
 .venv/bin/uvicorn flip.api:app --port 8000      # the API, in one terminal
@@ -198,7 +222,7 @@ The self-test opens the window, checks every kind of call (files, JSON, photo up
 | Offer price, profit | Code |
 | The listing's flaws, pickup place, "no offers" | The AI, held word for word to the listing by code |
 | What to say about the condition | Code picks it from that reading; the reseller's style or the reseller decides |
-| The offer message's wording | Code, from the reseller's own sentences; the AI only when their messages vary |
+| The offer message's wording | Code: AlertFlip's sentences before the reseller has past messages, then their own; the AI only when their messages vary, or code can't word the flaw |
 
 ## Run it
 

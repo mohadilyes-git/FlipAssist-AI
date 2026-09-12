@@ -92,7 +92,14 @@ export type ItemSpecific = {
 export type Approved = { draft_id: number; edited: boolean; at: string; saved_to_style: boolean };
 
 /** What it learned from your messages, with plain code: nothing gets trained. */
-export type Style = { count: number; traits: { k: string; v: string }[]; phrases: { k: string; v: string }[] };
+/** one thing your style puts in a message; used is false once you've removed it */
+export type Learned = { key: string; what: string; value: string; used: boolean };
+export type Style = {
+  count: number;
+  traits: { k: string; v: string }[];
+  phrases: { k: string; v: string }[];
+  learned: Learned[];
+};
 
 /** One of the messages your style is learned from; price is in pounds, as written ("220"), or empty. */
 export type StyleMessage = {
@@ -177,4 +184,5 @@ export const api = {
   styleMessages: () => call<StyleMessage[]>("/style/messages"),
   addStyleMessages: (messages: NewStyleMessage[]) => call<StyleMessage[]>("/style/messages", json(messages)),
   forgetStyleMessage: (id: string) => call<null>(`/style/messages/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  changeLearned: (key: string, used: boolean) => call<Style>("/style/learned", json({ key, used })),
 };

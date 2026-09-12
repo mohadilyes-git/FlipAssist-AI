@@ -36,12 +36,12 @@ import re
 
 from flip.attempts import try_models
 from flip.catalogue import contains, find_phrase, words
-from flip.checks import NEGATIONS, PROBLEM
-from flip.offers import LISTING_PARTS, read_listing
+from flip.checks import CONDITION_PROMISES, MARKS, NEGATIONS, NOT_A_FLAW, PROBLEM, answered, denied_by, slipped
+from flip.offers import PARTS, read_listing
 from flip.prompts import READING_SCHEMA, READING_SYSTEM, reading_prompt
 
 # the listing's parts: its sentences and clauses, and what follows "apart from" or "except"
-SPLIT = re.compile(LISTING_PARTS.pattern + r"|\b(?:apart from|except(?: for)?|other than|save for)\b", re.IGNORECASE)
+SPLIT = PARTS
 # where a clause starts, for whether a "no" before a flaw belongs to it: "No charger and the hinge is stiff"
 CLAUSE_WORDS = {"and", "but", "plus", "as", "because", "since", "though", "although", "however", "whereas", "while",
                 "which"}
@@ -51,6 +51,25 @@ MAX_BEFORE = 6  # words back a "no" can still deny a flaw
 NEGATORS = NEGATIONS | {"zero", "free", "arent", "isnt", "doesnt", "hasnt", "havent", "dont", "wont", "cant", "wasnt",
                         "werent", "didnt", "never", "none", "nothing", "nor"}
 DENIED_AFTER = {"none", "no", "nil", "na", "nope"}  # "Screen burn: none"
+# words that make a part a statement of its own, not one more item in a list: "screen has a crack or two"
+LIST_BREAKS = {"is", "are", "was", "were", "be", "been", "being", "has", "have", "had", "does", "do", "did", "comes",
+               "come", "came", "works", "work", "working", "needs", "need", "got", "gets", "get", "looks", "look",
+               "shows", "show", "there", "but", "though", "although", "however", "which", "apart",
+               "except", "still", "just", "only"}
+# an item that opens with one of these is a thing of its own: "no scratches, a small dent on the back",
+# "no cracks, light scratches or scuffs on the back"
+ITEM_OPENERS = {"a", "an", "one", "some", "the", "few", "couple", "slight", "small", "minor", "tiny", "light", "faint",
+                "hairline", "odd", "little", "deep", "bit"}
+# what may come between a "no" and the first thing it denies: "never BEEN dropped", "doesn't HAVE ANY
+# scratches", "not A SINGLE scratch", "free FROM scratches", "no VISIBLE scratches"
+AFTER_DENIAL = {"been", "had", "have", "has", "got", "any", "a", "an", "single", "one", "even", "ever", "visible",
+                "noticeable", "obvious", "major", "signs", "sign", "of", "from", "so", "much"}
+# a list with "and" denies its items only when the first is damage itself: "no scratches, scuffs and dents",
+# "never dropped, scratched and dented", never "no charger, cracked screen and dents"
+DAMAGE_EVENTS = {"dropped", "repaired", "opened", "damaged", "smashed", "water"}
+# "or" that doesn't close a list: "a dent or two", "a week or so"
+NOT_A_CHOICE = {"two", "three", "so", "2", "3", "more"}
+MAX_ITEM = 4  # words of one item in a list: "visible damage", not a sentence
 # a seller's own story, cut to the flaw: "I dropped it and cracked the back"
 FIRST_PERSON = re.compile(r"\b(?:I|I'?ve|I'?m|I'?d|[Mm]y|[Mm]ine|[Ww]e|[Ww]e'?ve|[Oo]ur)\b")
 # "no offers" in words that say it...
@@ -113,14 +132,30 @@ def parts_of(text):
     return [part for part in found if part]
 
 
+# a typed mark word with one slip still says what's wrong: "few scraches", "craked screen"
+MARK_WORDS = {word for kind in MARKS for word in CONDITION_PROMISES[kind]}
+
+
+def problems_at(piece):
+    """Where in a quote (its plain_words) each word that says something's
+    wrong is: typos allowed ("scraches"), a guard against one or a part's
+    name not ("scratch resistant", "Intel chip")."""
+    clean = NOT_A_FLAW.sub(lambda m: " " * len(m.group()), piece)
+    found = {len(plain_words(clean[:m.start()])) for m in PROBLEM.finditer(clean)}
+    found |= {n for n, word in enumerate(plain_words(clean)) if slipped(word) in MARK_WORDS}
+    return sorted(found)
+
+
 def judge(piece, text):
     """Rule 2 for one piece of a flaw quote: "flaw", "denied" (the seller
     says it isn't so) or "no" (it doesn't say anything's wrong, or isn't in
-    the listing as one part)."""
+    the listing as one part). Each word in it that says something's wrong
+    is judged on its own: "no cracks only light scratches" is a flaw."""
     piece_words = plain_words(piece)
-    problem = PROBLEM.search(piece)
-    if not piece_words or not problem or len(piece_words) > MAX_FLAW:
+    at_words = problems_at(piece)
+    if not piece_words or not at_words or len(piece_words) > MAX_FLAW:
         return "no"
+    text = answered(text)  # "Faults: none" -> "no Faults"
     part = next((p for p in parts_of(text) if contains(plain_words(p), piece_words)), None)
     if part is None:
         return "no"
@@ -128,15 +163,70 @@ def judge(piece, text):
     at = find_phrase(part_words, piece_words)[0]
     # the words of its own clause before it in the listing, then the quote's own words before the problem word
     head = " ".join(part_words[:at]).replace("no longer", " ").split()  # "no longer needed" denies nothing here
-    starts = [i for i, w in enumerate(head) if w in CLAUSE_WORDS]
-    before = head[starts[-1] + 1:] if starts else head
-    own = plain_words(piece[:problem.start()])  # "Hinge isn't loose": the quote's own words before the problem
     after = part_words[at + len(piece_words):at + len(piece_words) + 2]
-    # "scratch free", "scratch-free screen": free of it
-    following = (plain_words(piece[problem.end():]) + after)[:1]
-    if set(before[-MAX_BEFORE:]) & NEGATORS or set(own) & NEGATORS or set(after) & DENIED_AFTER or following == ["free"]:
+    if set(after) & DENIED_AFTER or in_denied_list(part, text):
         return "denied"
-    return "flaw"
+    for n in at_words:
+        # the words leading to it in its own clause: the listing's before the quote, then the quote's own
+        # ("Hinge isn't loose"), from the last clause word on ("No charger AND the back is cracked")
+        lead = head[-MAX_BEFORE:] + piece_words[:n]
+        lead = lead[max((k + 1 for k, w in enumerate(lead) if w in CLAUSE_WORDS), default=0):]
+        following = (piece_words[n + 1:] + after)[:1]  # "scratch free", "scratch-free screen": free of it
+        if not denied_by(lead, NEGATORS) and following != ["free"]:
+            return "flaw"
+    return "denied"
+
+
+def in_denied_list(part, text):
+    """"With no scratches, scuffs or visible damage": a "no" before the first
+    item of a list that ends in "or" (or "nor") denies every item, so the
+    part "scuffs or visible damage" is no flaw; so does one that ends in
+    "and" or "&" when its first item is damage ("no scratches, scuffs and
+    dents"). Otherwise a comma only lists things ("No charger, cracked
+    screen" still has a cracked screen), and an item that says something of
+    its own ("a small dent on the back", "screen has a crack or two") isn't
+    one more item of the list."""
+    target = plain_words(part)
+    is_item = lambda seg: len(seg) <= MAX_ITEM and (not seg or seg[0] not in ITEM_OPENERS) and not set(seg) & LIST_BREAKS
+    closes = lambda seg: any(w in ("or", "nor") and seg[n + 1:n + 2] != [] and seg[n + 1] not in NOT_A_CHOICE
+                             for n, w in enumerate(seg))
+    closes_with_and = lambda raw: bool(re.search(r"(?:^|\s)(?:and|&)\s+\S", raw))
+    for sentence in re.split(r"[.!?;\n]+", answered(text)):
+        raw = sentence.split(",")
+        segments = [plain_words(s) for s in raw]
+        for i in range(1, len(segments)):
+            if not contains(segments[i], target):
+                continue
+            # from this item on, every segment up to the one that closes the list is a bare item
+            end = next((j for j in range(i, len(segments)) if closes(segments[j]) or closes_with_and(raw[j])), None)
+            if end is None or not all(is_item(item) for seg in segments[i:end + 1] for item in list_items(seg)):
+                continue
+            # back over bare items ("no scratches, scuffs, dents or marks") to the first, which has the "no"
+            k = i - 1
+            while k > 0 and not set(segments[k]) & NEGATORS and is_item(segments[k]):
+                k -= 1
+            head = segments[k]
+            denial = [n for n, w in enumerate(head) if w in NEGATORS]
+            first = head[denial[-1] + 1:] if denial else []
+            while first and first[0] in AFTER_DENIAL:
+                first = first[1:]
+            if not first or not is_item(first):
+                continue
+            if closes(segments[end]) or PROBLEM.search(" ".join(first)) or set(first) & DAMAGE_EVENTS:
+                return True
+    return False
+
+
+def list_items(segment):
+    """A segment's items, split at "or" or "and": "dents or marks on the screen" -> [dents], [marks on the screen]."""
+    items, item = [], []
+    for w in segment:
+        if w in ("or", "nor", "and"):
+            items.append(item)
+            item = []
+        else:
+            item.append(w)
+    return items + [item]
 
 
 def trimmed(flaw):
@@ -212,7 +302,8 @@ def place(quote):
     """The place's name in a pickup quote, or "" if there's none: "Collection
     only, Leeds LS6" -> "Leeds LS6", "collection from leeds" -> "Leeds". Not
     a day or a time, a way of buying ("cash on collection") or a sentence."""
-    found = re.sub(r"^[^A-Za-z0-9]+", "", quote.replace("(", " ").replace(")", " ").strip())
+    found = re.sub(r"\s+", " ", re.sub(r"^[^A-Za-z0-9]+", "", quote.replace("(", " ").replace(")", " ").strip()))
+    found = re.sub(r"\b(St|Gt|Lt|Upr|Lwr)\.(?= [A-Z])", r"\1", found)  # "St. Albans" is no sentence's end
     found = PLACE_END.sub("", PLACE_LEAD.sub("", found)).strip(" .,;:!-–")
     if not found or len(found.split()) > MAX_PLACE:
         return ""

@@ -10,7 +10,7 @@ import json
 import re
 
 from flip.catalogue import DATA
-from flip.checks import MARKS, PROMISES, REASON, promises_in
+from flip.checks import MARKS, PROMISES, REASON, prices_in, promises_in
 from flip.offers import condition_said, read_listing
 
 MAX_QUESTIONS = 3  # a longer message, not a questionnaire
@@ -82,6 +82,9 @@ def check_no_answered_questions(message, text):
     for sentence in re.split(r"(?<=[.!?])\s+|\n+", message.strip()):
         if sentence.rstrip().endswith("?"):
             question = REASON.split(sentence)[0]  # "would you take £170 as it's boxed?" asks only the first part
+            if prices_in(question):  # the offer names the item ("for the booster box?"): only what follows asks
+                question = (re.split(r",|\band\b", question[question.index("£"):] if "£" in question else question,
+                                     maxsplit=1) + [""])[1]
             asked |= {key for key in promises_in(question) if key in PROMISES}
     if asked & done:
         return [f"the message asks what the listing already says: {', '.join(sorted(asked & done))}"]

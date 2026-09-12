@@ -4,7 +4,8 @@ one good and many bad, each bad one failing for the right reason."""
 import pytest
 
 from flip.catalogue import fill_from_catalogue, load_catalogue, load_conditions
-from flip.checks import (check_listing_answer, check_message, check_no_unasked_promises, has_fault, numbers_in,
+from flip.checks import (check_listing_answer, check_message, check_message_manner, check_no_unasked_promises, has_fault,
+                         numbers_in,
                          offer_asked, promised_in, promises_in, sources_text)
 
 CATALOGUE = load_catalogue()
@@ -869,3 +870,48 @@ def test_a_fault_that_comes_and_goes_is_a_fault(fault):
                                   "Turns on fine, works perfectly"])
 def test_no_fault_said_in_everyday_words_is_no_fault(fine):
     assert not has_fault(fine)
+
+
+# ── AlertFlip's rules for a message to a seller ─────────────────────────────
+
+@pytest.mark.parametrize("message, problem", [
+    ("Hi, would you take £235? Is it signed out of iCloud?", 'asks about iCloud or locks, which is for once the '
+                                                            'seller replies: "iCloud"'),
+    ("Hi, would you take £235? I can send a deposit now.", 'offers to pay before collecting: "deposit"'),
+    ("Hi, would you take £235? I can pay you now if you hold it.", 'offers to pay before collecting: "pay you now"'),
+    ("Hi, I'll pay £250. I'll pay cash.", "says \"I'll pay\" twice"),
+    ("Hi, it looks lovely. Would you take £235?", 'compliments the item: "looks lovely"'),
+    ("Hi, would you take £235? 😊", "has an emoji, which your messages don't use"),
+    ("Hi, is it available? Would you take £235? Does it have a box?", "asks 3 questions: at most 2"),
+])
+def test_alertflips_rules_hold_for_every_message(message, problem):
+    assert check_message_manner(message) == [f"the message {problem}"]
+
+
+def test_can_collect_straight_away_is_no_payment():
+    assert check_message_manner("Hi, would you take £235? I can collect straight away.") == []
+
+
+def test_before_you_have_past_messages_a_message_is_alertflips():
+    facebook = {"greeting": "Hi", "short": True, "must": ["cash", "collecting"]}
+    assert check_message_manner("Hi, would you take £235 cash for it? I can come and collect.", **facebook) == []
+    # Gemma's draft of 12 Sep for an iPhone 14 Pro, which passed the old checks
+    assert check_message_manner("I can pay £235", **facebook) == [
+        'the message doesn\'t open with "Hi"',
+        "the message doesn't say you'll pay cash and you'll come and collect: on Facebook and Gumtree it does"]
+    long = "Hi, would you take £235 cash? I can come and collect. " + "It's a lovely day for it. " * 9
+    assert check_message_manner(long, **facebook)[0].startswith(f"the message is {len(long.strip())} characters")
+    assert check_message_manner("Hi, would you take £235 cash?", cash=False) == [
+        "the message offers cash, but on eBay and Vinted you pay through the site"]
+
+
+def test_your_own_greeting_counts_once_you_have_one():
+    assert check_message_manner("Alright mate, would you take £235?", greeting=True) == []
+    assert check_message_manner("Would you take £235?", greeting=True) == ["the message doesn't open with a greeting"]
+    assert check_message_manner("Would you take £235?") == []  # your messages don't open with one
+
+
+def test_good_condition_given_as_the_reason_to_pay_more_is_no_compliment():
+    assert check_message_manner("Hi, I can pay £265, as it's in great condition.") == [
+        'the message compliments the item: "great condition"']
+    assert check_message_manner("Hi, I can pay £265, as it's in great condition.", praise=True) == []

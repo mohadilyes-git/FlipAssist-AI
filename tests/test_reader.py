@@ -313,3 +313,24 @@ def test_a_screen_that_turns_on_and_off_is_read_as_a_flaw_said_whole():
     text = ("iphone 13 Blue. 128gb\nUpgraded my phone hence the sale\nOriginal screen one issue with the screen it turns "
             "on and off sometimes\nBattery 91% health")
     assert code_reading(text)["flaws"] == ["one issue with the screen it turns on and off"]
+
+
+@pytest.mark.parametrize("text, flaws", [
+    # a "no" before a list that ends in "or" denies every item (the iPhone 14 Pro AlertFlip wrote for, 12 Sep)
+    ("In great condition, with no scratches, scuffs or visible damage!", []),
+    ("No scratches, scuffs, dents or marks on the screen", []),
+    ("no scratches, dents nor scuffs", []),
+    # without the "or", a comma lists things; and an item that says something of its own stands
+    ("No charger, cracked screen", ["cracked screen"]),
+    ("No box, screen has a crack or two", ["screen has a crack or two"]),
+    ("no scratches, a small dent or two on the corner", ["a small dent or two on the corner"]),
+    ("No scratches, small dent on the back", ["small dent on the back"]),
+])
+def test_a_no_before_a_list_denies_every_item_in_it(text, flaws):
+    assert code_reading(text)["flaws"] == flaws
+
+
+def test_the_ais_reading_of_a_denied_list_item_is_dropped():
+    text = "Excellent condition, with no scratches, scuffs or visible damage!"
+    assert check_reading({"flaws": ["scuffs or visible damage"], "pickup": "", "no_offers": ""}, text) == [
+        "the reading gives as flaws what the seller says isn't so: 'scuffs or visible damage'"]

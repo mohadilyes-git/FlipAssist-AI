@@ -179,11 +179,27 @@ class Row(BaseModel):
     v: str
 
 
+class Learned(BaseModel):
+    """One thing your style puts in a message, yours to keep or remove."""
+    key: str = Field(description="what to send to /style/learned to remove it or put it back")
+    what: str = Field(description='"Opens with", "Mentions", "Says the flaw", "Emojis", "Usual opener", "Offer '
+                                  'sentence", "Closing" or "Asks every time"')
+    value: str = Field(description="the greeting, habit, sentence or question, the price as …")
+    used: bool = Field(description="false once you've removed it: then no draft writes it")
+
+
 class Style(BaseModel):
     """What it learned from your messages, with plain code: nothing gets trained."""
     count: int = Field(description="how many of your messages it learns from")
     traits: list[Row] = Field(description="the style card: habits in 40% or more of your messages")
     phrases: list[Row] = Field(description="the phrasebook: sentences in 2 or more of your messages, the price as …")
+    learned: list[Learned] = Field(default=[], description="everything it puts in a message, removed ones included")
+
+
+class LearnedUse(BaseModel):
+    """Keep or remove one thing your style learned."""
+    key: str = Field(min_length=1, max_length=2100, description="its key, from /style")
+    used: bool = Field(description="false to remove it, true to put it back")
 
 
 class NewMessage(BaseModel):
@@ -486,7 +502,19 @@ def your_style(book: StyleBook = Depends(style)):
     more of them) and the phrasebook (sentences in 2 or more). Plain code."""
     card = book.card()
     return Style(count=card.get("messages", 0), traits=[Row(k=k, v=v) for k, v in traits(card)],
-                 phrases=[Row(k=k, v=v) for k, v in phrase_rows(card)])
+                 phrases=[Row(k=k, v=v) for k, v in phrase_rows(card)],
+                 learned=[Learned(**row) for row in book.learned()])
+
+
+@app.post("/style/learned", response_model=Style, dependencies=[Depends(key)])
+def use_learned(change: LearnedUse, book: StyleBook = Depends(style)):
+    """Keep or remove one thing your style learned (a greeting, a habit such
+    as paying cash, a sentence, a question you ask every time). A removed one
+    is off your style card, the AI is told never to write it, and no draft
+    that writes it passes the checks. Answers your style as it is now."""
+    if not book.use(change.key, change.used):
+        raise HTTPException(404, "your style hasn't learned that" if not change.used else "that isn't removed")
+    return your_style(book)
 
 
 @app.get("/style/messages", response_model=list[StyleMessage], dependencies=[Depends(key)])

@@ -3,9 +3,10 @@
 // with plain code (a style card, a phrasebook, and the 3 closest past messages
 // as examples for each new listing): nothing gets trained.
 import { useState } from "react";
-import { api, type Kind, type NewStyleMessage, type Style } from "../api";
+import { api, type Kind, type Learned, type NewStyleMessage, type Style } from "../api";
 import { lowerPrice, money, morePrice } from "../prices";
 import { CheckIcon, CrossIcon, Logo, PlusIcon } from "../ui";
+import { habitsOf, keepOrRemove, LearnedRow, lengthOf, sentencesOf } from "./StyleScreen";
 
 export type SetupStep = "welcome" | "cards" | "paste" | "result";
 
@@ -184,16 +185,30 @@ export function Setup({ step, go, style, onLearned, onStart }: Props) {
   }
 
   if (step === "result") {
+    // everything it learned, each yours to remove before you start: a removed one is never written
+    const length = lengthOf(style);
+    const rows = [...habitsOf(style), ...sentencesOf(style)];
+    const change = async (row: Learned) => {
+      setError("");
+      try {
+        await keepOrRemove(row, onLearned);
+      } catch (e) {
+        setError((e as Error).message);
+      }
+    };
     return (
       <div className="centre">
         <div className="welcome result">
           <span className="check-circle"><CheckIcon size={28} stroke={2.6} /></span>
           <p className="caps">Learned from {learned} {learned === 1 ? "message" : "messages"}</p>
           <h1 className="big-title">Your style</h1>
-          <div className="hero result-card">
-            {style?.traits.length ? style.traits.map((t) => (
-              <p className="trait" key={t.k}><span>{t.k}</span><span>{t.v}</span></p>
-            )) : <p className="trait"><span>Nothing to learn from yet: add messages any time from Your style</span></p>}
+          {rows.length > 0 && <p className="sub">This is what it'll put in your messages. Remove anything you don't want.</p>}
+          {error && <p className="error" role="alert">{error}</p>}
+          <div className="hero result-card" aria-label="What it learned">
+            {length && <p className="trait"><span>{length.k}</span><span>{length.v}</span></p>}
+            {rows.map((row) => <LearnedRow key={row.key} row={row} onUse={(r) => void change(r)} kind="trait" />)}
+            {!length && !rows.length &&
+              <p className="trait"><span>Nothing to learn from yet: add messages any time from Your style</span></p>}
           </div>
           <p className="sub">Every message you approve teaches it a bit more.</p>
           <button type="button" className="main full" onClick={onStart}>Start</button>

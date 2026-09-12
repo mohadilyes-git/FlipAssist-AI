@@ -19,22 +19,40 @@ must say the point, not ask it. Asking about the condition is otherwise fine
 import re
 
 from flip.catalogue import contains, words
-from flip.checks import (FAULTS, LEVELS, MARKS, NEGATIONS, NEW_SEALED, PROBLEM, clauses, has_fault, prices_in,
-                         promises_in, stated_parts)
+from flip.checks import (FAULTS, LEVELS, MARKS, NEGATIONS, NEW_SEALED, NOT_A_FLAW, PROBLEM, answered, clauses, has_fault,
+                         prices_in, promises_in, stated_parts)
 
 # the seller says the price already allows for the flaw: a lower offer mustn't use it again
 PRICED_IN = re.compile(r"\b(?:hence (?:the |why )?(?:the |low |cheap )?price|priced accordingly|priced to reflect|"
-                       r"price reflects|reflected in (?:the )?price|taken into account|"
-                       r"why it (?:is )?(?:so )?cheap|hence (?:so )?cheap)\b")
+                       r"price reflects|reflected in (?:the )?price|taken into account in (?:the )?price|"
+                       r"why it (?:is |s )?(?:so )?(?:cheap|priced low)|hence (?:so )?cheap|price (?:is )?reduced|"
+                       r"reduced (?:price|to reflect|for)|priced (?:it )?(?:low|lower|cheap|cheaper|to sell)|"
+                       r"(?:selling|sold|going|letting it go) (?:it )?(?:for )?cheap(?:er|ly)?|"
+                       r"cheap(?:er)? (?:than (?:others|usual|most) )?(?:due to|because of|cos|as)|"
+                       r"(?:low|cheap) price (?:due to|because of|cos|as))\b")
 # good condition in so many words: below "excellent" and "flawless", which the checks already read
 GOOD = re.compile(r"\b(?:good|great|nice|lovely|decent|fab|fantastic|brilliant|top) condition\b"
                   r"|\bcondition (?:is )?(?:very |really )?(?:good|great|nice|lovely)\b"
                   r"|\b(?:good|great|decent|lovely|nice|mint) nick\b|\b(?:great|good) shape\b|\bwell looked after\b"
-                  r"|\b(?:barely|hardly) used\b|\b(?:not|isn t) a (?:mark|scratch|scuff|dent) on it\b")
+                  r"|\b(?:barely|hardly) used\b|\b(?:not|isn t) a (?:mark|scratch|scuff|dent) on it\b"
+                  r"|\b(?:hardly|barely) (?:a|an|any) (?:mark|scratch|scuff|dent|chip)\w*")
 # damage the checks' mark words don't cover: "cosmetic damage", "smashed screen"
 DAMAGE = re.compile(r"\b(?:damage|damaged|smashed|shattered|bent|torn|ripped|stained|faded|peeling)\b")
 GOOD_LEVELS = ["good", "excellent", "flawless"]  # each one backs the ones before it
 FLAWS = MARKS | {"fault", "damage"}
+# faults sellers write that a reseller's notes rarely do: read in a listing for a message, never for a
+# listing's own condition (flip.checks.has_fault, where "battery needs replacing" isn't "for parts")
+SELLER_FAULTS = re.compile(r"\b(?:no (?:picture|signal|service|display|image|face id|touch id)|blacklisted|"
+                           r"needs? (?:replacing|a new \w+|repair\w*|fixing)|drains? (?:fast|quickly|really fast)|"
+                           r"swollen|lifting|crackl\w*|buzz\w*|rattl\w*|distort\w*|"
+                           r"(?:left|right|one) (?:airpod|earbud|bud|joy ?con|controller|pad)s? "
+                           r"(?:is |are )?missing)\b")
+# a listing's parts: its sentences and clauses, and what follows "apart from", "except" or "bar"
+PARTS = re.compile(r"[,.;!?\n()|•►▪→\U0001F300-\U0001FAFF☀-➿]|\s[-–—]\s|\b(?:but|which|though|although|otherwise|however|hence)\b"
+                   r"|\b(?:apart from|except(?: for)?|other than|save for)\b"
+                   r"|\b(?:only|just)(?=\s+(?:a|an|one|some|the|few|couple|light|minor|small|tiny|slight|faint|"
+                   r"hairline|odd|little)\b)"
+                   r"|\bbar(?=\s+(?:a|an|one|some|the|small|tiny|minor|light|few)\b)", re.IGNORECASE)
 # "I don't mind the scratch" isn't "no scratch": the "don't" is about you, not the item
 ATTITUDE = re.compile(r"\b(?:don'?t|do not|doesn'?t|does not)\s+(?:mind|bother me|matter)\b"
                       r"|\bnot (?:too |that |really |at all )?(?:bothered|fussed|worried)(?: about| by)?\b"
@@ -56,10 +74,12 @@ HYPOTHETICAL = re.compile(r"\b(?:if|whether|unless)\b.*|\band (?:is|are|does|do|
 CONDITIONAL = re.compile(r"\b(?:if|unless|whether|as long as|provided|assuming)\b.*", re.IGNORECASE)
 # "a time that works for you" isn't a claim that the item works
 WORKS_FOR = re.compile(r"\bwork(?:s|ing)? (?:for|with) (?:you|me|us)\b", re.IGNORECASE)
-# a listing read one part at a time: sentences, and what follows "but", "which"...
-LISTING_PARTS = re.compile(r"[,.;!?\n()]|\s[-–—]\s|\b(?:but|which|though|although|otherwise|however|hence)\b",
-                           re.IGNORECASE)
 MAX_QUOTE = 8  # words of the seller's to show: enough to recognise, short enough to read
+# sayings with a flaw's word in them: "on the spot", "drop me a line"
+IDIOMS = re.compile(r"\b(?:on the spot|spot on|hit the spot|drop (?:me |us )?a line|in line with|bottom line|line up|"
+                    r"online|crack on|cracking on)\b", re.IGNORECASE)
+JOINING = {"and", "but", "or", "so", "then", "also", "plus", "&", "+"}  # never the first word of a flaw
+DANGLING = {"of", "the", "a", "an", "on", "in", "at", "to", "with", "and", "or", "near", "by", "from", "for"}  # nor the last
 MAX_FAULT_QUOTE = 12  # words, when a fault phrase runs past MAX_QUOTE
 # words that don't say which flaw it is: "a bit of", "on the"
 SMALL_WORDS = {"a", "an", "the", "on", "in", "of", "to", "at", "it", "is", "its", "has", "have", "with", "and",
@@ -85,6 +105,9 @@ REASON_FILLER = SMALL_WORDS | {"it", "its", "s", "is", "are", "be", "been", "in"
                                "sold", "already", "mentions", "great", "hear", "fine", "by", "me", "state", "phone",
                                "console", "device", "handset", "unit", "product", "thing", "works", "working", "ok",
                                "okay", "happy", "glad", "good"}
+# battery health at or under this is a reason to offer less: resellers price a phone down below 86%, and
+# under 80% the iPhone itself says the battery needs a service
+LOW_BATTERY = 85
 ASK = {"lower": "Mention it as the reason for your offer?",
        "asking": "Say you don't mind it?",
        "more": "Give that as the reason you're paying more?"}
@@ -100,15 +123,17 @@ def unnegated(pattern, text):
     return False
 
 
-def condition_said(text):
+def condition_said(text, typos=False):
     """What a text says about the item's condition: kinds of flaw ("scratch",
     "crack", "fault", "damage"...) and how good it calls it ("good",
-    "excellent", "flawless"). "No scratches" says neither."""
-    text = ATTITUDE.sub(" fine with ", re.sub(r"[’‘ʼ]", "'", text))
-    claims = promises_in(text)
+    "excellent", "flawless"). "No scratches" says neither, and nor does a
+    guard against them ("scratch resistant") or a part's name ("Intel chip").
+    typos: read as people type, for the seller's listing ("few scraches")."""
+    text = NOT_A_FLAW.sub(" ", ATTITUDE.sub(" fine with ", re.sub(r"[’‘ʼ]", "'", text)))
+    claims = promises_in(text, typos)
     said = {kind for kind in MARKS if "yes" in claims.get(kind, set())}
     said |= {key.split()[0] for key, saids in claims.items() if key.split()[0] in LEVELS and "yes" in saids}
-    if has_fault(text):
+    if has_fault(text) or unnegated(SELLER_FAULTS, text):
         said.add("fault")
     if unnegated(DAMAGE, text):
         said.add("damage")
@@ -135,7 +160,15 @@ def quote(part, kinds):
         reach = max((m.end() for m in FAULTS.finditer(whole) if m.start() < len(said) < m.end()), default=0)
         while reach and cut < len(tokens) and len(plain(cut)) < reach:
             cut += 1
+        # ...and so is a place the cut would end on "of the": "...on the bottom left of the screen"
+        while cut < min(len(tokens), start + MAX_FAULT_QUOTE) and tokens[cut - 1].lower() in DANGLING:
+            cut += 1
         tokens = tokens[start:cut]
+        # the word kept before the flaw is for "small crack", not "and cracked the back"
+        while len(tokens) > 1 and tokens[0].lower().strip(",") in JOINING:
+            tokens = tokens[1:]
+        while len(tokens) > 1 and tokens[-1].lower() in DANGLING:
+            tokens = tokens[:-1]
     return " ".join(tokens).strip(" *-–—:")
 
 
@@ -144,10 +177,10 @@ def read_listing(text):
     words: {"flaws": ["Broken back"], "good": [], "priced_in": False}. A part
     with a flaw is a flaw even when it also praises: "good condition apart
     from a scratch"."""
-    text = re.sub(r"\bcondition\s*[:\-–—]\s*", "condition ", text, flags=re.IGNORECASE)  # "Condition: good"
+    text = answered(re.sub(r"\bcondition\s*[:\-–—]\s*", "condition ", text, flags=re.IGNORECASE))  # "Condition: good"
     found = {"flaws": [], "good": [], "priced_in": bool(PRICED_IN.search(" ".join(words(text))))}
-    for part in LISTING_PARTS.split(text):
-        said = condition_said(part)
+    for part in PARTS.split(text):
+        said = condition_said(part, typos=True)
         if said & FLAWS:
             found["flaws"].append(quote(part, said & FLAWS))
         elif said & set(GOOD_LEVELS):
@@ -155,21 +188,51 @@ def read_listing(text):
     return found
 
 
-def point_for(kind, text, flaws=None):
+def point_for(kind, text, flaws=None, battery=None):
     """What's worth saying with this kind of offer, read from the listing
-    (title and description), or None: {"about": "flaw" or "condition",
-    "says": up to two parts of the listing, in the seller's words}. flaws:
-    the listing's flaws as flip.reader read them, in place of code's own."""
+    (title and description), or None: {"about": "flaw", "condition" or
+    "battery", "says": up to two parts of the listing, in the seller's words}.
+    flaws: the listing's flaws as flip.reader read them, in place of code's
+    own. battery: the phone's battery health the listing gives ("80", read
+    by flip.numbers): with no flaw, LOW_BATTERY or under is the reason for a
+    lower offer, as AlertFlip gives it ("the battery health is 80%")."""
     read = read_listing(text)
     if flaws is not None:
         read["flaws"] = list(flaws)
     if read["flaws"] and (kind == "asking" or (kind == "lower" and not read["priced_in"])):
         about, says = "flaw", read["flaws"]
+    elif kind == "lower" and battery and float(battery) <= LOW_BATTERY and not read["priced_in"]:
+        return {"about": "battery", "says": [f"battery health {battery}%"], "battery": battery}
     elif kind == "more" and read["good"] and not read["flaws"]:
         about, says = "condition", read["good"]
     else:
         return None
-    return {"about": about, "says": list({s.lower(): s for s in says}.values())[:2]}  # the same words once
+    return {"about": about, "says": once_each(says)[:2]}
+
+
+def once_each(says):
+    """Each flaw once: the title and the description often say the same one
+    ("iPhone 13 128GB cracked back" and "Cracked back", "Cracked Screen" and
+    "Small crack on the screen"). Of two that say the same, the later
+    (the description's) stays, unless only it has the model's numbers."""
+    kept = []
+    for quote in says:
+        same = next((k for k in kept if k.lower() == quote.lower() or same_flaw(k, quote)), None)
+        if same is None:
+            kept.append(quote)
+        elif not (re.search(r"\d", quote) and not re.search(r"\d", same)):
+            kept[kept.index(same)] = quote
+    return kept
+
+
+def same_flaw(a, b):
+    """Whether two quotes say the same flaw: the same kinds of it, and the key
+    words of one all in the other, or sharing the part ("screen cracked" and
+    "The screen is cracked")."""
+    keys_a, keys_b = key_words(a), key_words(b)
+    if not keys_a or not keys_b or condition_said(a) != condition_said(b):
+        return False
+    return keys_a <= keys_b or keys_b <= keys_a or len(keys_a & keys_b) >= 2
 
 
 def quoted(point):
@@ -241,7 +304,7 @@ NEGATED_BEFORE = re.compile(r"\b(?:no|not|never|without|zero|cannot|(?:is|are|wa
                             r"n'?t)\s+(?:\w+\s+){0,2}$", re.IGNORECASE)
 
 
-def check_reasons(message, listing_text):
+def check_reasons(message, listing_text, point=None):
     """What a message says about the item uses only the listing's words for
     what's wrong with it: "given the stiff hinge" or "Shame about the stiff
     hinge." fails on a listing that doesn't say "stiff". Only words that say
@@ -251,14 +314,14 @@ def check_reasons(message, listing_text):
     check_condition_talk's, reported there. A message also never copies the
     seller's own story ("I dropped it and cracked the back")."""
     listed = {w[:5] for w in words(listing_text)}
-    message = re.sub(r"[’‘ʼ]", "'", message)
+    message = IDIOMS.sub(" ", re.sub(r"[’‘ʼ]", "'", message))  # "pay cash on the spot" names no spot
     said = stated_parts(message) + [m.group("reason") for m in REASON_SAID.finditer(message)]
     unbacked = [m.group() for part in said for m in PROBLEM.finditer(part)
                 if not condition_said(m.group()) and not {w[:5] for w in words(m.group())} <= listed
                 and not NEGATED_BEFORE.search(part[:m.start()])]
     problems = [f"the message says what's wrong with it in words the listing doesn't: "
                 f"{', '.join(dict.fromkeys(w.lower() for w in unbacked))}"] if unbacked else []
-    story = copied_story(message, listing_text)
+    story = copied_story(message, listing_text, allowed=point["says"] if point else ())
     if story:
         problems.append(f"the message copies the seller's own story: \"{story}\"")
     return problems
@@ -279,17 +342,21 @@ def copied_question(message, questions, allowed_text, run=4):
     return ""
 
 
-def copied_story(message, listing_text, run=4):
+def copied_story(message, listing_text, run=4, allowed=()):
     """Words the seller wrote about themselves ("I dropped it and cracked the
-    back") that a message repeats, at least run words of it in a row."""
+    back") that a message repeats, at least run words of it in a row. The
+    flaw the message is meant to say is allowed (allowed: its quotes), even
+    from a sentence with "my" in it ("selling my iphone, small crack on back")."""
     message_words = words(message)
+    said = [words(quote) for quote in allowed]
     for sentence in re.split(r"(?<=[.!?])\s+|\n+", listing_text):
         if not re.search(r"\b(?:I|I'?ve|I'?m|[Mm]y|[Ww]e|[Oo]ur)\b", sentence):
             continue
         told = words(sentence)
         for start in range(len(told) - run + 1):
-            if contains(message_words, told[start:start + run]):
-                return " ".join(told[start:start + run])
+            piece = told[start:start + run]
+            if contains(message_words, piece) and not any(contains(quote, piece) for quote in said):
+                return " ".join(piece)
     return ""
 
 
@@ -344,4 +411,4 @@ def check_condition_talk(message, listing_text, point, mention, kind="lower", of
     unbacked = sorted(unbacked)
     if unbacked:
         problems.append(f"the message says things about the condition the listing doesn't: {', '.join(unbacked)}")
-    return problems + check_reasons(message, listing_text)
+    return problems + check_reasons(message, listing_text, point if mention else None)

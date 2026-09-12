@@ -12,7 +12,7 @@ from flip.message_drafter import draft_message, item_name, longer_words
 from flip.offers import point_for
 from flip.prompts import message_prompt
 from flip.retrieval import MessageIndex
-from flip.style import describe, load_messages, style_card, without_prices
+from flip.style import describe, load_messages, style_card, without, without_prices
 from tests.fakes import FakeModel, fake_embed
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -157,14 +157,16 @@ def test_a_draft_that_leaves_out_the_flaw_you_said_yes_to_fails():
 
 
 def test_an_offer_at_the_asking_price_says_you_dont_mind_the_flaw():
-    happy = {"message": "Hi mate, is this still available? I don't mind the broken back, happy to pay £200."}
+    happy = {"message": "Hi, is this still available? I don't mind the broken back, happy to pay £200 cash and I can "
+                        "come and collect."}
     result = ai_draft(BROKEN, local=FakeModel("gemma3:4b", happy), kind="asking", mention=True)
     assert (result["status"], result["offer"]) == ("ready", 20000)
 
 
 def test_paying_more_gives_the_good_condition_and_is_said_never_asked():
-    asked = {"message": "Hi mate, would you take £210 as it's in good condition?"}
-    said = {"message": "Hi mate, is this still available? I can pay £210 as it's in good condition."}
+    asked = {"message": "Hi mate, would you take £210 cash as it's in good condition? I can come and collect."}
+    said = {"message": "Hi, is this still available? I can pay £210 cash as it's in good condition, and I can come "
+                       "and collect."}
     result = ai_draft(LISTING, local=FakeModel("gemma3:4b", asked), api=FakeModel("claude-haiku-5-5", said),
                       kind="more", mention=True)
     assert (result["status"], result["offer"], result["point"]) == ("ready", 21000, ["Good condition"])
@@ -173,7 +175,7 @@ def test_paying_more_gives_the_good_condition_and_is_said_never_asked():
 
 
 def test_a_flawed_item_is_never_praised_for_paying_more():
-    praise = {"message": "Hi mate, I can pay £210 as it's in good condition."}
+    praise = {"message": "Hi mate, I can pay £210 cash as it's in good condition. I can come and collect."}
     result = ai_draft(BROKEN, local=FakeModel("gemma3:4b", praise), kind="more")
     assert result["point"] == [] and result["status"] == "needs you"
     assert result["attempts"][0]["problems"] == [
@@ -288,9 +290,31 @@ def test_messages_that_repeat_are_written_without_ai():
     assert [(a["model"], a["problems"], a["cost_pence"]) for a in result["attempts"]] == [("template", [], 0)]
 
 
-def test_with_no_past_messages_the_plain_wording_is_used():
+def test_with_no_past_messages_alertflips_message_is_used():
     result = draft_message(LISTING, local=FakeModel("gemma3:4b"))
-    assert (result["writer"], result["answer"]["message"]) == ("template", "Hi, would you take £170 for it? Thanks.")
+    assert (result["writer"], result["answer"]["message"]) == \
+        ("template", "Hi, would you take £170 cash for it? I can come and collect.")
+    posted = draft_message({**LISTING, "marketplace": "ebay"}, local=FakeModel("gemma3:4b"))
+    assert posted["answer"]["message"] == "Hi, would you take £170 for it?"
+
+
+def test_with_no_past_messages_a_lower_offer_gives_the_low_battery_as_its_reason():
+    """Like the iPhone 14 Pro AlertFlip wrote for (12 Sep), whose listing gives "Battery Health: 80%" (made up here)."""
+    listing = {"id": "b80", "title": "iPhone 14 Pro – 128GB – Silver", "asking_price": "250", "marketplace": "facebook",
+               "description": "Great condition | Box & cable included\nLooked after, no scratches, scuffs or visible "
+                              "damage.\n✅ Battery Health: 80%\n✅ Unlocked"}
+    drafts = {kind: draft_message(listing, kind=kind, offer=offer)["answer"]["message"]
+              for kind, offer in (("lower", 23500), ("asking", 25000), ("more", 26500))}
+    assert drafts == {
+        "lower": "Hi, would you take £235 cash for it? I'm offering that because the battery health is 80%. "
+                 "I can come and collect.",
+        "asking": "Hi, is this still available? I'll pay the full £250 cash and can come and collect. "
+                  "Could you hold it for me?",
+        "more": "Hi, I'll pay £265 cash if you take the listing down and sell it to me. I can come and collect."}
+    # 86% and up isn't a reason, and nor is the battery of a phone your style doesn't mention condition for
+    high = {**listing, "description": listing["description"].replace("80%", "90%")}
+    assert draft_message(high, kind="lower", offer=23500)["point"] == []
+    assert draft_message(listing, style_card(PAST), kind="lower", offer=23500)["mentioned"] is False
 
 
 def test_messages_that_vary_are_written_by_the_ai():
@@ -343,8 +367,12 @@ def test_a_flaw_only_ai_read_goes_in_and_no_offers_is_a_note_not_a_new_offer():
 
 
 def test_the_pickup_place_is_only_for_messages_that_collect():
+    # with no past messages, AlertFlip's message collects on Facebook, from the listing's place...
     plain = draft_message(DOTTED, mention=True, reading=READ)
-    assert plain["writer"] == "template" and "Leeds" not in plain["answer"]["message"]
+    assert plain["writer"] == "template" and plain["answer"]["message"].endswith("I can come and collect from Leeds LS6.")
+    # ...and on eBay it's posted
+    posted = draft_message({**DOTTED, "marketplace": "ebay"}, mention=True, reading=READ)
+    assert posted["writer"] == "template" and "Leeds" not in posted["answer"]["message"]
     local = FakeModel("gemma3:4b", {"message": "Hiya, would you take £170, given the black dot on the screen? 😊"})
     draft_message(DOTTED, QUIET, local=local, mention=True, reading=READ)
     assert "Pickup:" not in local.asked[0]["user"]
@@ -410,7 +438,8 @@ def test_an_unknown_item_is_named_without_the_sellers_selling_words():
 
 def test_the_price_you_picked_is_the_price_drafted_and_must_fit_its_kind():
     result = draft_message(LISTING, local=FakeModel("gemma3:4b"), offer=15000)
-    assert (result["offer"], result["answer"]["message"]) == (15000, "Hi, would you take £150 for it? Thanks.")
+    assert (result["offer"], result["answer"]["message"]) == \
+        (15000, "Hi, would you take £150 cash for it? I can come and collect.")
     for kind, offer in [("lower", 21000), ("more", 19000), ("asking", 19000)]:
         with pytest.raises(ValueError):
             draft_message(LISTING, kind=kind, offer=offer)
@@ -529,11 +558,12 @@ def test_a_question_this_listing_or_code_would_ask_is_never_counted_as_copied():
 
 
 def test_an_offer_over_asking_says_why():
-    over = {"message": "Hi, I can pay £120 for it."}
-    held = {"message": "Hi, I can pay £120 if you can hold it for me."}
+    over = {"message": "Hi, I can pay £120 cash for it. I can come and collect."}
+    held = {"message": "Hi, I can pay £120 cash if you can hold it for me. I can come and collect."}
     result = ai_draft(BLUE, {}, None, FakeModel("gemma3:4b", over, held), kind="more", offer=12000)
     assert result["attempts"][0]["problems"] == ["an offer over asking says why: that it's if they'll hold it for you"]
-    assert draft_message(BLUE, {}, kind="more")["answer"]["message"].endswith("if you can hold it for me. Thanks.")
+    assert draft_message(BLUE, {}, kind="more")["answer"]["message"].endswith(
+        "if you take the listing down and sell it to me. I can come and collect.")
 
 
 def test_your_offer_sentence_is_your_style_not_a_question_about_another_listing():
@@ -544,3 +574,63 @@ def test_your_offer_sentence_is_your_style_not_a_question_about_another_listing(
                                                                   "the screen it turns on and off sometimes")}
     result = draft_message(faulty, {}, Past(mine), kind="lower", mention=True, writer="template")
     assert result["status"] == "ready", result["attempts"]
+
+
+# ── AlertFlip's rules for the AI ────────────────────────────────────────────
+
+def test_with_no_past_messages_the_ai_is_given_alertflips_rules():
+    local = FakeModel("gemma3:4b", {"message": "Hi, would you take £170 cash? I can come and collect."})
+    ai_draft(LISTING, local=local)
+    user = local.asked[0]["user"]
+    assert "Buying: the reseller pays cash and can come and collect it: say both" in user
+    assert '- Opens with "Hi"' in user and "- Two or three short sentences, under 250 characters" in user
+    assert "- At most two questions" in user and "- No emojis and no sign-off" in user
+    assert "Never ask about iCloud" in local.asked[0]["system"]
+    ebay = FakeModel("gemma3:4b", {"message": "Hi, would you take £170?"})
+    assert ai_draft({**LISTING, "marketplace": "ebay"}, local=ebay)["status"] == "ready"
+    assert "Buying: it's paid through the site and posted: don't mention cash or collecting" in ebay.asked[0]["user"]
+
+
+def test_with_your_style_the_ai_buys_the_way_your_messages_do():
+    local = FakeModel("gemma3:4b", GOOD)
+    ai_draft(LISTING, style_card(PAST), local=local)
+    user = local.asked[0]["user"]
+    assert "Buying: say it only the way their own messages do: cash, collecting" in user
+    assert "Opens with \"Hi\"" not in user and '- Opens with "Hi mate"' in user
+
+
+def test_gemmas_short_draft_of_31_oct_no_longer_passes():
+    """Gemma wrote "I can pay £235" for a lower offer on an iPhone 14 Pro, and the old checks let it through."""
+    listing = {**LISTING, "title": "iPhone 14 Pro – 128GB – Silver", "asking_price": "250",
+               "description": "Excellent condition, with no scratches, scuffs or visible damage! Battery Health: 80%"}
+    result = ai_draft(listing, local=FakeModel("gemma3:4b", {"message": "I can pay £235"}), offer=23500)
+    assert result["status"] == "needs you"
+    assert result["attempts"][0]["problems"] == [
+        'the message leaves out what the listing says: "battery health 80%"',
+        'the message doesn\'t open with "Hi"',
+        "the message doesn't say you'll pay cash and you'll come and collect: on Facebook and Gumtree it does"]
+    # and the seller's "no scratches, scuffs or visible damage" is no flaw
+    assert result["reading"]["flaws"] == [] and result["point"] == ["battery health 80%"]
+
+
+def test_what_you_removed_from_your_style_is_never_shown_to_the_ai():
+    """Gemma copied "cash" from your own examples after you'd removed it (12 Sep): the examples go without it."""
+    card = without(style_card(PAST), {"mention:cash"})
+    local = FakeModel("gemma3:4b", {"message": "Hi mate, is this still available? Would you take £170? Can collect today."})
+    result = draft_message(LISTING, card, Past(PAST[:3]), local)
+    assert "the message mentions paying cash, which you removed from your style" in result["attempts"][0]["problems"]
+    shown = local.asked[0]["user"].split("Their messages for similar listings:")[1]
+    assert "cash" not in shown.lower() and "Would you take £[OFFER]?" in shown
+    assert "- Never mentions paying cash" in local.asked[0]["user"]
+    assert (result["status"], result["writer"]) == ("ready", "gemma3:4b")
+
+
+def test_paying_more_says_why_only_when_you_said_yes_to_the_reason():
+    quiet = FakeModel("gemma3:4b", {"message": "Hi, I'll pay £210 cash if you take the listing down and sell it to "
+                                               "me. I can come and collect."})
+    ai_draft(LISTING, local=quiet, kind="more")
+    assert "- Doesn't say why they'll pay more" in quiet.asked[0]["user"]
+    said = FakeModel("gemma3:4b", {"message": "Hi, I'll pay £210 cash as it's in good condition, if you take the "
+                                              "listing down. I can come and collect."})
+    ai_draft(LISTING, local=said, kind="more", mention=True)
+    assert "Doesn't say why" not in said.asked[0]["user"] and "Condition: give this from the listing" in said.asked[0]["user"]

@@ -232,7 +232,7 @@ def test_the_price_you_picked_is_drafted_and_one_that_doesnt_fit_is_refused(clie
 # ── your style ──────────────────────────────────────────────────────────────
 
 def test_your_style_learns_from_the_messages_you_add(client):
-    assert client.get("/style").json() == {"count": 0, "traits": [], "phrases": []}
+    assert client.get("/style").json() == {"count": 0, "traits": [], "phrases": [], "learned": []}
     sent = [{"title": "iPhone 12 64GB", "price": "£150", "text": "Hi mate, would you take £125 cash? Cheers"},
             {"title": "PS5 Slim", "price": "£1,200", "text": "Hi mate, would you take £270 cash? Cheers"},
             {"title": "", "price": "", "text": "Hi mate, would you take £90 cash? Cheers"}]
@@ -244,6 +244,27 @@ def test_your_style_learns_from_the_messages_you_add(client):
     assert {"k": "Offer sentence", "v": "Hi mate, would you take £… cash?"} in style["phrases"]
     assert {"k": "Closing", "v": "Cheers"} in style["phrases"]
     assert [m["text"] for m in client.get("/style/messages").json()][0] == sent[-1]["text"]  # newest first
+
+
+def test_what_your_style_learned_is_yours_to_remove(client):
+    local = FakeModel("gemma3:4b", READ, {"message": "Hi mate, is this still available? Would you take £185? Can "
+                                                     "collect from Leeds LS6 today."})
+    client.use(local=local, messages=PAST)
+    cash = next(r for r in client.get("/style").json()["learned"] if r["value"] == "paying cash")
+    assert cash == {"key": "mention:cash", "what": "Mentions", "value": "paying cash", "used": True}
+    style = client.post("/style/learned", json={"key": "mention:cash", "used": False})
+    assert style.status_code == 200
+    assert next(r for r in style.json()["learned"] if r["key"] == "mention:cash")["used"] is False
+    assert {"k": "Mentions", "v": "collecting and today"} in style.json()["traits"]
+    # your own offer sentence says cash, so it's refused, and the AI is told never to say it
+    draft = client.post("/messages/draft", json={"listing": LISTING}).json()
+    assert (draft["status"], draft["written_by"]) == ("ready", "gemma3:4b") and "cash" not in draft["message"]
+    assert "the message mentions paying cash, which you removed from your style" in draft["attempts"][0]["problems"]
+    assert "Never mentions paying cash" in local.asked[-1]["user"]
+    # put back, it's used again; putting back what isn't removed, or removing what it never learned, is a 404
+    assert client.post("/style/learned", json={"key": "mention:cash", "used": True}).status_code == 200
+    assert client.post("/style/learned", json={"key": "mention:cash", "used": True}).status_code == 404
+    assert client.post("/style/learned", json={"key": "greeting:yo", "used": False}).status_code == 404
 
 
 def test_a_message_you_add_needs_words_and_a_price_that_is_one(client):

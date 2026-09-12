@@ -5,6 +5,7 @@ left empty and listed under "missing": a gap is better than a wrong guess."""
 import json
 import re
 import unicodedata
+from functools import lru_cache
 from pathlib import Path
 
 from flip.numbers import read_numbers
@@ -68,6 +69,12 @@ BREAK = "|"  # where one part of a sentence ends: no rule reads across it
 
 def load_catalogue():
     return json.loads((DATA / "catalogue.json").read_text(encoding="utf-8"))["models"]
+
+
+@lru_cache(maxsize=1)
+def model_names():
+    """Every model name in the catalogue: a size right after another model's name is that model's."""
+    return tuple(alias for model in load_catalogue() for alias in model["aliases"])
 
 
 def load_conditions():

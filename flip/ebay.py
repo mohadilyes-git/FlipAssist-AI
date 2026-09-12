@@ -26,7 +26,7 @@ from datetime import date
 from functools import lru_cache
 from pathlib import Path
 
-from flip.catalogue import load_catalogue
+from flip.catalogue import model_names
 from flip.numbers import read_numbers
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -64,12 +64,6 @@ def spelt(values, wanted):
     "apple iphone se (2nd generation)" -> "Apple iPhone SE (2nd Generation)"."""
     lower = (wanted or "").lower()
     return next((value for value in values if value.lower() == lower), None)
-
-
-@lru_cache(maxsize=1)
-def model_names():
-    """Every model name in the catalogue: a size right after another model's name is that model's."""
-    return tuple(alias for model in load_catalogue() for alias in model["aliases"])
 
 
 def seller_sizes(description, model):

@@ -7,10 +7,14 @@ no AI:
    offer without handing the AI a number to copy.
 3. Your phrasebook: the opener, offer and closing sentences you use again and
    again, which flip.writer turns into a whole message with no AI.
+4. The list of what it learned (learned), one thing a row, each yours to
+   remove: a removed one is off the card, the AI is told never to write it,
+   and the checks hold every draft to that (check_not_removed).
 
 StyleBook keeps the messages it all comes from, on this Mac.
 """
 
+import copy
 import csv
 import re
 import sqlite3
@@ -21,13 +25,11 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
-from flip.catalogue import words
-from flip.checks import ends_asking, promised_in
+from flip.catalogue import contains, words
+from flip.checks import EMOJI, GREETING_WORDS, ends_asking, promised_in
 
-EMOJI = re.compile("[\U0001F300-\U0001FAFF☀-➿]")
-GREETING_WORDS = {"hi", "hiya", "hello", "hey", "alright", "morning", "afternoon", "evening", "yo"}
 MENTIONS = {"collecting": r"\bcollect(?:ion|ing)?\b", "cash": r"\bcash\b", "today": r"\b(?:today|tonight|asap)\b",
-            "postage": r"\bpost(?:age|ed)?\b",
+            "postage": r"\bpost(?:age|ed|ing)\b|\bpost (?:it|them)\b",
             "condition": r"\b(?:condition|scratch\w*|crack\w*|dent(?:s|ed)?|scuff\w*|chip(?:s|ped)?|marks?|broken|"
                          r"damage\w*|fault\w*|flaw\w*|wear|mint)\b"}
 SHARE = 0.4  # a habit is something at least 40% of your messages do
@@ -48,7 +50,13 @@ TABLE = """
 create table if not exists messages (
     n integer primary key, id text unique, listing_title text, asking_price text, marketplace text,
     my_message text, source text, at text);
+create table if not exists removed (key text primary key, at text);
 """
+# how the list of what it learned names your habits
+HABIT_NAMES = {"collecting": "coming to collect", "cash": "paying cash", "postage": "postage", "today": "today or asap"}
+SLOTS = (("opener", "Usual opener"), ("offer", "Offer sentence"), ("closing", "Closing"))
+CALLED = {"mate", "there", "bro", "pal", "buddy", "m8", "hun", "all"}  # "Hi mate", "Hi there"
+GREETING = "Hi"  # in place of a greeting you removed
 OLD_PRICE = re.compile(rf"£\s?{AMOUNT}"
                        rf"|\b{AMOUNT}\s?(quid|pounds)\b"
                        rf"|\b(take|do|accept|consider|offer|pay|stretch to|go to|let it go for)\s+{AMOUNT}\b",
@@ -79,24 +87,34 @@ def opening(text):
 
 
 def style_card(messages):
-    """What your messages have in common. Empty if there are none yet."""
+    """What your messages have in common. Empty if there are none yet. What
+    they mention is read in what they say, not ask: "what condition is it
+    in?" mentions no condition, but the offer's own question counts ("would
+    you take £185 cash?" mentions cash). The greeting is counted whatever its
+    case ("Hi mate", "hi mate"), written the way you write it most."""
     texts = [m["my_message"] for m in messages if m.get("my_message")]
     if not texts:
         return {}
     share = lambda found: sum(found) / len(texts) >= SHARE
+    said = [statements(t) for t in texts]
     card = {"messages": len(texts), "words": int(statistics.median(len(t.split()) for t in texts)),
             "questions": int(statistics.median(t.count("?") for t in texts)),
             "emoji": share(bool(EMOJI.search(t)) for t in texts),
             "mentions": [name for name, pattern in MENTIONS.items()
-                         if share(bool(re.search(pattern, t, re.IGNORECASE)) for t in texts)]}
-    greeting, times = Counter(opening(t) for t in texts).most_common(1)[0]
+                         if share(bool(re.search(pattern, t, re.IGNORECASE)) for t in said)]}
+    greeting, times = Counter(opening(t).lower() for t in texts).most_common(1)[0]
     if greeting and times / len(texts) >= SHARE:
-        card["greeting"] = greeting
+        card["greeting"] = Counter(opening(t) for t in texts if opening(t).lower() == greeting).most_common(1)[0][0]
     card["phrases"] = phrasebook([m for m in messages if m.get("my_message")])
     asked = Counter(q for t in texts for q in set(questions_in(t)))
     card["asks"] = sorted(q for q, n in asked.items() if n >= HABIT)  # questions you ask every time
     card["promises"] = sorted(set().union(*(promised_in(t) for t in texts)))
     return card
+
+
+def statements(text):
+    """What a message says, not asks: its sentences that don't ask, and the one that makes the offer."""
+    return " ".join(s for s in SENTENCES.split(text.strip()) if s.strip() and (not ends_asking(s) or OLD_PRICE.search(s)))
 
 
 def questions_in(text):
@@ -135,7 +153,8 @@ def phrasebook(messages):
 
 def describe(card, words=None):
     """The style card as short lines for the AI (and for you to check). words
-    takes the place of your usual length, for a longer message."""
+    takes the place of your usual length, for a longer message. What you
+    removed from your style (without) comes last, as what it never writes."""
     if not card:
         return []
     lines = [f'Opens with "{card["greeting"]}"'] if card.get("greeting") else []
@@ -144,7 +163,233 @@ def describe(card, words=None):
               "Uses emojis" if card["emoji"] else "No emojis"]
     if card["mentions"]:
         lines.append(f"Usually mentions: {', '.join(card['mentions'])}")
+    removed = card.get("removed") or {}
+    lines += [f'Never opens with "{greeting}"' for greeting in removed.get("greetings", [])]
+    if removed.get("habits"):
+        lines.append(f"Never mentions {and_list([HABIT_NAMES[h] for h in removed['habits']])}")
+    lines += [f'Never writes "{phrase}"' for phrase in removed.get("phrases", [])]
+    lines += [f'Never asks "{question_words(ask)}?"' for ask in removed.get("asks", [])]
     return lines
+
+
+def learned(card, removed=()):
+    """Everything your style puts in a message, one row each, for you to keep
+    or remove: [{"key": "greeting:hi mate", "what": "Opens with", "value":
+    "Hi mate", "used": True}, ...]. removed: the keys you removed (used is
+    False for those); one your messages no longer give is still listed, to
+    put back. How long your messages are isn't on it: that's not a thing it
+    puts in. Neither is the offer question you ask every time, a question or
+    an emoji already in one of your sentences, or an opener that's only your
+    greeting."""
+    card = card or {}
+    rows, keys = [], set()
+
+    def add(key, what, value):
+        if key not in keys:
+            keys.add(key)
+            rows.append({"key": key, "what": what, "value": value, "used": key not in removed})
+
+    phrases = card.get("phrases") or {}
+    if card.get("greeting"):
+        add(f"greeting:{card['greeting'].lower()}", "Opens with", card["greeting"])
+    for habit, name in HABIT_NAMES.items():
+        if habit in card.get("mentions", []) or habit in card.get("promises", []):
+            add(f"mention:{habit}", "Mentions", name)
+    if "condition" in card.get("mentions", []):
+        add("says-flaw", "Says the flaw", "as the reason for a lower offer")
+    if card.get("emoji"):
+        add("emoji", "Emojis", phrases.get("emoji") or "yes")
+    for slot, what in SLOTS:
+        text = phrases.get(slot)
+        if text and words(text) and not (slot == "opener" and greeting_only(text)):
+            add(f"phrase:{slot}:{text.lower()}", what, text.replace("[OFFER]", "…"))
+    listed = [words(phrases[slot]) for slot, _ in SLOTS if phrases.get(slot)]
+    for ask in card.get("asks", []):
+        asked = question_words(ask)
+        if "offer" in ask.split() or not set(asked.split()) - GREETING_WORDS - CALLED \
+                or any(contains(sentence, ask.split()) for sentence in listed):
+            continue
+        add(f"ask:{asked}", "Asks every time", f"{asked}?")
+    for key in sorted(set(removed) - keys):  # removed, and no longer in your messages: still yours to put back
+        row = removed_row(key)
+        if row:
+            add(key, *row)
+    return rows
+
+
+def removed_row(key):
+    """What a removed key is called in the list, from the key alone: ("Opens with", "Hi mate")."""
+    kind, _, rest = key.partition(":")
+    if kind == "phrase":
+        slot, _, text = rest.partition(":")
+        return (dict(SLOTS)[slot], text.replace("[offer]", "…")) if slot in dict(SLOTS) else None
+    return {"greeting": ("Opens with", rest[:1].upper() + rest[1:]), "mention": ("Mentions", HABIT_NAMES.get(rest, rest)),
+            "says-flaw": ("Says the flaw", "as the reason for a lower offer"), "emoji": ("Emojis", "yes"),
+            "ask": ("Asks every time", f"{rest}?")}.get(kind)
+
+
+def greeting_only(text):
+    """Whether a sentence is nothing but a greeting: "Hi mate!"."""
+    return bool(opening(text)) and words(opening(text)) == words(text)
+
+
+def question_words(ask):
+    """A question you ask every time without the greeting it opens with: "hi mate still available" -> "still available"."""
+    parts = ask.split()
+    while parts[1:] and parts[0] in GREETING_WORDS | CALLED:
+        parts = parts[1:]
+    return " ".join(parts)
+
+
+def ungreeted(text, greeting):
+    """A message or sentence without a greeting at its start, whatever follows
+    it: "Alright mate? Would you take..." -> "Would you take...", "Hi mate 👋,
+    would you..." -> "Would you..."."""
+    found = re.match(rf"\s*{re.escape(greeting)}(?=\W|$)[\s,.!?:;\-–—]*(?:{EMOJI.pattern}[\s,.!?]*)*", text, re.IGNORECASE)
+    if not found:
+        return text
+    rest = text[found.end():]
+    return rest[:1].upper() + rest[1:]
+
+
+def without(card, removed):
+    """Your style card without what you removed from it (learned's keys),
+    which is kept in card["removed"]: the AI is told never to write it
+    (describe), it's taken out of the examples the AI is shown (scrubbed),
+    and the checks refuse a draft that writes it (check_not_removed). A
+    removed habit (cash, collecting...) is one your messages no longer
+    promise, so the promise check refuses it too. A removal stands whatever
+    messages you add later: "Hi mate" stays removed once your greeting is
+    "Hi". A removed greeting comes out of your sentences too ("Hi mate,
+    would you take..." -> "Hi, would you take...")."""
+    removed = set(removed)
+    if not card or not removed:
+        return card
+    card = copy.deepcopy(card)
+    phrases = card.setdefault("phrases", {})
+    gone = {"greetings": [], "habits": [], "phrases": [], "asks": [], "emoji": False, "flaw": False}
+    for key in sorted(removed):
+        kind, _, rest = key.partition(":")
+        if kind == "greeting":
+            mine = (card.get("greeting") or "").lower() == rest
+            gone["greetings"].append(card.pop("greeting") if mine else rest)
+            for slot, _ in SLOTS:  # your sentences keep their words, with "Hi" for the greeting, or none for "Hi"
+                text = phrases.get(slot)
+                if text and opening(text).lower() == rest:
+                    bare = ungreeted(text, opening(text))
+                    phrases[slot] = (bare if rest == GREETING.lower() or not bare else
+                                     f"{GREETING}, {bare[:1].lower()}{bare[1:]}") or None
+        elif kind == "mention":
+            card["mentions"] = [m for m in card.get("mentions", []) if m != rest]
+            card["promises"] = [p for p in card.get("promises", []) if p != rest]
+            gone["habits"].append(rest)
+        elif kind == "says-flaw":
+            card["mentions"] = [m for m in card.get("mentions", []) if m != "condition"]
+            gone["flaw"] = True
+        elif kind == "emoji":
+            card["emoji"] = False
+            phrases["emoji"] = ""
+            for slot, _ in SLOTS:
+                if phrases.get(slot) and not words(phrases[slot]):  # a closing that's only "👍"
+                    phrases[slot] = None
+            gone["emoji"] = True
+        elif kind == "phrase":
+            slot, _, text = rest.partition(":")
+            mine = (phrases.get(slot) or "").lower() == text
+            gone["phrases"].append(phrases[slot] if mine else text)
+            if mine:
+                phrases[slot] = None  # no habit there: the writer words that part, or the AI writes
+            gone["asks"] += [question_words(q) for q in questions_in(text)]  # "...is this still available?" goes with it
+        elif kind == "ask":
+            card["asks"] = [a for a in card.get("asks", []) if question_words(a) != rest]
+            gone["asks"].append(rest)
+    card["removed"] = gone
+    return card
+
+
+# a habit in any words (check_not_removed, scrubbed): wider than how the card counts it, so a removed habit
+# can't come back as "can pop round" or "happy to cover delivery"
+HABIT_WORDS = {
+    "collecting": re.compile(r"\b(?:collect\w*|pick(?:ing)? (?:it |them )?up|pick ?up|grab (?:it|them)|"
+                             r"come (?:and |& )?get|pop (?:round|over|by)|swing by|drop by|nip (?:round|over))\b",
+                             re.IGNORECASE),
+    "cash": re.compile(r"\bcash\b", re.IGNORECASE),
+    "postage": re.compile(r"\b(?:post(?:age|ed|ing)|post (?:it|them)|ship\w*|deliver\w*|courier|tracked|royal mail|"
+                          r"evri|hermes|dpd|send (?:it|them))\b", re.IGNORECASE),
+    "today": re.compile(r"\b(?:today|tonight|asap)\b", re.IGNORECASE)}
+# ...as it's taken out of the offer's own sentence in an example: "Would you take £[OFFER] cash?" -> "...£[OFFER]?"
+IN_THE_OFFER = {"cash": re.compile(r"\s*\b(?:(?:in|with|for)\s+)?cash(?:\s+(?:in hand|on collection))?\b", re.IGNORECASE),
+                "today": re.compile(r"\s*\b(?:today|tonight|asap)\b", re.IGNORECASE)}
+# a reason given about the condition, as it's taken out of an example when you removed "Says the flaw"
+CONDITION_REASON = re.compile(rf",?\s+(?:as|because|given|since|due to|seeing as)\s+[^.?!]*?{MENTIONS['condition']}[^.?!]*",
+                              re.IGNORECASE)
+NEUTRAL_OFFER = "Would you take £[OFFER]?"
+
+
+def scrubbed(message, card):
+    """One of your past messages as the AI is shown it, without what you
+    removed from your style, so there's nothing there to copy. Whole
+    sentences go: one you removed (whatever its case or full stop), a
+    question you removed, one about a habit you removed. The offer's own
+    sentence stays, without the habit's word ("...£[OFFER] cash?" ->
+    "...£[OFFER]?") or, if that can't be said, as a plain offer. A removed
+    greeting, emojis or a reason about the condition go from what's left.
+    The price is hidden as in every example (without_prices)."""
+    gone = (card or {}).get("removed")
+    text = without_prices(message.strip())
+    if not gone:
+        return text
+    removed_sentences = [words(part) for phrase in gone["phrases"] for part in SENTENCES.split(phrase) if words(part)]
+    kept = []
+    for sentence in (s.strip() for s in SENTENCES.split(text) if s.strip()):
+        plain = words(sentence)
+        offer = "[OFFER]" in sentence
+        if not offer and any(plain == part or len(part) > 2 and contains(plain, part) for part in removed_sentences):
+            continue
+        asks_removed = any(contains(q.split(), a.split()) for q in questions_in(sentence) for a in gone["asks"])
+        if asks_removed and not offer:
+            continue
+        if asks_removed:  # the offer's sentence asks it too: "would you take £[OFFER], does it come with a charger?"
+            sentence = NEUTRAL_OFFER
+        habits = [h for h in gone["habits"] if h in HABIT_WORDS and HABIT_WORDS[h].search(sentence)]
+        if habits and not offer:
+            continue
+        for habit in habits:
+            sentence = IN_THE_OFFER[habit].sub("", sentence) if habit in IN_THE_OFFER else NEUTRAL_OFFER
+        if gone.get("emoji"):
+            sentence = re.sub(r"\s{2,}", " ", EMOJI.sub("", sentence)).strip()
+        if gone.get("flaw"):
+            sentence = CONDITION_REASON.sub("", sentence)
+        if words(sentence) or "[OFFER]" in sentence:
+            kept.append(sentence)
+    text = " ".join(kept)
+    for greeting in gone["greetings"]:
+        text = ungreeted(text, greeting)
+    return text
+
+
+def check_not_removed(message, card):
+    """A draft never writes what you removed from your style (without): the
+    greeting, whatever follows it ("Hi mate -", "Hello there"), a habit in
+    any words ("can pop round" for collecting), a sentence of your
+    phrasebook or a question you ask every time. (No emojis is
+    check_message_manner's.)"""
+    gone = (card or {}).get("removed")
+    if not gone or not isinstance(message, str):
+        return []
+    problems = []
+    said = words(message)
+    problems += [f"the message opens with \"{g}\", which you removed from your style"
+                 for g in gone["greetings"] if words(g) and said[:len(words(g))] == words(g)]
+    problems += [f"the message mentions {HABIT_NAMES[h]}, which you removed from your style"
+                 for h in gone["habits"] if h in HABIT_WORDS and (HABIT_WORDS[h].search(message) or h in promised_in(message))]
+    plain = words(without_prices(message))
+    problems += [f"the message writes \"{p}\", which you removed from your style"
+                 for p in gone["phrases"] if words(p) and contains(plain, words(p))]
+    asked = [q.split() for q in questions_in(message)]  # "Hi, would you take £90, does it come with a charger?"
+    problems += [f"the message asks \"{question_words(a)}?\", which you removed from your style"
+                 for a in gone["asks"] if any(contains(q, question_words(a).split()) for q in asked)]
+    return problems
 
 
 def and_list(names):
@@ -190,7 +435,7 @@ class StyleBook:
         self.db = sqlite3.connect(path, check_same_thread=False)  # the API answers from more than one thread
         self.lock = threading.RLock()
         self.db.executescript(TABLE)
-        self.index, self._card = index, None
+        self.index, self._card, self._learned_card = index, None, None
         if index is not None:
             self.sync()
 
@@ -216,7 +461,7 @@ class StyleBook:
                 "excluded.asking_price, marketplace = excluded.marketplace, my_message = excluded.my_message, "
                 "source = excluded.source, at = excluded.at", rows)
             self.db.commit()
-            self._card = None
+            self._card = self._learned_card = None
         if self.index is not None:
             self.index.add(rows)
         return rows
@@ -226,17 +471,51 @@ class StyleBook:
         with self.lock:
             gone = self.db.execute("delete from messages where id = ?", (message_id,)).rowcount
             self.db.commit()
-            self._card = None
+            self._card = self._learned_card = None
         if gone and self.index is not None:
             self.index.remove([message_id])
         return bool(gone)
 
     def card(self):
-        """Your style card (style_card), from every message here, oldest first."""
+        """Your style card (style_card), from every message here, oldest
+        first, without what you removed from it (without)."""
         with self.lock:
             if self._card is None:
-                self._card = style_card(self.messages(newest_first=False))
+                self._card = without(self.learned_card(), self.removed())
             return self._card
+
+    def learned_card(self):
+        """The style card as learned, before anything you removed comes off."""
+        with self.lock:
+            if self._learned_card is None:
+                self._learned_card = style_card(self.messages(newest_first=False))
+            return self._learned_card
+
+    def removed(self):
+        """The keys of what you removed from your style (learned)."""
+        with self.lock:
+            return {key for (key,) in self.db.execute("select key from removed")}
+
+    def learned(self):
+        """What your style puts in a message, each with whether you still use it (learned)."""
+        with self.lock:
+            return learned(self.learned_card(), self.removed())
+
+    def use(self, key, used):
+        """Keep (used) or remove one thing your style learned, by its key in
+        learned. False if your style hasn't learned it: removing it, or
+        putting back what isn't removed."""
+        with self.lock:
+            if used:
+                gone = self.db.execute("delete from removed where key = ?", (key,)).rowcount
+            elif key in {row["key"] for row in self.learned()}:
+                at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                gone = self.db.execute("insert or replace into removed (key, at) values (?, ?)", (key, at)).rowcount
+            else:
+                gone = 0
+            self.db.commit()
+            self._card = None
+        return bool(gone)
 
     def sync(self):
         """Make the message search hold exactly the messages here: after a

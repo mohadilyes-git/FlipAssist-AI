@@ -13,7 +13,10 @@
    sentences with no AI (flip.writer), which beat the AI in a blind test; the
    AI writes only if that fails a check. If they vary, the AI writes, shown
    your messages for the most similar listings (flip.retrieval) with their
-   old prices hidden, next to your style card (flip.style).
+   old prices hidden, next to your style card (flip.style). With none yet,
+   the message is AlertFlip's: cash and collecting on Facebook and Gumtree,
+   the listing's flaw or low battery as the reason for a lower offer, "hold
+   it for me" at the asking price, "take the listing down" over it.
 5. A longer message is about twice your usual length, and says more only with
    your usual points and questions the listing doesn't answer
    (flip.questions). It can start from the draft on screen.
@@ -21,7 +24,9 @@
    the condition only as the listing says it, enough words for a longer one,
    no promise about collecting or paying that your messages don't make, no
    invented numbers or stories, no contact details, nothing off the
-   platform. Models are tried in turn as for listings (flip.attempts).
+   platform, AlertFlip's rules (flip.checks.check_message_manner) and
+   nothing you removed from your style. Models are tried in turn as for
+   listings (flip.attempts).
 """
 
 import math
@@ -30,15 +35,17 @@ import time
 
 from flip.ai import Reply
 from flip.attempts import try_models
-from flip.catalogue import fill_from_catalogue, load_catalogue, models_disagree, words
-from flip.checks import HOLD, check_message, check_no_unasked_promises, ends_asking, names_other_model, promised_in
+from flip.catalogue import fill_from_catalogue, load_catalogue, model_names, models_disagree, words
+from flip.checks import (HOLD, check_message, check_message_manner, check_no_unasked_promises, ends_asking,
+                         names_other_model, promised_in)
 from flip.money import offer_for, to_pence
+from flip.numbers import read_numbers
 from flip.offers import check_condition_talk, copied_question, point_for, question_for, says_point
-from flip.prompts import MESSAGE_SCHEMA, message_prompt
+from flip.prompts import MESSAGE_SCHEMA, buying_line, message_prompt
 from flip.questions import check_no_answered_questions, load_questions, open_questions
 from flip.reader import code_reading, in_listing
 from flip.retrieval import listing_text
-from flip.style import OLD_PRICE, SENTENCES, describe, without_prices
+from flip.style import OLD_PRICE, SENTENCES, check_not_removed, describe, question_words, scrubbed, without_prices
 from flip.writer import make_longer, repeats, write_offer
 
 USUAL_WORDS = 15  # how long a message is before you have past messages to go by
@@ -62,6 +69,47 @@ MAX_NAME = 8  # words
 COLLECT_FROM = re.compile(r"\b(?:collect|pick (?:it |them )?up|meet)\s+(?:it\s+|them\s+)?(?:from|in|at|near)\s+"
                           r"((?:[A-Z][\w'-]*|[A-Z]{1,2}\d[A-Z\d]?(?:\s*\d[A-Z]{2})?)(?:\s+(?:[A-Z0-9][\w'-]*|city centre|"
                           r"town centre|upon|on|under))*)")
+
+
+# where you come and collect and pay cash, and where you pay through the site and it's posted
+LOCAL_MARKETS = re.compile(r"\b(?:facebook|fb|gumtree)\b", re.IGNORECASE)
+POSTED_MARKETS = re.compile(r"\b(?:ebay|vinted)\b", re.IGNORECASE)
+# what a message promises before you have past messages: AlertFlip's way on Facebook and Gumtree
+LOCAL_HABITS = {"collecting", "cash"}
+# a seller's battery health, for the reason of a lower offer (battery_in): health in so many words...
+HEALTH_CUE = re.compile(r"\b(?:health|b/?h|max(?:imum)?\s+cap(?:acity)?|(?:battery|batt)\s+(?:capacity|condition))\b|🔋",
+                        re.IGNORECASE)
+# ...about the battery as it is now, and a figure, not a bound: "was 84%", "replaced at 81%", "over 85%", "85%+"
+NOT_NOW = re.compile(r"\b(?:was|were|used to be|had been|replaced|replacement|new battery|fitted|old (?:one|battery)|"
+                     r"over|above|more than|at least|min(?:imum)?|under|below|less than|nearly|almost|about|around|"
+                     r"approx\w*)\b|\d\s*%?\s*\+|>|<", re.IGNORECASE)
+CLAUSES = re.compile(r"[.;!?\n()]+|,(?!\d)")
+
+
+def local_market(marketplace):
+    """Facebook Marketplace or Gumtree, where you come and collect and pay cash."""
+    return bool(LOCAL_MARKETS.search(marketplace or ""))
+
+
+def posted_market(marketplace):
+    """eBay or Vinted, where you pay through the site and the item is posted: no cash."""
+    return bool(POSTED_MARKETS.search(marketplace or ""))
+
+
+def battery_in(text, model):
+    """The battery health a phone's listing gives ("Battery Health: 80%" ->
+    "80"), or None. A seller's "battery 80%" can be how charged it is in the
+    photos, so only a figure in a clause that says health in so many words
+    counts (HEALTH_CUE, read by flip.numbers), and only one about the battery
+    as it is now: not "was 84%", "replaced at 81%", "over 85%" (NOT_NOW).
+    Two figures are none."""
+    if not model or model.get("category") != "phones":
+        return None
+    found = set()
+    for clause in CLAUSES.split(text):
+        if HEALTH_CUE.search(clause) and not NOT_NOW.search(clause):
+            found |= read_numbers(clause, model, model_names())["battery"]
+    return next(iter(found)) if len(found) == 1 else None
 
 
 def longer_words(base):
@@ -164,24 +212,35 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     title = listing.get("title") or ""
     sources = f"{title}. {listing.get('description') or ''}"
     reading = reading or code_reading(sources)
-    point = point_for(kind, sources, reading["flaws"])
+    catalogue = load_catalogue()
+    found = fill_from_catalogue(title, "", catalogue, listing.get("description") or "")
+    model = next((m for m in catalogue if m["id"] == found.get("model_id")), None)
+    in_person = local_market(listing.get("marketplace"))  # Facebook or Gumtree: you collect and pay cash
+    point = point_for(kind, sources, reading["flaws"], battery_in(sources, model))
     style_decides = mention is None
-    if style_decides:
-        mention = says_point(previous, point) if previous and point else "condition" in card.get("mentions", [])
+    if style_decides:  # your style decides; before you have one, AlertFlip's: a lower offer gives its reason
+        mention = says_point(previous, point) if previous and point else \
+            "condition" in card.get("mentions", []) if card else kind == "lower"
     mention = bool(point and mention)
-    found = fill_from_catalogue(title, "", load_catalogue(), listing.get("description") or "")
     longer = None
     if length == "longer":
         base = len(previous.split()) if previous else card.get("words") or USUAL_WORDS
+        removed_asks = set((card.get("removed") or {}).get("asks", []))
         longer = {"words": longer_words(base),
-                  "questions": open_questions(sources, found.get("category"), flaws=reading["flaws"]),
+                  "questions": [q for q in open_questions(sources, found.get("category"), flaws=reading["flaws"])
+                                if question_words(" ".join(words(q))) not in removed_asks],
                   "previous": previous or None}
     query = listing_text(title, listing.get("marketplace") or "")
     examples = index.similar(query, leave_out=leave_out) if index else []
-    allowed = habits(card, examples)
+    # how a message may say you'll buy: as your messages do, or before you have any, AlertFlip's way
+    allowed = habits(card, examples) if card else LOCAL_HABITS if in_person else set()
+    gone = card.get("removed") or {}
+    allowed -= set(gone.get("habits", []))  # removed from your style: your old examples don't bring it back
     once = [q for e in examples for q in asked_once(e["my_message"], set(card.get("asks", [])))]
-    shown = [{**e, "my_message": " ".join(s.strip() for s in SENTENCES.split(e["my_message"].strip())
-                                          if s.strip() and s.strip() not in once)} for e in examples]
+    # the examples as the AI sees them: without a question you asked about that listing alone, and without
+    # anything you removed from your style (flip.style.scrubbed)
+    shown = [{**e, "my_message": scrubbed(" ".join(s.strip() for s in SENTENCES.split(e["my_message"].strip())
+                                                   if s.strip() and s.strip() not in once), card)} for e in examples]
     pool = load_questions()
     code_asks = " ".join(q["ask"] for q in [*pool.get(found.get("category"), []), *pool["any"]])
     pickup = reading["pickup"] if "collecting" in allowed else ""  # only if you'd say you'll collect
@@ -207,17 +266,22 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
                 log.draft(result)
             return result
 
-    catalogue = load_catalogue()
-    model = next((m for m in catalogue if m["id"] == found.get("model_id")), None)
-
     def check(answer, rewrite=True):
         message = answer.get("message")
-        problems = check_message(message, offer, sources, asking, kind, at_least) + \
+        problems = check_message(message, offer, sources, asking, kind, at_least, ebay=not in_person) + \
             check_condition_talk(message, sources, point, mention, kind, offer)
         if isinstance(message, str) and rewrite and rewrite_of and words(message) == words(rewrite_of):
             problems.append("it's the message on screen again: a rewrite says it in other words")
         if isinstance(message, str):
             problems += check_no_answered_questions(message, sources) + check_no_unasked_promises(message, allowed)
+            # AlertFlip's rules: with no past messages its "Hi", length and way of buying; yours once you have them
+            problems += check_message_manner(
+                message, greeting="Hi" if not card else True if card.get("greeting") else None,
+                usual=length == "usual", short=not card and length == "usual",
+                must=sorted(LOCAL_HABITS) if not card and in_person else (),
+                cash=not posted_market(listing.get("marketplace")), emoji=bool(card.get("emoji")),
+                praise=kind == "more" and mention)
+            problems += check_not_removed(message, card)
             sentences = re.split(r"(?<=[.!?])\s+|\n+", message)
             if model and any(names_other_model(words(sentence), model, catalogue) for sentence in sentences):
                 problems.append("the message names a different item from the listing's")
@@ -235,7 +299,7 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     if writer == "template" or writer == "auto" and (not card or repeats(card)):
         ready = written_without_ai(result, lambda answer: check(answer, rewrite=False), card, kind, offer,
                                    point if mention else None, longer, at_least,
-                                   item_name(found.get("model_id"), title), pickup, previous, log)
+                                   item_name(found.get("model_id"), title), pickup, previous, log, in_person)
         again = ready and rewrite_of and words(result["answer"]["message"]) == words(rewrite_of)
         if again and writer == "auto":
             yours = result["answer"]  # the AI words the rewrite; this stays if it can't
@@ -250,7 +314,8 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
             return result
 
     system, user = message_prompt(listing, offer, describe(card, longer["words"] if longer else None), shown,
-                                  kind, point if mention else None, longer, pickup or None, rewrite_of or None)
+                                  kind, point if mention else None, longer, pickup or None, rewrite_of or None,
+                                  buying_line(allowed, in_person, bool(card)))
     result["answer"] = try_models(
         mode, {"local": local, "api": api},
         ask=lambda ai: ai.ask(system, user, [], MESSAGE_SCHEMA, vary=bool(rewrite_of)),
@@ -265,14 +330,16 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     return result
 
 
-def written_without_ai(result, check, card, kind, offer, point, longer, at_least, item, pickup, previous, log):
+def written_without_ai(result, check, card, kind, offer, point, longer, at_least, item, pickup, previous, log,
+                       in_person=False):
     """flip.writer's message, through the same checks as the AI's: True and
     the result is ready if it passes. If not, its problems are in the
-    attempts and the AI gets its turn (or, with writer="template", you do)."""
+    attempts and the AI gets its turn (or, with writer="template", you do).
+    in_person: a Facebook or Gumtree listing (local_market)."""
     started = time.monotonic()
     questions = longer["questions"] if longer else []
     text = make_longer(previous, questions, at_least, item) if previous else \
-        write_offer(card, kind, offer, point, questions, at_least, item, pickup)
+        write_offer(card, kind, offer, point, questions, at_least, item, pickup, in_person)
     answer = {"message": text} if text is not None else None
     problems = check(answer) if answer else [f"there's no plain wording for what the listing says: "
                                              f"{' / '.join(point['says'])}"]

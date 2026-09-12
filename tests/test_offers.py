@@ -235,3 +235,21 @@ def test_not_minding_the_flaw_can_be_said_in_other_words(said):
     point = point_for("asking", listing, ["Few scratches on screen"])
     assert check_condition_talk(f"Hi, I can pay £400 for it. {said} Is it still available?", listing, point, True,
                                 "asking", 40000) == []
+
+
+def test_a_low_battery_is_the_reason_for_a_lower_offer_when_there_is_no_flaw():
+    assert point_for("lower", "iPhone 14 Pro, great condition", [], battery="80") == \
+        {"about": "battery", "says": ["battery health 80%"], "battery": "80"}
+    assert point_for("lower", "iPhone 14 Pro, great condition", [], battery="85")["about"] == "battery"
+    assert point_for("lower", "iPhone 14 Pro, great condition", [], battery="86") is None  # not a low one
+    assert point_for("lower", "Cracked back", battery="80")["about"] == "flaw"  # a flaw comes first
+    assert point_for("asking", "iPhone 14 Pro", [], battery="80") is None  # only a lower offer gives it
+    assert point_for("lower", "Battery 80%, priced accordingly", [], battery="80") is None  # the price allows for it
+
+
+def test_a_long_part_is_cut_to_the_flaw_without_the_word_that_joins_it():
+    """A real draft (12 Sep): "I dropped it last week and cracked the back glass" was quoted from "and"."""
+    assert read_listing("I dropped it last week and cracked the back glass, screen is fine")["flaws"] == \
+        ["cracked the back glass"]
+    assert read_listing("Selling as upgraded, has a small crack on the back camera lens")["flaws"] == \
+        ["small crack on the back camera lens"]

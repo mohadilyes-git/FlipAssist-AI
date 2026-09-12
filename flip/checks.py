@@ -18,6 +18,35 @@ from flip.numbers import TYPED_BATTERY, battery_worded
 MAX_CONDITION_NOTE = 1000  # eBay's limit for the condition description
 MAX_DESCRIPTION = 1500     # our own limit: short listings read better and cost fewer tokens
 MAX_MESSAGE = 500
+SHORT_MESSAGE = 250  # characters: a usual message in AlertFlip's style
+MAX_QUESTIONS = 2  # in a usual message
+GREETING_WORDS = {"hi", "hiya", "hello", "hey", "alright", "morning", "afternoon", "evening", "yo"}
+EMOJI = re.compile("[\U0001F1E6-\U0001F1FF\U0001F300-\U0001FAFF☀-➿⬀-⯿‼⁉]")  # flags, stars and "‼️" too
+# AlertFlip's rules for a message to a seller (check_message_manner): iCloud and locks are asked once the
+# seller replies; nothing is paid before you collect; no compliments, which read as softening them up
+LOCK_TALK = re.compile(r"\b(?:i ?cloud|find my(?! (?:way|feet|bearings|house|place|address|keys))|fmi|activation|"
+                       r"apple[- ]?id|apple account|google account|frp|account lock)\b", re.IGNORECASE)
+PAY_FIRST = re.compile(
+    r"\b(?:deposit|up[- ]?front|(?<!thanks )(?<!thank you )in advance|before (?:i |we )?(?:collect|collection|meet|see)\w*)\b"
+    r"|\bpay(?:ing)? (?:you |it )?(?:now|first(?! thing)|straight ?away|right away|asap)\b"
+    r"(?! (?:on|at|when|in person|in cash on|once))"
+    r"|\b(?:transfer|bacs|paypal|send|sending|ping)\s+(?:it |you |over |the )?(?:money |payment |cash |funds |it )?"
+    r"(?:now|today|tonight|over|first|asap|straight ?away|right away|in advance)\b"
+    r"|\bsend (?:you )?(?:the )?(?:money|payment)\b", re.IGNORECASE)
+COMPLIMENT = re.compile(
+    r"\blooks (?:really |very |so |absolutely |super )?(?:nice|lovely|great|perfect|brilliant|amazing|mint|immaculate|"
+    r"gorgeous|stunning|beautiful|cracking|smart|clean|class)\b(?! (?:for|to) me)|\bwell (?:looked|cared)\b"
+    r"|\b(?:nice|lovely|cracking|beautiful|gorgeous|stunning|smart|cool|great|brilliant|amazing|mint) (?:looking )?"
+    r"(?:console|phone|item|one|bit of kit|piece|laptop|watch|bike|set|headphones|earbuds|camera|tv|machine|unit|device|"
+    r"tablet|ipad|iphone|kit)\b|(?<!not in )(?<!not )\bgreat condition\b|\bbeautiful\b|\bstunning\b|\bgorgeous\b",
+    re.IGNORECASE)
+I_PAY = re.compile(r"\b(?:I'?ll|I will|will|I'?d|I would)\s+(?:\w+ly\s+)?(?:pay|be paying)\b", re.IGNORECASE)
+# ending a listing: dealing outside eBay, but on Facebook just taking it down
+ENDING = re.compile(r"end (?:the |your )?listing", re.IGNORECASE)
+# a sentence asking without a question mark: "Are you about Saturday", "Hi is it still available"
+QUESTION_START = re.compile(r"^(?:(?:hi|hello|hey|hiya|mate|there)[,!]?\s+)*(?:is|are|was|were|do|does|did|any|has|have|"
+                            r"what|when|where|how|why)\b", re.IGNORECASE)
+SAYS = {"collecting": "you'll come and collect", "cash": "you'll pay cash", "postage": "postage"}
 NEW_CONDITIONS = {"1000", "1500"}  # New, Opened - never used: eBay ignores a condition note on these
 UNSURE = "unsure"  # the AI may answer this for colour when the photo doesn't show it: then it's for you
 
@@ -58,7 +87,7 @@ CONDITION_PROMISES = {
     "dent": ["dent", "dented"],
     "crack": ["crack", "cracked"],
     "chip": ["chip", "chipped"],
-    "mark": ["mark", "marking", "wear"],
+    "mark": ["mark", "marked", "marking", "wear", "worn"],
 }
 # each kind of mark is its own claim: "no dents" doesn't back "no scratches".
 # "mark" is the general word: your "no marks" backs a draft's "no scratches"
@@ -67,7 +96,8 @@ MARKS = {"scratch", "scuff", "dent", "crack", "chip", "mark"}
 # "flawless" only by your "flawless"
 LEVELS = {"excellent": ["excellent", "flawless"], "flawless": ["flawless"]}
 # "chip" after one of these is the processor, not damage: "A15 Bionic chip"
-PROCESSOR_WORDS = {"bionic", "pro", "fusion", "tensor", "exynos", "snapdragon", "gen", "processor", "silicon"}
+PROCESSOR_WORDS = {"bionic", "pro", "fusion", "tensor", "exynos", "snapdragon", "gen", "processor", "silicon", "intel",
+                   "amd", "m1", "m2", "m3", "m4", "kirin", "mediatek", "qualcomm"}
 KEYWORDS = {word: promise for promise, keywords in {**PROMISES, **CONDITION_PROMISES}.items() for word in keywords}
 # what people type is read with one slip allowed ("few scraches" is scratches), for
 # claim words of 6 letters or more: shorter ones have too many real neighbours
@@ -99,7 +129,7 @@ SAME_AS = [
 # phrases that contain a claim word but aren't a claim
 # why an offer over asking is made: so they'll hold it for you, or take the listing down
 HOLD = re.compile(r"\b(?:hold|reserve|keep it for|put it aside|set it aside|take (?:it|the (?:ad|advert|listing|post)) "
-                  r"down|off the market)\b", re.IGNORECASE)
+                  r"down|off the market|end (?:the |your )?listing)\b", re.IGNORECASE)
 # a seller who isn't sure claims nothing, yes or no: "not sure if locked or not" leaves
 # "is it unlocked?" open. Read on the part's words, so "don't" is "don t"
 NOT_SURE = re.compile(r" (?:not sure|unsure|don t know|dont know|do not know|no idea|not certain|can t confirm|"
@@ -111,9 +141,60 @@ HARMLESS = ["perfect for", "perfect gift", "new owner", "new home", "since new",
             "works with", "working with", "compatible with", "games console", "games consoles", "game console",
             "stand out", "stands out"]
 # a claim word with one of these shortly before it, in the same part of the
-# sentence, is a "no": "no box", "doesn't come with a charger", "can't find the box"
+# sentence, is a "no": "no box", "doesn't come with a charger", "can't find the box",
+# "neither scratched nor dented"
 NEGATIONS = {"no", "not", "without", "missing", "never", "none", "nor", "isn", "doesn", "don", "hasn", "wasn",
-             "lost", "t"}
+             "lost", "t", "neither"}
+# ...unless it ends first (denied_by): an exception ("no marks APART from a scratch", "no cracks ONLY light
+# scratches"), a thing of its own the "no" was about ("no OFFERS small crack", "no BOX just a scratch"), or a
+# new statement ("no box, screen HAS a crack", though not "doesn't HAVE any scratches")
+NEGATION_ENDS = {"only", "just", "apart", "except", "bar", "other", "but", "though", "although", "however", "selling",
+                 "sold"}
+NEW_STATEMENT = {"has", "have", "got", "is", "are", "was"}
+NEGATED_THINGS = {"offers", "offer", "swaps", "swap", "returns", "refunds", "timewasters", "time", "box", "charger",
+                  "cable", "plug", "case", "lowballers", "messers", "scams", "pets", "smoke", "smoking"}
+# a label and its answer, as sellers list them: "Faults: none", "Scratches – no", "Any damage? Nope",
+# "Dents: not that I know of", "Scratches ❌", "0 dents" (answered)
+NO_ANSWER = r"(?:no|none|nope|nil|n/?a|zero|0|nothing|never|missing|not included|not that i(?:'?m| am)? (?:know|aware) of)"
+ANSWERS = [
+    (re.compile(rf"\b(?:any\s+)?([a-z]+(?:\s+(?:or|and|&)\s+[a-z]+)?(?:\s+[a-z]+)?)\s*(?:[:=?]|\s[-–—])\s*{NO_ANSWER}"
+                r"\s*(?=[,.;!\n)]|$)", re.IGNORECASE), r"no \1"),
+    (re.compile(r"\b([a-z]+)[ \t]*[❌✖✗]", re.IGNORECASE), r"no \1"),  # on its own line: "❌ Small crack" is a flaw
+    (re.compile(r"(?<![\w.£$€])0\s+(?=[a-z])", re.IGNORECASE), "no "),
+]
+# what has a claim word but isn't a flaw or a claim: a guard against one, a part's name, a cover
+NOT_A_FLAW = re.compile(
+    r"\b(?:scratch[- ]?resist\w*|anti[- ]?scratch|(?:to )?prevent(?:s|ing)? (?:any )?(?:scratch\w*|damage)|"
+    r"protect\w* (?:it )?(?:from|against) (?:any )?(?:scratch\w*|damage|drops?)|water damage indicators?(?: \w+)?|"
+    r"accidental damage(?: cover| protection| insurance)?|damage (?:cover|protection|insurance)|"
+    r"(?:intel|apple|amd|m[1-4](?: pro| max)?|a\d{1,2}(?: bionic| pro)?|bionic|snapdragon|exynos|tensor|kirin|"
+    r"mediatek|qualcomm) chips?|wear ?os|(?:hardly|barely) (?:a|an|any) (?:\w+ )?(?:mark|scratch|scuff|dent|chip)\w*)\b",
+    re.IGNORECASE)
+
+
+def denied_by(lead, negations=NEGATIONS):
+    """Whether the words leading up to a claim word deny it: a negation word
+    among them that nothing ends first (NEGATION_ENDS, NEGATED_THINGS, or a
+    verb with a word of its own before it: NEW_STATEMENT). "doesn t have any"
+    denies; "no box screen has small" and "no cracks only light" don't."""
+    for n, word in enumerate(lead):
+        if word not in negations:
+            continue
+        rest = lead[n + 1:]
+        ended = set(rest) & (NEGATION_ENDS | NEGATED_THINGS) or \
+            any(verb in NEW_STATEMENT and set(rest[:k]) - {"t"} for k, verb in enumerate(rest))
+        if not ended:
+            return True
+    return False
+
+
+def answered(text):
+    """A listing's labels with their answers turned into plain words: "Faults:
+    none" -> "no Faults", "Any damage? Nope" -> "no damage", "Scratches ❌" ->
+    "no Scratches", "0 dents" -> "no dents"."""
+    for pattern, plain in ANSWERS:
+        text = pattern.sub(plain, text)
+    return text
 # ...and so is one of these shortly after it: "charger MISSING", "box LOST"
 NEGATED_AFTER = {"missing", "lost", "none", "excluded"}
 # ...or "not" and one of these: "charger NOT INCLUDED"
@@ -222,7 +303,9 @@ OFFER_VERBS = {"pay", "paying", "offer", "offering", "give", "do", "take", "go",
 LISTING_PRICE = re.compile(r"\b(?:paid|rrp|retail|retails|retailed|cost|costs|bought (?:it )?for|worth|valued at|was)"
                            r"\s+(?:at\s+)?(?:£|gbp\s?)?\s?\d[\d,]*(?:\.\d{2})?\b" + COUNTED + r"|\bgbp\s?\d", re.IGNORECASE)
 # paying or dealing outside the platform: no buyer protection, and against eBay's rules
-OFF_PLATFORM = re.compile(r"\b(?:outside (?:of )?ebay|off ebay|end (?:the |your )?listing|friends (?:and|&) family|"
+OFF_PLATFORM = re.compile(r"\b(?:outside (?:of )?(?:ebay|vinted|the app|the site|the platform)|off (?:the )?(?:ebay|vinted|"
+                          r"app|site|platform)|(?:save|avoid|skip|dodge|without) (?:the |on |paying )?(?:the )?(?:fees?|"
+                          r"buyer protection)|end (?:the |your )?listing|friends (?:and|&) family|bacs|"
                           r"f ?& ?f|bank transfer|direct transfer|pay(?:ment)? by transfer|revolut|monzo|crypto|"
                           r"bitcoin|western union|gift cards?|"
                           # ending an auction early to sell outside it
@@ -290,7 +373,10 @@ PROBLEM = re.compile(
     r"doesn'?t (?:work|charge|turn|connect|hold|stay)|won'?t (?:work|charge|turn|connect|hold|stay)|"
     r"not (?:charging|holding|turning|connecting|pairing)|needs? (?:replacing|a new|repair\w*|fixing)|"
     r"replaced|replacement|repaired|spares|for parts|cosmetic|blemish\w*|imperfection\w*|cloudy|hazy|bleed\w*|"
-    r"bubbl\w*|weak|noisy|noise|smell\w*|locked|blacklisted|bad|poor|cracking|"
+    r"bubbl\w*|weak|noisy|noise|smell\w*|locked|blacklisted|bad|poor|cracking|swollen|lifting|"
+    r"stop(?:s|ped) working|cuts? out|cutting out|restart\w*|intermittent\w*|"
+    r"turns? (?:itself )?(?:on and off|off and on|off by itself|off on its own|off randomly)|"
+    r"keeps? (?:turning|switching|shutting) (?:off|down)|no (?:face|touch) id|"
     r"(?:isn'?t|is not|not) (?:perfect|great|good|the best|mint|working properly)|"
     r"no (?:sound|power|picture|signal|display|image|wifi|charge|charging|service|audio|video|bluetooth)|"
     rf"(?:does not|doesn['’]?t|do not|don['’]?t|did not|didn['’]?t|will not|won['’]?t|can ?not|can['’]?t|isn['’]?t|"
@@ -303,7 +389,7 @@ PROBLEM = re.compile(
 PROMISES_ABOUT_YOU = {
     "collecting": re.compile(
         r"\b(?:(?:can|could|will|i'?ll|happy to|able to|ready to|free to|want to|like to|gladly)\s+"
-        r"(?:come\s+(?:and\s+)?)?(?:collect|pick)\w*"
+        r"(?:come\s+(?:(?:and|&)\s+)?)?(?:collect|pick)\w*|when (?:i|we) (?:come (?:to |and |& )?)?(?:collect|pick)\w*"
         r"|collect(?:ing|ed)?\s+(?:it|them|this|these|today|tonight|tomorrow|whenever|asap|later|now|any ?time|"
         r"this (?:week|weekend|evening|morning|afternoon)|at|from|in person)"
         r"|on collection|arrange (?:a |the )?collection|collection (?:is|would be|today|tonight|tomorrow|whenever|asap)"
@@ -323,16 +409,26 @@ ASKS_YOU = re.compile(r"\b(?:would|could|will|can)\s+(?:you|u)\b", re.IGNORECASE
 SECOND_OFFER = re.compile(
     r"\b(?:(?:the |your )?full asking(?: price)?|pay (?:the |your )?asking(?: price)?"
     r"|(?:go|pay|offer|stretch|come up)\s+(?:a (?:bit|little) |slightly )?(?:higher|more)\b(?! than)"
-    r"|meet (?:you |me )?(?:in the )?middle|split the difference"
+    r"|meet (?:you |me )?(?:in the )?middle|split the difference|could do (?:a (?:bit|little) |slightly )?more"
+    r"|add (?:a tenner|a fiver|a few quid|\w+ quid|a bit|a little)|(?:a few|couple of|a couple of) quid (?:higher|more)"
+    r"|wiggle room|bit of room|flexible on (?:the )?price|price is flexible|go (?:up|higher) (?:a bit|a little|if)"
     r"|if not,? i(?:'d| could| can| would| will|'ll)?\s+(?:do|pay|go|offer|take|meet|stretch|split)"
     r"|if not,? (?:would you (?:take|do|accept|consider)|how about|what about))\b", re.IGNORECASE)
+# ...said not to happen after it: "Collection is NOT possible", "collection would be IMPOSSIBLE"
+NOT_AFTER = re.compile(r"\s*(?:\w+\s+){0,2}?(?:not|n't|isn't|isnt|impossible|never|unlikely|tricky|difficult|hard|a problem)\b",
+                       re.IGNORECASE)
+# ...someone else travelling: "happy for YOU to drop round"
+SOMEONE_ELSE = re.compile(r"\byou(?:'re| are)? (?:welcome |free |happy )?(?:to|could|can|might)\b(?:\s+\w+){0,2}\s*$",
+                          re.IGNORECASE)
+# a "no" that isn't one: "no problem collecting", "can't wait to collect"
+HARMLESS_NO = re.compile(r"\b(?:no (?:problem|bother|worries|issue)|not a problem|can'?t wait)\b", re.IGNORECASE)
 # "can't collect" isn't a promise
 NOT_PROMISED = re.compile(r"\b(?:can'?t|cannot|can not|won'?t|wouldn'?t|shouldn'?t|unable to|not|no|never|"
                           r"couldn'?t)\s+(?:\w+\s+){0,3}$", re.IGNORECASE)
 # a question tagged onto a promise doesn't make it a question: "I can collect today, does that work?"
 TAG_QUESTION = re.compile(r",?\s*(?:does that (?:work|suit(?: you)?|sound (?:ok|okay|good|alright))|"
                           r"is that (?:ok|okay|alright|fine|good)|if that'?s (?:ok|okay|alright|fine)|"
-                          r"would that (?:work|be (?:ok|okay|alright|fine))|ok|okay|alright|yeah)"
+                          r"would that (?:work|be (?:ok|okay|alright|fine))|ok|okay|alright|yeah|fine|good)"
                           r"(?: (?:for|with) you)?\s*\?$", re.IGNORECASE)
 # "would you take £170, or is it postage only?" asks about the sale, it doesn't promise
 ONLY_QUESTION = re.compile(r",?\s+or is (?:it|that)\b.*$", re.IGNORECASE)
@@ -418,12 +514,10 @@ def promises_in(text, typos=False):
     counts: "few scraches" says scratches. The AI's own words are read as written.
     """
     found = {}
-    text = text.lower()
+    text = answered(text).lower()
     if typos:
         text = BH.sub("battery", text)
-    # "box: no", "charger - none" -> "no box", "no charger"; "box: yes" -> "box"
-    text = re.sub(r"\b([a-z]+(?: [a-z]+)?)\s*[:=\-–—]\s*(?:no|none|nope|missing|not included)\s*(?=[,.;\n]|$)",
-                  r"no \1", text)
+    # "box: yes" -> "box" ("box: no" is answered's)
     text = re.sub(r"\b([a-z]+(?: [a-z]+)?)\s*[:=\-–—]\s*(?:yes|yep|included)\s*(?=[,.;\n]|$)", r"\1", text)
     # read one part of a sentence at a time, so "no scratches, comes with box"
     # or "no scratches and comes with box" doesn't turn into "no box"
@@ -435,6 +529,7 @@ def promises_in(text, typos=False):
             part = part.replace(f" {phrase} ", f" {same} ")
         for phrase in HARMLESS:
             part = part.replace(f" {phrase} ", " ")
+        part = NOT_A_FLAW.sub(" ", part)
         part_words = part.split()
         for i, word in enumerate(part_words):
             promise = KEYWORDS.get(singular(word)) or (typos and KEYWORDS.get(slipped(word)))
@@ -459,8 +554,9 @@ def promises_in(text, typos=False):
                 j += 1
             after = part_words[j:j + 3]
             # up to 5 words back: "doesn't come with a charger" splits into
-            # doesn / t / come / with / a, so "doesn" is 5 words before
-            negated = bool(NEGATIONS & set(part_words[max(0, i - 5):i])) or bool(NEGATED_AFTER & set(after[:2])) \
+            # doesn / t / come / with / a, so "doesn" is 5 words before. A "no" stops
+            # where its own thing ends: "no offers small crack", "no cracks only light scratches"
+            negated = denied_by(part_words[max(0, i - 5):i]) or bool(NEGATED_AFTER & set(after[:2])) \
                 or any(w in ("not", "t") and nxt in INCLUDED for w, nxt in zip(after, after[1:]))
             found.setdefault(promise, set()).add("no" if negated else "yes")
     return found
@@ -798,10 +894,13 @@ def check_no_prices(what, text):
     return []
 
 
-def check_no_off_platform(what, text):
+def check_no_off_platform(what, text, ebay=True):
     """Nothing about paying or dealing outside the platform: bank transfer,
-    PayPal friends and family, "outside eBay", ending the listing early."""
-    if OFF_PLATFORM.search(text):
+    PayPal friends and family, "outside eBay" or "off the app", ending the
+    listing early. On Facebook or Gumtree (ebay=False) there's no sale to go
+    round, so ending the listing is only what "take it down" says."""
+    found = OFF_PLATFORM.search(text)
+    if found and (ebay or not ENDING.fullmatch(found.group())):
         return [f"{what} suggests paying or dealing outside the platform"]
     return []
 
@@ -850,9 +949,23 @@ def promised_in(text):
             continue
         sentence = ONLY_QUESTION.sub("", sentence)
         for habit, pattern in PROMISES_ABOUT_YOU.items():
-            if any(not NOT_PROMISED.search(sentence[:m.start()]) for m in pattern.finditer(sentence)):
+            if any(promised(sentence, m, habit) for m in pattern.finditer(sentence)):
                 found.add(habit)
     return found
+
+
+def promised(sentence, found, habit):
+    """Whether one match of a habit in a sentence is a promise of yours: not
+    "can't collect" (with "no problem collecting" and "can't wait to
+    collect" still promises), not one said not to happen after it
+    ("Collection is not possible"), not the seller travelling ("happy for
+    you to drop round"), and not a name ("the Johnny Cash LP")."""
+    before = HARMLESS_NO.sub(" ", sentence[:found.start()])
+    if NOT_PROMISED.search(before) or NOT_AFTER.match(sentence[found.end():]):
+        return False
+    if habit == "collecting" and SOMEONE_ELSE.search(before):
+        return False
+    return not (habit == "cash" and found.group()[:1] == "C" and re.search(r"\b[A-Z][a-z]+ $", before))
 
 
 def check_no_unasked_promises(message, allowed):
@@ -939,20 +1052,86 @@ def prices_in(text):
     return {pence_or_none(amount) for pattern in PRICES for amount in pattern.findall(text)}
 
 
+def offer_stated(sentence):
+    """Whether a sentence says the offer as yours: "I'll pay £360", "I can do £360"."""
+    return bool(re.search(r"\b(?:i'?ll|i will|i can|i could|happy to|i'?d|i would)\s+(?:\w+ly\s+)?(?:pay|do|offer|give)\b",
+                          sentence, re.IGNORECASE))
+
+
 def offer_asked(message, offer):
     """True if the offer is in a question: "would you take £210?", and also
     "would you be happy with £210?", where "with" starts a new clause of the
-    same question."""
+    same question, or "£210 if you take the listing down?", a question with
+    no question word. A question tagged on ("..., is that ok?") asks nothing."""
     for sentence in re.split(r"(?<=[.!?])\s+|\n+", message.strip()):
         asking = False
         for clause, asks in clauses(sentence):
             asking = asking or asks
             if asking and offer in prices_in(clause):
                 return True
+        bare = TAG_QUESTION.sub(".", SIGN_OFF.sub("", sentence)).rstrip()
+        if bare.endswith("?") and offer in prices_in(bare) and not offer_stated(bare):
+            return True
     return False
 
 
-def check_message(message, offer, sources, asking=None, kind="lower", min_words=0):
+def check_message_manner(message, greeting=None, usual=True, short=False, must=(), cash=True, emoji=False,
+                         praise=False):
+    """AlertFlip's rules for a message to a seller (its seller-message
+    function), on top of check_message's: no asking about iCloud or locks
+    (that's for once the seller replies), no paying before collecting, no
+    "I'll pay" twice, no compliments about the item, and a usual message asks
+    at most two questions (a longer one asks what the listing leaves open).
+
+    greeting: "Hi" when it must open with that, True for any greeting (yours),
+    None when your messages don't open with one. short: AlertFlip's 250
+    characters, for a usual message before you have past messages. must: how
+    it has to say you'll buy ("collecting", "cash": on Facebook and Gumtree
+    with no past messages). cash: False on eBay and Vinted, where you pay
+    through the site. emoji: whether your messages use them. praise: whether
+    this draft gives the listing's good condition as its reason.
+    """
+    if not isinstance(message, str) or not message.strip():
+        return []  # check_message reports that
+    message = re.sub(r"[’‘ʼ]", "'", message.strip())
+    problems = []
+    first = re.match(r"[A-Za-z]+", message)
+    if isinstance(greeting, str) and not re.match(rf"{re.escape(greeting)}\b", message, re.IGNORECASE):
+        problems.append(f"the message doesn't open with \"{greeting}\"")
+    elif greeting is True and not (first and first.group().lower() in GREETING_WORDS):
+        problems.append("the message doesn't open with a greeting")
+    if short and len(message) > SHORT_MESSAGE:
+        problems.append(f"the message is {len(message)} characters: a usual one is under {SHORT_MESSAGE}")
+    asked = questions_asked(message)
+    if usual and asked > MAX_QUESTIONS:
+        problems.append(f"the message asks {asked} questions: at most {MAX_QUESTIONS}")
+    for pattern, what in ((LOCK_TALK, "asks about iCloud or locks, which is for once the seller replies"),
+                          (PAY_FIRST, "offers to pay before collecting"),
+                          *(() if praise else ((COMPLIMENT, "compliments the item"),))):
+        found = pattern.search(message)
+        if found:
+            problems.append(f"the message {what}: \"{found.group()}\"")
+    if len(I_PAY.findall(message)) > 1:
+        problems.append("the message says \"I'll pay\" twice")
+    if not emoji and EMOJI.search(message):
+        problems.append("the message has an emoji, which your messages don't use")
+    missing = [habit for habit in must if habit not in promised_in(message)]
+    if missing:
+        problems.append(f"the message doesn't say {' and '.join(SAYS[m] for m in missing)}: on Facebook and Gumtree it does")
+    if not cash and "cash" in promised_in(message):  # "the Johnny Cash LP" offers none
+        problems.append("the message offers cash, but on eBay and Vinted you pay through the site")
+    return problems
+
+
+def questions_asked(message):
+    """How many sentences of a message ask something: a question mark, or
+    two ("available??"), counts once, and a question asked without one
+    counts too ("Hi is it still available", "Are you about Saturday")."""
+    return sum(1 for sentence in re.split(r"(?<=[.!?])\s+|\n+", message.strip()) if sentence.strip() and
+               (ends_asking(sentence) or QUESTION_START.match(sentence.strip()) and not sentence.rstrip().endswith((".", "!"))))
+
+
+def check_message(message, offer, sources, asking=None, kind="lower", min_words=0, ebay=True):
     """Every check on a drafted message to a seller. offer and asking are in pence.
 
     The only price it may state is the offer. The asking price may come up as
@@ -996,7 +1175,7 @@ def check_message(message, offer, sources, asking=None, kind="lower", min_words=
         said = re.split(r"(?<=[.!?])\s", message[second.start():])[0]
         problems.append(f"a lower offer can't offer more as well: \"{said.strip()}\"")
     problems += check_no_invented_numbers("message", message, f"{sources} {pounds(offer)}")
-    problems += check_no_off_platform("message", message)
+    problems += check_no_off_platform("message", message, ebay)
     problems += check_no_contact_details("message", message)
     problems += check_no_story("message", message, sources)
     problems += check_message_claims(message, sources)

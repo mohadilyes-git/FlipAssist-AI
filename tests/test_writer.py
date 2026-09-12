@@ -45,15 +45,48 @@ def test_your_own_sentences_with_the_new_price_and_the_sellers_words(kind, offer
     assert write_offer(PAST, kind, offer, point, item="iPhone 13") == message
 
 
-def test_with_no_past_messages_it_is_plain_and_promises_nothing():
+def test_with_no_past_messages_it_writes_alertflips_messages():
+    # on Facebook and Gumtree: cash, and you come and collect
+    assert write_offer(None, "lower", 18500, FLAW, item="iPhone 13", in_person=True) == \
+        "Hi, would you take £185 cash for it? I'm offering that because of the black dot on the screen. " \
+        "I can come and collect."
+    assert write_offer({}, "asking", 22000, item="iPhone 13", in_person=True) == \
+        "Hi, is this still available? I'll pay the full £220 cash and can come and collect. Could you hold it for me?"
+    assert write_offer({}, "more", 42000, item="iPhone 13", in_person=True) == \
+        "Hi, I'll pay £420 cash if you take the listing down and sell it to me. I can come and collect."
+    # on eBay and Vinted it's paid through the site and posted: neither
     assert write_offer(None, "lower", 18500, FLAW, item="iPhone 13") == \
-        "Hi, would you take £185 for it, given the black dot on the screen? Thanks."
-    assert write_offer({}, "more", 42000, item="iPhone 13") == "Hi, I can pay £420 if you can hold it for me. Thanks."
+        "Hi, would you take £185 for it? I'm offering that because of the black dot on the screen."
+    assert write_offer({}, "asking", 22000, item="iPhone 13") == \
+        "Hi, is this still available? I'm happy to pay the full £220. Could you hold it for me?"
+    assert write_offer({}, "more", 42000, item="iPhone 13") == \
+        "Hi, I'll pay £420 if you take the listing down and sell it to me."
+
+
+def test_a_low_battery_is_the_reason_for_a_lower_offer():
+    battery = {"about": "battery", "says": ["battery health 80%"], "battery": "80"}
+    assert write_offer({}, "lower", 23500, battery, in_person=True) == \
+        "Hi, would you take £235 cash for it? I'm offering that because the battery health is 80%. I can come and collect."
+    # in your own sentences it goes after the offer, like a flaw
+    assert write_offer(PAST, "lower", 23500, battery) == "Hi mate, is this still available? Would you take £235 " \
+                                                          "cash, given that the battery health is 80%? Can collect today."
+
+
+def test_the_reason_sentence_says_each_flaw_the_way_it_reads():
+    two = {"about": "flaw", "says": ["Broken back", "doesn't charge"]}
+    assert write_offer({}, "lower", 9000, two) == \
+        "Hi, would you take £90 for it? I'm offering that because of the broken back and because it doesn't charge."
+    assert write_offer({}, "lower", 9000, {"about": "flaw", "says": ["Not charging"]}) == \
+        "Hi, would you take £90 for it? I'm offering that because it's not charging."
+    # the seller's own story has no sentence here: the AI writes instead
+    assert write_offer({}, "lower", 9000, {"about": "flaw", "says": ["I dropped it and cracked the back"]}) is None
 
 
 def test_the_pickup_place_goes_in_only_where_you_say_youll_collect():
     assert write_offer(PAST, "lower", 18500, item="iPhone 13", pickup="Leeds LS6").endswith(
         "Can collect from Leeds LS6 today.")
+    assert write_offer(None, "lower", 18500, item="iPhone 13", pickup="Leeds LS6", in_person=True).endswith(
+        "I can come and collect from Leeds LS6.")
     assert "Leeds" not in write_offer(None, "lower", 18500, item="iPhone 13", pickup="Leeds LS6")
     assert "Leeds" not in write_offer(CHATTY, "lower", 18500, item="iPhone 13", pickup="Leeds LS6")
 
@@ -97,10 +130,13 @@ def test_an_emoji_habit_ends_the_message_and_a_reason_goes_before_it():
 def test_a_longer_message_adds_the_open_questions_then_only_safe_lines():
     asks = ["Does it come with a charger?", "Does it come with the box?"]
     assert write_offer(None, "lower", 18500, FLAW, asks, at_least=23, item="iPhone 13") == \
-        "Hi, would you take £185 for it, given the black dot on the screen? Does it come with a charger and the " \
-        "box? Thanks."
+        "Hi, would you take £185 for it? I'm offering that because of the black dot on the screen. Does it come " \
+        "with a charger and the box?"
     assert write_offer(None, "lower", 34000, None, [], at_least=23, item="PlayStation 5 Slim") == \
-        "Hi, I'm interested in your PlayStation 5 Slim. Would you take £340 for it? Let me know what you think. Thanks."
+        "Hi, I'm interested in your PlayStation 5 Slim. Would you take £340 for it? Let me know what you think."
+    assert write_offer(None, "lower", 34000, None, [], at_least=23, item="PlayStation 5 Slim", in_person=True) == \
+        "Hi, I'm interested in your PlayStation 5 Slim. Would you take £340 cash for it? Let me know what you think. " \
+        "I can come and collect."
 
 
 def test_the_draft_on_screen_keeps_every_word():
@@ -184,7 +220,7 @@ def test_making_a_draft_longer_never_breaks_the_greeting_or_asks_twice():
 
 
 @pytest.mark.parametrize("part, phrase", [
-    ("Face ID not working", "the Face ID not working"),  # "ID" isn't "I"
+    ("Face ID not working", "that the Face ID is not working"),  # "ID" isn't "I"
     ("Faulty", "that it's faulty"),
     ("Slightly scratched", "that it's slightly scratched"),
     ("Cracked and scratched", "that it's cracked and scratched"),
@@ -218,6 +254,7 @@ def test_a_sellers_run_on_flaw_reads_as_a_sentence():
     """A real listing (2 Sep): "one issue with the screen it turns on and off sometimes"."""
     point = {"about": "flaw", "says": ["one issue with the screen it turns on and off"]}
     assert write_offer({}, "lower", 9000, point) == \
-        "Hi, would you take £90 for it, given the issue with the screen – it turns on and off? Thanks."
+        "Hi, would you take £90 for it? I'm offering that because of the issue with the screen – it turns on and off."
     assert write_offer({}, "asking", 11000, point) == \
-        "Hi, I can pay £110 for it. I don't mind the issue with the screen – it turns on and off. Thanks."
+        "Hi, is this still available? I'm happy to pay the full £110. I don't mind the issue with the screen – it " \
+        "turns on and off. Could you hold it for me?"

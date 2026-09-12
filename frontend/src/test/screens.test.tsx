@@ -16,7 +16,13 @@ const DRAFT: MessageDraft = {
     read_by: "gemma3:4b", attempts: [{ model: "gemma3:4b", problems: [], seconds: 1.2, cost_pence: 0 }] },
 };
 const STYLE: Style = { count: 14, traits: [{ k: "Opens with", v: "'Hi mate'" }, { k: "Length", v: "about 12 words" }],
-  phrases: [{ k: "Closing", v: "Cheers" }] };
+  phrases: [{ k: "Closing", v: "Cheers" }],
+  learned: [{ key: "greeting:hi mate", what: "Opens with", value: "Hi mate", used: true },
+    { key: "mention:cash", what: "Mentions", value: "paying cash", used: true },
+    { key: "phrase:closing:cheers", what: "Closing", value: "Cheers", used: true }] };
+const NO_STYLE: Style = { count: 0, traits: [], phrases: [], learned: [] };
+// the same style with paying cash removed
+const NO_CASH: Style = { ...STYLE, learned: STYLE.learned.map((r) => (r.key === "mention:cash" ? { ...r, used: false } : r)) };
 const HEALTH = { local_model: "gemma3:4b", local_running: true, api_model: "claude-haiku-5-5", api_key_set: true,
   flip_api_key_set: true };
 const STATS = { drafts: 2, ready: 2, needs_you: 0, done_on_this_mac: 0.8, models: [], cost_pence: 0,
@@ -346,7 +352,7 @@ describe("the app", () => {
     "GET /api/stats": [200, STATS] as Answer };
 
   it("asks you to set up your style on first launch, and learns from the messages you paste", async () => {
-    const fetch = serve({ ...usual, "GET /api/style": [[200, { count: 0, traits: [], phrases: [] }], [200, STYLE]],
+    const fetch = serve({ ...usual, "GET /api/style": [[200, NO_STYLE], [200, STYLE]],
       "POST /api/style/messages": [201, []] });
     const user = userEvent.setup();
     render(<App />);
@@ -370,8 +376,42 @@ describe("the app", () => {
     expect(localStorage.getItem(SETUP_DONE)).toBe("1");
   });
 
+  it("lists what it learned at the end of setup, and removes what you don't want", async () => {
+    const fetch = serve({ ...usual, "GET /api/style": [[200, NO_STYLE], [200, STYLE], [200, NO_CASH]],
+      "POST /api/style/messages": [201, []], "POST /api/style/learned": [200, NO_CASH] });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Paste my messages" }));
+    const first = within(screen.getByRole("region", { name: "Message 1" }));
+    await user.type(first.getByLabelText("Your message"), "Hi mate, would you take £125 cash? Cheers");
+    await user.click(screen.getByRole("button", { name: "Learn from 1 message" }));
+    expect(await screen.findByText("This is what it'll put in your messages. Remove anything you don't want.")).toBeTruthy();
+    const list = within(screen.getByLabelText("What it learned"));
+    expect(list.getByText("about 12 words")).toBeTruthy(); // how long isn't something to remove
+    expect(list.getAllByRole("button").map((b) => b.textContent)).toEqual(["Remove", "Remove", "Remove"]);
+    await user.click(screen.getByRole("button", { name: "Remove “paying cash” from your style" }));
+    expect(sent(fetch, "POST /api/style/learned")).toEqual({ key: "mention:cash", used: false });
+    expect(await screen.findByRole("button", { name: "Use “paying cash” again" })).toBeTruthy();
+  });
+
+  it("removes a thing your style learned from Your style, and puts it back", async () => {
+    localStorage.setItem(SETUP_DONE, "1");
+    window.location.hash = "#style";
+    const fetch = serve({ ...usual, "GET /api/style": [[200, NO_CASH], [200, STYLE]], "GET /api/style/messages": [200, []],
+      "POST /api/style/learned": [200, STYLE] });
+    const user = userEvent.setup();
+    render(<App />);
+    const card = within(await screen.findByRole("region", { name: "Style card" }));
+    expect(card.getByText("paying cash").closest("p")?.className).toContain("removed");
+    await user.click(await screen.findByRole("button", { name: "Use “paying cash” again" }));
+    expect(sent(fetch, "POST /api/style/learned")).toEqual({ key: "mention:cash", used: true });
+    expect(await screen.findByRole("button", { name: "Remove “paying cash” from your style" })).toBeTruthy();
+    const book = within(screen.getByRole("region", { name: "Phrasebook" }));
+    expect(book.getByRole("button", { name: "Remove “Cheers” from your style" })).toBeTruthy();
+  });
+
   it("goes through the 8 listings one at a time, sending only the ones you answered", async () => {
-    const fetch = serve({ ...usual, "GET /api/style": [[200, { count: 0, traits: [], phrases: [] }], [200, STYLE]],
+    const fetch = serve({ ...usual, "GET /api/style": [[200, NO_STYLE], [200, STYLE]],
       "POST /api/style/messages": [201, []] });
     const user = userEvent.setup();
     render(<App />);
@@ -421,7 +461,7 @@ describe("the app", () => {
     const user = userEvent.setup();
     render(<App />);
     expect(await screen.findByText("Pixel 8 · £260")).toBeTruthy();
-    expect(await screen.findByText("'Hi mate'")).toBeTruthy();
+    expect(await screen.findByText("Hi mate")).toBeTruthy();
     expect(screen.getByText("Cheers")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Delete this message" }));
     expect(screen.queryByText("Pixel 8 · £260")).toBeNull();
