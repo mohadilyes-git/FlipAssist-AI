@@ -5,8 +5,8 @@ converted with the built-in sips tool.
 
 Only photos reach sips: a file is a JPEG, PNG, HEIC or WebP by how its bytes
 start, whatever it's called, and anything else (a PDF, a TIFF...) is refused,
-as is one with more pixels than any camera photo, or one sips can't read in
-SECONDS. sips reads whatever it's given, decoding all of it first."""
+as is one over MAX_PIXELS (with what to do: send a smaller copy), or one sips
+can't read in SECONDS. sips reads whatever it's given, decoding all of it first."""
 
 import base64
 import re
@@ -16,7 +16,9 @@ import tempfile
 from pathlib import Path
 
 MAX_SIDE = 1024  # pixels on the longest side
-MAX_PIXELS = 60_000_000  # a 48-megapixel iPhone photo fits; a 40,000 x 40,000 trick image doesn't
+# a 48-megapixel iPhone photo fits; a 40,000 x 40,000 trick image doesn't, and nor does a 200-megapixel
+# photo from a Samsung Ultra (sips decodes all of it first): that one goes in as a smaller copy
+MAX_PIXELS = 60_000_000
 SECONDS = 20  # the longest sips gets for one photo
 HEIF_BRANDS = {b"heic", b"heix", b"hevc", b"hevx", b"heim", b"heis", b"hevm", b"hevs", b"mif1", b"msf1"}
 
@@ -50,6 +52,13 @@ def sips(path, *args, text=False):
         raise NotAPhoto(path, f"took over {SECONDS} seconds to read") from None
 
 
+def megapixels(pixels):
+    """Megapixels as a size over the limit reads: rounded up, to a tenth
+    under 100 ("60.2", not "60") and whole from there ("1,600")."""
+    tenths = -(-pixels // 100_000)
+    return f"{-(-tenths // 10):,}" if tenths >= 1000 else f"{tenths / 10:g}"
+
+
 def photo_jpeg(path, max_side=MAX_SIDE, max_pixels=MAX_PIXELS):
     """The photo as JPEG bytes, shrunk (never enlarged) to max_side pixels."""
     path = Path(path)
@@ -70,8 +79,8 @@ def photo_jpeg(path, max_side=MAX_SIDE, max_pixels=MAX_PIXELS):
         raise NotAPhoto(path, "can't be read as a photo")
     width, height = int(size["Width"]), int(size["Height"])
     if width * height > max_pixels:
-        raise NotAPhoto(path, f"{width:,} x {height:,} pixels is more than a photo has "
-                              f"(at most {max_pixels // 1_000_000} megapixels)")
+        raise NotAPhoto(path, f"{width:,} x {height:,} pixels ({megapixels(width * height)} megapixels) is over the "
+                              f"{max_pixels // 1_000_000}-megapixel limit: save a smaller copy and send that")
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "photo.jpg"
         resize = ["-Z", str(max_side)] if max(width, height) > max_side else []

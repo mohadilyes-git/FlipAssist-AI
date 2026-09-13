@@ -34,12 +34,22 @@ def test_a_pdf_called_photo_jpg_never_reaches_sips(tmp_path, monkeypatch):
 
 
 @pytest.mark.skipif(not shutil.which("sips"), reason="sips is on Macs only")
-def test_more_pixels_than_a_photo_has_is_refused_before_it_is_converted(tmp_path):
+def test_more_pixels_than_the_limit_is_refused_before_it_is_converted_with_what_to_do(tmp_path, monkeypatch):
     path = tmp_path / "tiny.jpg"
     path.write_bytes(JPEG)  # 2 x 2
     assert photo_jpeg(path)[:3] == b"\xff\xd8\xff"
-    with pytest.raises(NotAPhoto, match="2 x 2 pixels is more than a photo has"):
+    with pytest.raises(NotAPhoto, match="2 x 2 pixels"):
         photo_jpeg(path, max_pixels=3)
+    # a 200-megapixel Samsung Ultra photo is a real photo: the message says what to do, not that it isn't one
+    monkeypatch.setattr(photos, "sips", lambda path, *args, text=False: "pixelWidth: 16320\npixelHeight: 12240")
+    with pytest.raises(NotAPhoto) as refused:
+        photo_jpeg(path)
+    assert refused.value.why == \
+        "16,320 x 12,240 pixels (200 megapixels) is over the 60-megapixel limit: save a smaller copy and send that"
+    # just over the limit reads as over it: rounded up, to a tenth
+    monkeypatch.setattr(photos, "sips", lambda path, *args, text=False: "pixelWidth: 9504\npixelHeight: 6336")
+    with pytest.raises(NotAPhoto, match=r"\(60\.3 megapixels\) is over the 60-megapixel limit"):
+        photo_jpeg(path)
 
 
 def test_a_photo_sips_cant_read_in_time_is_refused(tmp_path, monkeypatch):
