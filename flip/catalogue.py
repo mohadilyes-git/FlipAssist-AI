@@ -35,6 +35,32 @@ NAME_DESCRIPTORS = {"nd", "rd", "th", "st", "gen", "generation", "usb", "c", "li
 PLUS_MEANS_AND = {"a", "an", "the", "case", "cases", "charger", "box", "cable", "free", "original", "postage",
                   "screen", "protector", "earphones", "headphones", "lead", "accessories", "extras", "games",
                   "controller", "controllers", "dock"}
+# "a MINI scratch on the back" is a small scratch on an iPhone 13, not an iPhone 13 mini. Only where it can't be
+# the name: at the start, after a comma or full stop, or after a word like "a" or "few"; right before a mark,
+# with nothing but a space between ("Mini - scratch on back" is the Mini, then the scratch); and not "mini
+# scratch free". Read on the text itself, before its dashes and brackets are lost to words()
+MARK_NAMES = (r"(?:scratch(?:es|ed|y)?|scratchs|scraches|scracth|scuff(?:s|ed|ing)?|dent(?:s|ed)?|dints?|crack(?:s|ed)?|"
+              r"chip(?:s|ped)?|marks?|marked|marking|scrapes?|nicks?|dings?|blemish(?:es)?|imperfections?|wear)")
+SMALL_MINI = re.compile(
+    r"(^|[,.;:!?\n(]\s*|\b(?:a|an|one|few|couple of|some|small|tiny|minor|light|slight|very|super|two|three|several|"
+    r"with|has|have|had|got|and|plus|also)\s+)mini(?=(?:[ \t]+|-)(?:(?:hairline|light|micro|paint|wear|small|tiny|minor|"
+    rf"faint|surface)[ \t]+)?{MARK_NAMES}\b(?![ \t-]*free))", re.IGNORECASE | re.MULTILINE)
+# letters that aren't a model's: a London postcode ("collection E14"), "E.U.", "U.K.", "U.S.". Read on the
+# text itself: "16e" is a name, "16 E14" a postcode, and words() can't tell them apart
+NOT_A_LETTER = [(re.compile(r"(?<![a-z0-9])e(?=\d{1,2}(?:\s?\d[a-z]{2})?\b)", re.IGNORECASE), "postcode "),
+                (re.compile(r"\b([eu])\.\s?([uks])\.?(?![a-z])", re.IGNORECASE), r"\1\2")]
+# single letters that name another model ("iPhone 17e", "S23 U", "it's the e", "U model"), unless they're the
+# everyday letter: by the word after ("e-sim", "e-mail", "e.g.", "U.K.", "U/L"), or, away from the model's own
+# number, a number after ("London E17") or the word before ("can post to u")
+LETTER_NAMES = {"e", "u"}
+EVERYDAY_AFTER = {"e": {"sim", "sims", "simcard", "mail", "mails", "bay", "g", "commerce", "book", "books", "reader",
+                        "ink"},
+                  "u": {"k", "l", "s", "can", "could", "will", "would", "want", "wanna", "need", "are", "r", "know",
+                        "get", "like", "have", "may", "might", "should", "must", "just", "pls", "please", "too",
+                        "interested"}}
+EVERYDAY_BEFORE = {"u": {"to", "for", "with", "thank", "thanks", "ty", "see", "send", "sent", "message", "msg", "let",
+                         "ask", "call", "text", "dm", "tell", "give", "show", "if", "when", "do", "can", "will", "are",
+                         "did", "got", "c", "cu", "love"}}
 # a colour right before one of these is describing something else: "blue CASE",
 # "pink LINE", "black COVERS", "natural WEAR"
 NOT_ITEM_COLOUR = {"case", "cases", "cover", "covers", "bumper", "skin", "strap", "line", "lines", "spot",
@@ -139,10 +165,13 @@ def mentioned(text_words, phrase, not_followed_by=(), skipping=(), not_after=())
                for start in find_phrase(text_words, phrase_words))
 
 
-def rules_out(text_words, not_if):
+def rules_out(text_words, not_if, numbers=()):
     """True if a word that means a different model appears: "pro" rules out the
     iPhone 13. Not "plus" meaning "and" ("plus a charger", "plus 2 cases"), not
-    "max" in "battery max capacity" or "86% max cap", not "pm" in "after 5pm"."""
+    "max" in "battery max capacity" or "86% max cap", not "pm" in "after 5pm"
+    ("mini" meaning small is written "small" first: as_named). A single
+    letter (LETTER_NAMES) is another model unless it's the everyday letter;
+    numbers are the model's own ("17" for the iPhone 17): "17e" is always a name."""
     for i, word in enumerate(text_words):
         if word not in not_if:
             continue
@@ -154,8 +183,36 @@ def rules_out(text_words, not_if):
             continue  # "max capacity 86%", "86% max cap"
         if word == "pm" and before.isdigit():
             continue  # "collect after 5pm" isn't a Pro Max
+        if word in LETTER_NAMES:
+            following = next((w for w in text_words[i + 1:] if w != BREAK), "")
+            if following in EVERYDAY_AFTER[word]:
+                continue  # "16 e-sim only", "e.g.", "U.K. stock"
+            if before not in numbers and ((word == "e" and following.isdigit()) or
+                                          before in EVERYDAY_BEFORE.get(word, set())):
+                continue  # "collection E17", "can post to u"
         return True
     return False
+
+
+def as_named(text):
+    """The text with what can't be part of a name written plainly: each
+    "mini" that means small as "small" (SMALL_MINI: "few mini scratches" ->
+    "few small scratches"; "13 mini scratches" stays), and letters that are
+    something else (NOT_A_LETTER: "collection E14", "E.U. model")."""
+    text = SMALL_MINI.sub(lambda m: m.group(1) + "small", text or "")
+    for pattern, plain in NOT_A_LETTER:
+        text = pattern.sub(plain, text)
+    return text
+
+
+def name_words(text):
+    """The words a model's name is looked for in: words(), breaks kept, after as_named."""
+    return words(as_named(text), breaks=True)
+
+
+def name_numbers(model):
+    """The numbers in a model's names: {"17"} for the iPhone 17, {"23"} for the Galaxy S23."""
+    return {word for alias in model["aliases"] for word in words(alias) if word.isdigit()}
 
 
 def is_accessory(text_words, start, end):
@@ -175,11 +232,14 @@ def name_matches(text_words, catalogue):
     "ps 5 slim" beats the "ps 5" inside it."""
     matches = []
     for model in catalogue:
-        ruled_out = rules_out(text_words, model["not_if"])
+        ruled_out = rules_out(text_words, model["not_if"], name_numbers(model))
         for alias in model["aliases"]:
             alias_words = words(alias)
             for start in find_phrase(text_words, alias_words):
                 end = start + len(alias_words)
+                if alias_words[-1] in LETTER_NAMES and text_words[end:end + 1] and \
+                        text_words[end] in EVERYDAY_AFTER[alias_words[-1]]:
+                    continue  # "iPhone 16 e-sim" isn't the 16e
                 if not is_accessory(text_words, start, end):
                     matches.append((start, end, model, ruled_out))
     return [m for m in matches
@@ -200,7 +260,7 @@ def find_model(text, catalogue):
     5. The answer is a model only if it's the one thing left. Two products
        named in different places, or one we ruled out, means we can't tell.
     """
-    text_words = words(text, breaks=True)
+    text_words = name_words(text)
     if any(contains(text_words, words(phrase)) for phrase in NOT_THE_ITEM):
         return None
     kept = name_matches(text_words, catalogue)
@@ -212,7 +272,7 @@ def find_model(text, catalogue):
 def models_named(text, catalogue):
     """The ids of every model the text names, even one it rules out: "an iPhone
     15, not the pro" names the iPhone 15."""
-    return {m[2]["id"] for m in name_matches(words(text, breaks=True), catalogue)}
+    return {m[2]["id"] for m in name_matches(name_words(text), catalogue)}
 
 
 def models_disagree(title, description, catalogue):
@@ -366,7 +426,7 @@ def fill_from_catalogue(title, notes, catalogue, description=""):
     """
     title, notes = title or "", notes or ""
     text = f"{title} {notes}"
-    text_words = [*words(title, breaks=True), BREAK, *words(notes, breaks=True)]
+    text_words = [*name_words(title), BREAK, *name_words(notes)]
     warnings = warnings_for(words(f"{text} {description or ''}"))
 
     from_title = find_model(title, catalogue)
@@ -379,7 +439,7 @@ def fill_from_catalogue(title, notes, catalogue, description=""):
         else:
             model = None
             warnings.append("the title and your notes name different models")
-    if model and rules_out(text_words, model["not_if"]):
+    if model and rules_out(text_words, model["not_if"], name_numbers(model)):
         model = None
     if model and model.get("confirm_with") and \
             not any(contains(text_words, words(phrase)) for phrase in model["confirm_with"]):

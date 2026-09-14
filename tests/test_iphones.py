@@ -83,3 +83,43 @@ def test_colours_that_contain_other_colours(title, colour):
 
 def test_a_time_isnt_a_pro_max():
     assert fill_from_catalogue("iPhone 13 128GB Midnight", "collect after 5pm", CATALOGUE)["model_id"] == "iphone-13"
+
+
+@pytest.mark.parametrize("title, notes, expected", [
+    # a mini scratch is a small scratch, not an iPhone 13 mini: at the start, after a comma or "a", "few"...
+    ("iPhone 13 128GB Midnight", "mini scratch on the back", "iphone-13"),
+    ("iPhone 13 128GB Midnight", "mini crack in the corner, works fine", "iphone-13"),
+    ("iPhone 13 128GB Midnight", "battery 88, couple of mini scratches", "iphone-13"),
+    ("iPhone 13 128GB Midnight. Mini dents on the frame", "", "iphone-13"),
+    ("iPhone 13 128GB Midnight", "mini-scratch on back", "iphone-13"),
+    # ...but "mini" that can be the name stays the name, or can't tell (the test agents', 14 Sep)
+    ("iPhone 13 128GB Midnight", "13 mini scratches on back", None),
+    ("iPhone 13 128GB Midnight", "13mini scratches on back", None),
+    ("iPhone 12 64GB White", "12mini crack on back glass", None),
+    ("iPhone 13 128GB Midnight Mini Scratch Free", "", None),
+    ("iPhone 13 128GB Mini - Scratch-Free Screen", "", None),
+    ("iPhone 13 128GB Mini - scratch on back", "", None),
+    ("Apple iPhone 13 128GB Mini (marks on screen)", "", None),
+    ("iPhone 13 128GB Pink", "Mini — scratches on back, battery 88%", None),
+    ("iPhone 13 128GB Midnight mini scratch on the back", "", None),  # after a colour: could be the Midnight mini
+    ("iPhone 13 128GB Mini Midnight", "", None),
+    # e-sim, a London postcode and "e.g." aren't the iPhone 17e...
+    ("iPhone 17 256GB Black, e-sim only", "", "iphone-17"),
+    ("iPhone 17 256GB Black, collection E17", "", "iphone-17"),
+    ("iPhone 17 256GB Black", "boxed e.g. like new", "iphone-17"),
+    ("iPhone 16 e-sim only 128GB", "", "iphone-16"),  # nor the 16e
+    ("iPhone 16 (e-SIM) 128GB Ultramarine", "", "iphone-16"),
+    # ...but the letter as a name is, wherever it is
+    ("iPhone 17e 256GB Black", "", None),
+    ("iPhone 17 E 256GB Black", "", None),
+    ("iPhone 17 256GB Black", "it's the e", None),
+    ("iPhone 17 256GB White E Version", "", None),
+    ("iPhone 17 256GB Black, e model", "", None),
+    ("iPhone 16 128GB Black", "16e, battery 92%", None),
+    ("iPhone 16 128GB White", "it's the e", None),
+    ("iPhone 16e 128GB", "", "iphone-16e"),
+    ("iPhone 13 mini 128GB Midnight", "", "iphone-13-mini"),
+    ("iPhone 12 mini 64GB mini scratch", "", "iphone-12-mini"),
+])
+def test_everyday_mini_and_single_letters_dont_rule_a_model_out(title, notes, expected):
+    assert fill_from_catalogue(title, notes, CATALOGUE)["model_id"] == expected

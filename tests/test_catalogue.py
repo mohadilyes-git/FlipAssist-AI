@@ -308,6 +308,14 @@ def test_unlocked_with_a_doubt_is_for_you(title, notes):
     ("iPhone 13 128GB Midnight unlocked", "boxed plus original charger", "iphone-13"),
     ("iPhone 13 128GB Midnight unlocked + screen protector", "", "iphone-13"),
     ("iPhone 13 128GB Midnight unlocked", "battery max capacity 86%", "iphone-13"),
+    ("Samsung Galaxy S23 128GB Cream", "can post to u", "galaxy-s23"),  # "u" isn't the S23 U...
+    ("Samsung Galaxy S23 128GB Cream U.K. stock", "", "galaxy-s23"),
+    ("Samsung Galaxy S23 128GB Cream U/L", "", "galaxy-s23"),
+    ("Samsung Galaxy S23U 128GB Cream", "", None),  # ...but as a name it's the Ultra
+    ("Samsung Galaxy S23 256GB U", "", None),
+    ("Samsung Galaxy S23 256GB Phantom Black", "it's the U", None),
+    ("Samsung Galaxy S23 Ulta 512GB", "", None),
+    ("Samsung S23 Ult 256GB", "", None),
     ("Apple AirPods Pro (2nd Generation) USB-C", "", "airpods-pro-2"),
     ("Nintendo Switch (OLED Model) White", "", "switch-oled"),
 ])
