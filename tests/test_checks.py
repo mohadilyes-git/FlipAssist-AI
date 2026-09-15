@@ -4,9 +4,11 @@ one good and many bad, each bad one failing for the right reason."""
 import pytest
 
 from flip.catalogue import fill_from_catalogue, load_catalogue, load_conditions
-from flip.checks import (check_listing_answer, check_message, check_message_manner, check_no_unasked_promises, has_fault,
-                         numbers_in,
-                         offer_asked, promised_in, promises_in, sources_text)
+from flip.checks import (KEYWORDS, check_listing_answer, check_message, check_message_manner,
+                         check_no_unasked_promises, has_fault, numbers_in, offer_asked, promised_in, promises_in,
+                         real_words, slipped, sources_text)
+from flip.offers import read_listing
+from flip.real_words import DICTIONARY, build
 
 CATALOGUE = load_catalogue()
 CONDITIONS = load_conditions()
@@ -142,6 +144,86 @@ def test_one_slip_counts_in_what_people_type(typed, claim):
     assert ({claim} if claim else set()) <= set(promises_in(typed, typos=True))
     if claim and claim not in promises_in(typed):
         assert promises_in(typed) == {}  # without typos, the slip says nothing
+
+
+@pytest.mark.parametrize("typed, word", [
+    ("scrstch", "scratch"),  # a key touching the right one
+    ("excellant", "excellent"), ("pristene", "pristine"),  # another vowel
+    ("crak", "crack"), ("dnet", "dent"), ("scuuff", "scuff"), ("mrak", "mark"),  # short words take one slip too
+    ("scarches", "scratch"), ("instuctions", "instructions"),  # long words take two
+    ("unlockex", "unlocked"),  # x touches d
+    ("dentd", "dent"), ("chipd", "chip"),  # as close to "dent" as to "dented": a dent either way
+])
+def test_the_slips_people_make_in_a_hurry_are_read(typed, word):
+    assert slipped(typed) == word and KEYWORDS[word]
+
+
+@pytest.mark.parametrize("real", [
+    "cash", "mask", "mind", "mini", "mist", "came", "cage", "gate", "leak", "chin",  # no realistic slip from a claim word
+    "card", "cards", "core", "work", "charges", "minutes", "mins", "making", "charge", "function", "battered", "extra",
+    "scratchless",  # "screen is completely scratchless"
+])
+def test_a_real_word_is_never_read_as_a_typo(real):
+    assert slipped(real) is None
+
+
+@pytest.mark.parametrize("typed, claim", [("warrant", "warranty"), ("scraches", "scratch"), ("scrath", "scratch"),
+                                          ("baterray", "battery"), ("immculate", "immaculate")])
+def test_what_one_slip_read_before_is_still_read(typed, claim):
+    """ "Still under warrant": the rule from 2 Sep comes first, unguarded as it was."""
+    assert slipped(typed) == claim
+
+
+def test_hurried_notes_back_what_they_say():
+    claims = promises_in("few scrstches on the back, excellant condition, crak on the corner", typos=True)
+    assert claims["scratch"] == claims["crack"] == {"yes"} and "excellent" in {c.split()[0] for c in claims}
+    assert promises_in("few scrstches on the back, excellant condition") == {}  # the AI's own words are read as written
+
+
+# ── what test agents tried, to break reading typos (14 Sep 2026) ──────────────
+
+@pytest.mark.parametrize("text, found", [
+    ("The phone is in excellant condition for its age and always had a case on", "good"),
+    ("The back glass has one small crak near the camera bump at the top", "flaws"),
+    ("There is a tiny dnet on the bottom edge next to the charging port", "flaws"),
+])
+def test_a_typo_in_a_long_sentence_is_quoted_not_a_crash(text, found):
+    """read_listing found the word with typos, then quote() looked for it without them: StopIteration."""
+    assert read_listing(text)[found]
+
+
+@pytest.mark.parametrize("text, claim", [
+    ("out of warrenty", "warranty"), ("warrenty expired", "warranty"), ("screen crak free", "crack"),
+    ("dnet free", "dent"), ("mrak free", "mark"), ("scrstch free", "scratch"),
+    ("doesnt come with charger", "charger"), ("dont have the box", "box"), ("isnt unlocked, its on EE", "unlocked"),
+    ("hasnt got a case", "case"), ("witout box", "box"),
+])
+def test_a_typo_or_a_missing_apostrophe_still_says_no(text, claim):
+    assert promises_in(text, typos=True)[claim] == {"no"}
+
+
+@pytest.mark.parametrize("typed", ["minr", "decnt", "dcent", "deent", "makr", "maks", "minths", "chep", "worj", "scuf"])
+def test_a_typo_as_close_to_an_everyday_word_or_a_maker_is_read_as_neither(typed):
+    """"minr scuffs" is minor scuffs, not mint; "SCUF Reflex Pro" is a controller, not a scuff."""
+    assert slipped(typed) is None
+
+
+def test_everyday_words_make_no_claims_in_notes():
+    claims = promises_in("minr scuffs on the frame, battery 86", typos=True)
+    assert claims["scuff"] == {"yes"} and "flawless" not in claims  # minor scuffs, not mint
+    assert "dent" not in promises_in("decnt condition, light scratch on back", typos=True)
+    assert read_listing("PS5 Slim disc edition. SCUF Reflex Pro included. Paddles all work.")["flaws"] == []
+
+
+@pytest.mark.parametrize("typed, word", [("seled", "sealed"), ("cabes", "cable"), ("scratchess", "scratch")])
+def test_word_endings_that_arent_words_dont_hide_a_typo(typed, word):
+    assert slipped(typed) == word
+
+
+@pytest.mark.skipif(not DICTIONARY.exists(), reason="macOS's dictionary isn't here to build the list from")
+def test_the_real_words_list_is_the_one_the_dictionary_gives():
+    """data/real_words.json is flip.real_words' output: rebuild it after changing the claim words or the catalogue."""
+    assert sorted(real_words()) == build()
 
 
 @pytest.mark.parametrize("notes", ["baterray 88", "batery 88%", "battry: 88", "batt 88", "bh 88%", "BH: 88"])

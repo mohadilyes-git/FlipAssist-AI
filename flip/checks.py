@@ -7,8 +7,11 @@ catch an answer that's broken or made up; they can't tell whether a believable
 answer is true. That's why you approve every draft.
 """
 
+import json
 import re
 from decimal import Decimal
+from functools import lru_cache
+from pathlib import Path
 
 from flip.catalogue import (COMMON_COLOURS, PLUS_MEANS_AND, colours_named, find_phrase, item_colour_mentioned,
                             options_named, sizes_in, words)
@@ -144,7 +147,10 @@ HARMLESS = ["perfect for", "perfect gift", "new owner", "new home", "since new",
 # sentence, is a "no": "no box", "doesn't come with a charger", "can't find the box",
 # "neither scratched nor dented"
 NEGATIONS = {"no", "not", "without", "missing", "never", "none", "nor", "isn", "doesn", "don", "hasn", "wasn",
-             "lost", "t", "neither"}
+             "lost", "t", "neither",
+             # typed without the apostrophe: "doesnt come with charger", "dont have the box"
+             "isnt", "doesnt", "dont", "hasnt", "wasnt", "arent", "werent", "havent", "hadnt", "didnt", "cant", "wont",
+             "aint"}
 # ...unless it ends first (denied_by): an exception ("no marks APART from a scratch", "no cracks ONLY light
 # scratches"), a thing of its own the "no" was about ("no OFFERS small crack", "no BOX just a scratch"), or a
 # new statement ("no box, screen HAS a crack", though not "doesn't HAVE any scratches")
@@ -472,6 +478,127 @@ def singular(word):
     return word
 
 
+KEY_ROWS = ("qwertyuiop", "asdfghjkl", "zxcvbnm")
+VOWELS = frozenset("aeiou")
+SHORTEST_TYPO = 4  # letters: "crk" or "dnt" could be anything
+REAL_WORDS = Path(__file__).resolve().parent.parent / "data" / "real_words.json"
+
+
+def keys_near(row, column):
+    """The keys touching one on a UK keyboard: either side, and two above and
+    two below. Each row sits half a key right of the one above it, so "g"
+    touches "f", "h", "t", "y", "v" and "b"."""
+    near = {(row, column - 1), (row, column + 1), (row - 1, column), (row - 1, column + 1),
+            (row + 1, column - 1), (row + 1, column)}
+    return {KEY_ROWS[r][c] for r, c in near if 0 <= r < len(KEY_ROWS) and 0 <= c < len(KEY_ROWS[r])}
+
+
+NEAR_KEYS = {key: keys_near(r, c) for r, keys in enumerate(KEY_ROWS) for c, key in enumerate(keys)}
+
+
+def wrong_letter(typed, meant):
+    """What typing one letter for another costs in slips: 1 for a key next
+    to it or another vowel, else 2 (as good as one left out and one added)."""
+    return 1 if typed in NEAR_KEYS.get(meant, ()) or (typed in VOWELS and meant in VOWELS) else 2
+
+
+def slips(typed, word, most):
+    """How many slips typed is from word, or most + 1 if it's more: a letter
+    left out, one too many or two next to each other swapped is one slip,
+    and a wrong letter is wrong_letter's. Edit distance (optimal string
+    alignment), counting only the slips people make."""
+    if abs(len(typed) - len(word)) > most:
+        return most + 1
+    before, row = None, list(range(len(word) + 1))
+    for i in range(1, len(typed) + 1):
+        now = [i] + [0] * len(word)
+        for j in range(1, len(word) + 1):
+            same = typed[i - 1] == word[j - 1]
+            now[j] = min(row[j] + 1, now[j - 1] + 1, row[j - 1] + (0 if same else wrong_letter(typed[i - 1], word[j - 1])))
+            if i > 1 and j > 1 and typed[i - 1] == word[j - 2] and typed[i - 2] == word[j - 1]:
+                now[j] = min(now[j], before[j - 2] + 1)
+        before, row = row, now
+    return min(row[-1], most + 1)
+
+
+def most_slips(form):
+    """How many slips a claim word can take and still be read: none under 4
+    letters, one up to 8, two from 9 ("scratches" typed "scarches")."""
+    return 0 if len(form) < SHORTEST_TYPO else 1 if len(form) <= 8 else 2
+
+
+def claim_forms(keyword):
+    """A claim word and its plurals: "battery", "batterys", "batteries"."""
+    return {keyword, keyword + "s", keyword + "es"} | ({keyword[:-1] + "ies"} if keyword.endswith("y") else set())
+
+
+@lru_cache(maxsize=1)
+def real_words():
+    """The real words a typo is never read as: every word within wider_slip's
+    reach of a claim word that's in macOS's dictionary (with its endings:
+    "cards", "charges") or in the catalogue and listings ("mini", "mins").
+    Built by flip.real_words."""
+    return frozenset(json.loads(REAL_WORDS.read_text(encoding="utf-8")))
+
+
+# everyday words of listings and notes a few slips from a claim word: a typo as close to one of these as to
+# the claim word could be either, so it's read as neither ("minr" is as close to minor as to mint)
+COMMON_WORDS = frozenset("""
+    base bugs buds cage came card cards care cash caused charge charged charges cheap close cold could cross deal
+    decent does dont doesnt done extra function functions gate goes gone guess just less load loaded loads loud main
+    make made makes many mask mind mine mini mins minor minus minutes model month months more most near need needs
+    newer sale sales star start this tops touch unlock used warm west word words work worked working wrong year
+""".split())
+# words reading needs spelt right, though they aren't claims: "witout box" says no box
+READING_WORDS = ("without",)
+TYPED_WORD = re.compile(r"[a-z]{4,}")
+
+
+def fewest_slips(word, targets):
+    """The targets a typed word is fewest slips from, within each one's
+    most_slips and with the first letter right: (slips, {targets}), or (None, set())."""
+    best, closest = None, set()
+    for target in targets:
+        most = most_slips(target)
+        if not most or target[0] != word[0] or abs(len(target) - len(word)) > most:
+            continue
+        n = slips(word[1:], target[1:], most)
+        if n <= most and (best is None or n <= best):
+            closest = closest | {target} if n == best else {target}
+            best = n
+    return best, closest
+
+
+@lru_cache(maxsize=None)
+def wider_slip(word, guard=True):
+    """Rule 3 of slipped: the claim word a typed word is fewest slips from
+    (most_slips for that word, the first letter right), unless it's a real
+    word (guard), an everyday word is as close (COMMON_WORDS), or claim words
+    that say different things are as close: then it could be either. "dentd"
+    is as close to "dent" as to "dented": a dent either way."""
+    if len(word) < SHORTEST_TYPO or word in KEYWORDS or (guard and (word in real_words() or word in COMMON_WORDS)):
+        return None
+    forms = {form: keyword for keyword in KEYWORDS for form in claim_forms(keyword)}
+    best, closest = fewest_slips(word, forms)
+    everyday, _ = fewest_slips(word, COMMON_WORDS) if guard else (None, set())
+    if best is None or (everyday is not None and everyday <= best):
+        return None
+    keywords = {forms[form] for form in closest}
+    return min(keywords) if len({KEYWORDS[k] for k in keywords}) == 1 else None
+
+
+@lru_cache(maxsize=None)
+def as_meant(word):
+    """A word as it was meant to be: a claim word typed with a slip ("crak"
+    -> "crack"), or a word reading needs ("witout" -> "without"); else as typed."""
+    if word in KEYWORDS or singular(word) in KEYWORDS:
+        return word
+    if slipped(word):
+        return slipped(word)
+    _, meant = fewest_slips(word, READING_WORDS) if word not in real_words() and word not in READING_WORDS else (0, ())
+    return next(iter(meant), word)
+
+
 def one_slip(typed, word):
     """True if typed is word with one slip: a letter left out ("scrach"), one
     too many ("chargerr") or two next to each other swapped ("chrager")."""
@@ -482,13 +609,24 @@ def one_slip(typed, word):
     return len(long) - len(short) == 1 and any(long[:i] + long[i + 1:] == short for i in range(len(long)))
 
 
+@lru_cache(maxsize=None)
 def slipped(word):
-    """The claim word a typed word misses by one slip, plural or not
-    ("scraches" -> "scratch", "batery" -> "battery"), or None. Words of 6
-    letters or more that start with the same letter, never one of NOT_SLIPS.
-    "battery" is typed so many ways it has its own pattern ("baterray", "batt")."""
+    """The claim word a typed word misses, plural or not, or None:
+    1. "battery" is typed so many ways it has its own pattern ("baterray", "batt");
+    2. one slip in a claim word of 6 letters or more that starts with the same
+       letter: a letter left out, one too many or two swapped ("scraches" ->
+       "scratch"), never one of NOT_SLIPS;
+    3. else the other slips people make in a hurry (wider_slip): a key next
+       to the right one ("scrstch"), another vowel ("excellant"), a slip in a
+       shorter word ("crak", "dnet") or two in a long one ("scarches"), never
+       a real word ("cash" isn't a case, nor "mask" a mark)."""
     if re.fullmatch(TYPED_BATTERY, word):
         return "battery"
+    return one_slip_claim(word) or wider_slip(word)
+
+
+def one_slip_claim(word):
+    """Rule 2 of slipped: what a typed word with one slip says, the way it was read before 14 Sep 2026."""
     if len(word) < SLIP_LENGTH:
         return None
     for ending, replacement in (("", ""), ("ies", "y"), ("es", ""), ("s", "")):
@@ -517,6 +655,9 @@ def promises_in(text, typos=False):
     text = answered(text).lower()
     if typos:
         text = BH.sub("battery", text)
+        # each word typed with a slip, as the word it was meant to be, before anything reads the text: then
+        # "crak free" is "crack free" and "out of warrenty" is "out of warranty", read as no like any other
+        text = TYPED_WORD.sub(lambda m: as_meant(m.group()), text)
     # "box: yes" -> "box" ("box: no" is answered's)
     text = re.sub(r"\b([a-z]+(?: [a-z]+)?)\s*[:=\-–—]\s*(?:yes|yep|included)\s*(?=[,.;\n]|$)", r"\1", text)
     # read one part of a sentence at a time, so "no scratches, comes with box"

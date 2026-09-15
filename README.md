@@ -37,7 +37,7 @@ Drafts eBay listings and offer messages for a reseller. Plain code does everythi
   - no yes/no claims about the box, charger, cable, case, controller, dock, game, screen protector, receipt, warranty or network lock that the inputs don't back up, with the reseller's notes beating the seller's text;
   - condition claims (new, sealed, working, flawless, battery, scratches and other marks) only when the reseller's own notes back them, and "For parts or not working" whenever the notes mention a fault;
   - where a mark is ("on the back") only when the notes say where;
-  - what people type is read with typos allowed ("few scraches", "baterray 88", "bh 88%"), the AI's own words as written;
+  - what people type is read with typos allowed ("few scraches", "baterray 88", "bh 88%"), the AI's own words as written. A slip is a letter left out, doubled or swapped, a key touching the right one ("scrstch") or another vowel ("excellant"): one in a word of 4 to 8 letters, two in a longer one. A real word is never read as a typo ("cash" isn't a case: `data/real_words.json`, built from macOS's dictionary by `python -m flip.real_words`), nor is a typo as close to an everyday word ("minr" is as close to minor as to mint). A typo inside a "no" still says no ("crak free", "out of warrenty"), and so does a "no" typed without its apostrophe ("doesnt come with charger");
   - nothing that contradicts the item: another model, colour, storage size or edition;
   - no prices, contact details or paying off the platform;
   - length limits.
@@ -139,6 +139,8 @@ Without the checks, Gemma claimed flaws on 2 clean listings and said "no offers"
 - removed parts of a style that came back through the reseller's old examples.
 
 All 242 are fixed and kept as tests (`tests/test_message_cases.py`, `tests/test_style_book.py`).
+
+**Typos (14 Sep).** Every claim word typed with each slip people make (3,195 typos): 26% were read before, 91% now. The rest are typos that are real words themselves, as close to an everyday word, or under 4 letters. On 3,969 real listings, one more typo is read and no real word is misread.
 
 ## The API
 

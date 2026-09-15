@@ -144,14 +144,15 @@ def condition_said(text, typos=False):
 
 # ── reading the listing ─────────────────────────────────────────────────────
 
-def quote(part, kinds):
+def quote(part, kinds, typos=False):
     """The seller's own words for one part of the listing. A long part is cut
     to the few words around what it says: "...battery health 86% small crack
-    on the back camera lens" -> "small crack on the back camera lens"."""
+    on the back camera lens" -> "small crack on the back camera lens". typos:
+    read as condition_said read it ("one small crak near the camera")."""
     tokens = part.split()
-    if len(tokens) > MAX_QUOTE:
-        says = lambda start, end: condition_said(" ".join(tokens[start:end])) & kinds
-        end = next(e for e in range(1, len(tokens) + 1) if says(0, e))
+    says = lambda start, end: condition_said(" ".join(tokens[start:end]), typos) & kinds
+    end = next((e for e in range(1, len(tokens) + 1) if says(0, e)), None) if len(tokens) > MAX_QUOTE else None
+    if end is not None:  # else it's short, or said only by the whole part: kept whole
         start = max(0, next(s for s in range(end - 1, -1, -1) if says(s, end)) - 1)
         cut = start + MAX_QUOTE
         # a fault the cut would end halfway through is said whole: "...it turns on" -> "...it turns on and off"
@@ -182,9 +183,9 @@ def read_listing(text):
     for part in PARTS.split(text):
         said = condition_said(part, typos=True)
         if said & FLAWS:
-            found["flaws"].append(quote(part, said & FLAWS))
+            found["flaws"].append(quote(part, said & FLAWS, typos=True))
         elif said & set(GOOD_LEVELS):
-            found["good"].append(quote(part, said & set(GOOD_LEVELS)))
+            found["good"].append(quote(part, said & set(GOOD_LEVELS), typos=True))
     return found
 
 
