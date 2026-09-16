@@ -93,6 +93,7 @@ Drafts eBay listings and offer messages for a reseller. Plain code does everythi
     - a reason about the item uses only the listing's words ("given the stiff hinge" fails on a listing that doesn't say it), and no other model is named;
     - the asking price is never misquoted, and a lower offer never offers more in words ("if not I can pay the full asking price");
     - no made-up story about the reseller in the common shapes: who it's for, why they want it, where they are, that they don't resell. A place name ("I'm in Leeds") still gets through;
+    - nothing about how the damage happened that the listing doesn't say ("I know you dropped it", "looks like water damage", "never been dropped"). Asking ("was it ever dropped?") is fine;
     - no invented numbers, no contact details, nothing off the platform.
 - **Scores the code** against a private test set of real items, with a scoring script.
 

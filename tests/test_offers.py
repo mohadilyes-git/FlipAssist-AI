@@ -214,6 +214,85 @@ def test_a_message_never_copies_the_sellers_own_story():
         ['the message copies the seller\'s own story: "i dropped it and"']
 
 
+CRACKED_BACK = "iPhone 12 64GB. Works perfectly, no scratches on the screen, back glass is cracked."
+
+
+@pytest.mark.parametrize("message, kind, said", [
+    ("Hi, would you take £170 for it? I know you dropped it and cracked the back.", "dropped or knocked", "dropped"),
+    ("Hi, would you take £170 for it? I see it's been dropped, so the back glass is cracked.", "dropped or knocked",
+     "it's been dropped"),
+    ("Hi, would you take £170 as it fell off a table?", "dropped or knocked", "fell"),
+    ("Hi, would you take £170, given it had a fall?", "dropped or knocked", "had a fall"),
+    ("Hi, would you take £170 for it? It looks like it has never been dropped.", "dropped or knocked", "been dropped"),
+    ("Hi, would you take £170 for it? Looks like it got water damage as well as the cracked back.", "water",
+     "water damage"),
+    # the test agents' (14 Sep): natural wordings that got through
+    ("Hi, would you take £170 for it, as the back glass cracked after being dropped?", "dropped or knocked",
+     "being dropped"),
+    ("Hi, would you take £170 for it, as the back glass is cracked? I'm guessing it fell.", "dropped or knocked", "fell"),
+    ("Hi, would you take £170 for it, as the back glass is cracked? Clearly dropped at some point.",
+     "dropped or knocked", "dropped"),
+    ("Hi, would you take £170 for it, as the back glass is cracked? It's had a few knocks by the look of it.",
+     "dropped or knocked", "had a few knocks"),
+    ("Hi, would you take £170 for it, as the back glass is cracked? Looks like it's been bashed about a bit.",
+     "dropped or knocked", "it's been bashed"),
+    ("Hi, would you take £170 for it, as the back glass is cracked? It's taken a hit by the look of it.",
+     "dropped or knocked", "taken a hit"),
+    ("Hi, would you take £170 for it, as the back glass is cracked? Looks like moisture damage too.", "water",
+     "moisture damage"),
+    ("Hi, would you take £170 for it, as the back glass is cracked? Looks like it's been through the wash.", "water",
+     "through the wash"),
+    ("Hi, would you take £170 for it, as the back glass is cracked? It's probably been rained on.", "water",
+     "It's probably been rained on"),
+])
+def test_a_message_never_says_how_the_damage_happened_when_the_listing_doesnt(message, kind, said):
+    """The explainer's sentences (12 Sep): every check passed them."""
+    assert check_reasons(message, CRACKED_BACK) == \
+        [f"the message says how it happened ({kind}), which the listing doesn't: \"{said}\""]
+
+
+@pytest.mark.parametrize("message, listing", [
+    ("Hi, would you take £170 for it, as the back glass is cracked?", CRACKED_BACK),
+    ("Hi, would you take £170 for it? I can come and collect, just drop me a line.", CRACKED_BACK),
+    ("Hi, I see you dropped the price, would you take £170 for it?", CRACKED_BACK),
+    ("Hi, would you take £170 for it? Happy to drop round tonight.", CRACKED_BACK),
+    ("Hi, would you take £170 for it? Was it ever dropped?", CRACKED_BACK),  # asked, not said
+    ("Hi, would you take £170 for it? Is it water resistant still?", CRACKED_BACK),
+    ("Hi, would you take £170 for it? I see it has been dropped and the back glass is cracked.",
+     "iPhone 12 64GB. Dropped once, back glass is cracked."),
+    ("Hi, would you take £150 for it as it got wet and the screen flickers?",
+     "iPhone 12 64GB. Got wet in the rain, screen flickers."),
+    # the test agents' (14 Sep): the price, an extra, collecting, the weather, asking, and listings in other words
+    ("Hi, I see it's been dropped in price. Would you take £190 for it?", CRACKED_BACK),
+    ("Hi, I see you've dropped your asking price. Would you take £190 for it?", CRACKED_BACK),
+    ("Hi, I see you've knocked off a bit already. Would you take £190 for it?", CRACKED_BACK),
+    ("Hi, would you take £190 with the carry case thrown in?", CRACKED_BACK),
+    ("Hi, would you take £300 cash for it? I can run over tonight to collect it.", CRACKED_BACK),
+    ("Hi, would you take £300 cash for it? I'm in Bath on Saturday so can collect then.", CRACKED_BACK),
+    ("Hi, would you take £300 cash for it? Happy to collect today, even in the rain.", CRACKED_BACK),
+    ("Hi, would you take £300 cash for it? I can collect tonight, will bring a bag in case it's wet.", CRACKED_BACK),
+    ("Hi, would you take £300 cash for it? I can come and collect, or get it dropped off to me if easier.",
+     CRACKED_BACK),
+    ("Hi, I see it's been sat on here a while. Would you take £190 for it?", CRACKED_BACK),
+    ("Hi, would you take £170 for it, as the back glass is cracked? Did it crack because it was dropped?",
+     CRACKED_BACK),
+    ("Hi, would you take £250 for it, as the back glass cracked after a tumble down the stairs?",
+     "iPhone 13 128GB. Back glass cracked after a tumble down the stairs. Works perfectly."),
+    ("Hi, would you take £210 for it, as the screen cracked when it was hit by a football?",
+     "Galaxy S22 128GB. Screen cracked when it was hit by a football. Works perfectly otherwise."),
+    ("Hi, would you take £150 for it, as it went in the sea and the screen flickers?",
+     "iPhone 12 64GB. Went in the sea on holiday, screen now flickers."),
+    ("Hi, would you take £150 for it, as it got wet and the screen flickers?",
+     "iPhone 12 64GB. Got rained on, screen flickers now."),
+    ("Hi, would you take £60 for it, as the screen flickers from the water damage?",
+     "iPhone 11 64GB. Seawater damage, screen flickers."),
+    ("Hi, would you take £170 for it, given it was knocked off the side and has a small dent?",
+     "iPhone 12 64GB. Knoked off the side, small dent on the corner."),
+])
+def test_how_it_happened_is_fine_when_the_listing_says_it_and_everyday_drops_arent_damage(message, listing):
+    assert check_reasons(message, listing) == []
+
+
 def test_what_follows_if_in_a_statement_is_a_condition_not_a_claim():
     """A real longer message (18 Aug) was refused for "good" here."""
     listing = "iPhone 14 for sale. Few scratches on screen but does not effect. Works perfectly fine! No offers"

@@ -20,7 +20,7 @@ import re
 
 from flip.catalogue import contains, words
 from flip.checks import (FAULTS, LEVELS, MARKS, NEGATIONS, NEW_SEALED, NOT_A_FLAW, PROBLEM, answered, clauses, has_fault,
-                         prices_in, promises_in, stated_parts)
+                         ends_asking, prices_in, promises_in, stated_parts)
 
 # the seller says the price already allows for the flaw: a lower offer mustn't use it again
 PRICED_IN = re.compile(r"\b(?:hence (?:the |why )?(?:the |low |cheap )?price|priced accordingly|priced to reflect|"
@@ -305,6 +305,85 @@ NEGATED_BEFORE = re.compile(r"\b(?:no|not|never|without|zero|cannot|(?:is|are|wa
                             r"n'?t)\s+(?:\w+\s+){0,2}$", re.IGNORECASE)
 
 
+# how the damage happened: a message says it only when the listing does ("dropped once, back cracked"), never
+# as a guess ("I know you dropped it", "looks like water damage"), and "never been dropped" is made up too. A
+# price that's been dropped, an extra thrown in, someone running over to collect, or the weather isn't damage.
+# Each kind: the ways a message says it, then any word of the listing that backs it, typos and all
+DROPPED = r"(?:dropp?ed|dropt|knocked|banged|bumped|bashed|crushed|thrown|chucked|smacked|whacked|hit)" \
+          r"\b(?!\s+(?:off|round|by|over|me|us)\b)"
+CAUSES = {
+    "dropped or knocked": (
+        re.compile(
+            # "it's been dropped", "after being dropped", "it was quite obviously dropped"
+            rf"\b(?:been|being|was|were|got|gets|get|is|it'?s)\s+(?:\w+\s+){{0,2}}{DROPPED}"
+            # "from dropping it", "clearly dropped at some point": not "drop round", "drop me a line"
+            r"|\b(?:dropp?ed|dropt|dropping)\b(?!\s+(?:off|round|by|over|in to|me|us)\b)"
+            r"|\b(?:knocked|banged|bumped|bashed|crushed|chucked|thrown|threw)\s+(?:it|them|on|onto|into|down|from|"
+            r"against|across|at|off\s+(?:the|a|its|my))\b"
+            # "when it fell", "it fell and cracked": not a deal that fell through
+            r"|\b(?:fell|fallen)\b(?!\s+(?:through|for|in love)\b)"
+            # "had a fall", "a few knocks", "took a nasty tumble", "drop damage", "an accident"
+            r"|\b(?:had|took|taken|after|from|in|a|an|few|some|any|of)\s+(?:(?:a|few|couple|of|nasty|bad|big|little|"
+            r"small|hard|good)\s+)*(?:drops?|falls?|knocks?|bumps?|tumbles?|bash(?:es)?|accidents?)\b"
+            r"|\b(?:had|took|taken)\s+(?:a\s+)?(?:\w+\s+)?(?:hits?|beating|battering|bashing)\b|\bthrough the wars\b"
+            r"|\b(?:drop|impact|accident(?:al)?)[\s-]*damage\w*"
+            # "it's been sat on" (not "sat on here a while"), "it's been run over" (not "I can run over tonight")
+            r"|\bsat on\b(?!\s+(?:here|there|this|the|marketplace|ebay|vinted|gumtree|facebook|for|a|ages|long|my|"
+            r"it)\b)|\b(?:been|was|got|being)\s+run over\b|\bran over it\b|\b(?:stood|stepped|trodden|trod) on\b",
+            re.IGNORECASE),
+        re.compile(r"\b(?:drop\w*|fel{1,2}|fall\w*|knock\w*|knok\w*|bang\w*|bump\w*|bash\w*|hit\w*|crush\w*|chuck\w*|"
+                   r"thr[eo]w\w*|tumbl\w*|accident\w*|impact\w*|smack\w*|whack\w*|slip\w*|wars|sat on|stood on|"
+                   r"stepped on|trod\w* on|run over|ran over)\b", re.IGNORECASE)),
+    "water": (
+        re.compile(
+            r"\b(?:water|liquid|moisture|sweat|rain|sea|salt\s?water)[\s-]*damage\w*"
+            r"|\b(?:underwater|under water|waterlogged|water[\s-]logged)\b"
+            r"|\b(?:been|being|was|were|got|gets|get|is|it'?s)\s+(?:\w+\s+){0,2}(?:wet|soaked|submerged|flooded|"
+            r"rained on|dunked|drenched|drowned)\b"
+            r"|\brained on\b|\b(?:had|took|taken)\s+a\s+(?:swim|dunk|dip|bath)\b"
+            r"|\b(?:in|into|through|down|under)\s+(?:the|a)\s+(?:wash|washing machine|bath|toilet|loo|sink|pool|sea|"
+            r"puddle|river|lake|drink|pint)\b|\b(?:in|into)\s+water\b"
+            r"|\b(?:spill(?:ed|s)?|spilt|moisture|damp)\b|\bliquid\b(?![\s-]+retina)",
+            re.IGNORECASE),
+        re.compile(r"water|\b(?:liquid|moist\w*|damp\w*|wet|soak\w*|submerg\w*|spill\w*|spilt|wash\w*|bath|toilet|"
+                   r"loo|sink|pool|sea|rain\w*|swim\w*|dunk\w*|drench\w*|flood\w*|sweat\w*|puddle\w*|river|lake)\b",
+                   re.IGNORECASE)),
+}
+# a drop or a knock in its clause with the price: "you've dropped your asking price", "knocked it down a bit"
+PRICE_TALK = re.compile(r"\b(?:price|prices|asking|reduc\w*|discount\w*|cheaper|(?:down|off|by) a bit|by £|to £|"
+                        r"quid)\b|£\d", re.IGNORECASE)
+# "in case it's wet" is about what might happen: the rest of the sentence after it says nothing happened
+IN_CASE = re.compile(r"\b(?:just )?in case\b[^.?!]*", re.IGNORECASE)
+# a cause that might happen, not one that did: "in case it gets wet", "if it's been dropped"
+MIGHT_BE = re.compile(r"\b(?:in case|if|unless|whether|so (?:it|they) (?:doesn'?t|don'?t|won'?t)|to (?:keep|stop) it)\b",
+                      re.IGNORECASE)
+
+
+def made_up_causes(said, listing_text):
+    """For each way of saying how damage happened that the statements make and
+    the listing doesn't back: (kind, the words). [] if none."""
+    found = []
+    for kind, (in_message, in_listing) in CAUSES.items():
+        if in_listing.search(listing_text):
+            continue
+        words_said = next((m.group() for part in said for m in in_message.finditer(part) if happened(kind, part, m)),
+                          None)
+        if words_said:
+            found.append((kind, words_said))
+    return found
+
+
+def happened(kind, part, match):
+    """Whether a cause a statement names is said to have happened to the item:
+    not about the price ("dropped your asking price") and not what might ("in case it gets wet")."""
+    begins = max(part.rfind(stop, 0, match.start()) for stop in ",.;!?") + 1
+    stops = [at for at in (part.find(stop, match.end()) for stop in ",.;!?") if at != -1]
+    clause = part[begins:min(stops, default=len(part))]
+    if kind == "dropped or knocked" and PRICE_TALK.search(clause):
+        return False
+    return not MIGHT_BE.search(part[begins:match.start()])
+
+
 def check_reasons(message, listing_text, point=None):
     """What a message says about the item uses only the listing's words for
     what's wrong with it: "given the stiff hinge" or "Shame about the stiff
@@ -313,7 +392,8 @@ def check_reasons(message, listing_text, point=None):
     the sale ("as it's cash", "because it's over my budget") is fine, and
     questions are fine. Words code knows ("scratched") are
     check_condition_talk's, reported there. A message also never copies the
-    seller's own story ("I dropped it and cracked the back")."""
+    seller's own story ("I dropped it and cracked the back"), nor says how the
+    damage happened when the listing doesn't (CAUSES: "I know you dropped it")."""
     listed = {w[:5] for w in words(listing_text)}
     message = IDIOMS.sub(" ", re.sub(r"[’‘ʼ]", "'", message))  # "pay cash on the spot" names no spot
     said = stated_parts(message) + [m.group("reason") for m in REASON_SAID.finditer(message)]
@@ -325,6 +405,13 @@ def check_reasons(message, listing_text, point=None):
     story = copied_story(message, listing_text, allowed=point["says"] if point else ())
     if story:
         problems.append(f"the message copies the seller's own story: \"{story}\"")
+    # how it happened, as said: the sentences that don't ask, and the reason in the offer's own question (a
+    # question of its own, "did it crack because it was dropped?", only asks)
+    sentences = [s for s in re.split(r"(?<=[.!?])\s+|\n+", IN_CASE.sub(" ", message)) if s.strip()]
+    cause_said = [s for s in sentences if not ends_asking(s)] + \
+        [m.group("reason") for s in sentences if "£" in s for m in REASON_SAID.finditer(s)]
+    for kind, words_said in made_up_causes(cause_said, listing_text):
+        problems.append(f"the message says how it happened ({kind}), which the listing doesn't: \"{words_said}\"")
     return problems
 
 
