@@ -44,6 +44,7 @@ Drafts eBay listings and offer messages for a reseller. Plain code does everythi
 - **Drafts the rest with AI** (`python -m flip.draft`):
   - Gemma 3 4B runs on the reseller's own machine through Ollama. It's asked only for what code couldn't fill: the colour (from that model's real colours, or "unsure"), a condition note and a description, held to an exact answer shape.
   - The checks decide. An answer that fails gets one try on Claude Haiku. If that fails too, the item is marked "needs you".
+  - If Gemma's answer passes but it can't tell the colour from the photos, Haiku gets one look at the colour alone, for about 0.01p. The draft is still Gemma's, and the app says who picked the colour.
   - If the local model isn't running, nothing is sent to the API instead.
   - If Gemma ends its answer with a curly quote (”), or writes two in a row, it's stopped there and the answer closed, instead of running on for a minute.
   - A draft is "ready" only when nothing is missing.
@@ -141,6 +142,16 @@ Without the checks, Gemma claimed flaws on 2 clean listings and said "no offers"
 
 All 242 are fixed and kept as tests (`tests/test_message_cases.py`, `tests/test_style_book.py`).
 
+**The colour from photos (2 Sep, 14 Sep).** 198 real phone photos, each with the colour taken out of its title:
+
+| | Right | Wrong | Unsure |
+|---|---|---|---|
+| Gemma | 68 | 4 | 126 |
+| Haiku's look at the colour alone | 113 | 3 | 82 |
+| Gemma, then Haiku's look when Gemma is unsure | 131 | 5 | 61 |
+
+A wrong answer here includes a near one (Teal for Ultramarine). Haiku's look costs about 0.0125p. Most wrong answers came from photos that showed only the box's picture or the wallpaper, not the phone's back; one "wrong" answer was right and the seller's title wrong. Telling the models a box or wallpaper isn't the item's colour made Haiku lose 32 right answers to remove one wrong one, so it isn't in the prompt.
+
 **Typos (14 Sep).** Every claim word typed with each slip people make (3,195 typos): 26% were read before, 91% now. The rest are typos that are real words themselves, as close to an everyday word, or under 4 letters. On 3,969 real listings, one more typo is read and no real word is misread.
 
 ## The API
@@ -218,7 +229,7 @@ The self-test opens the window, checks every kind of call (files, JSON, photo up
 |---|---|
 | Model, storage, specs, title | Code, from `data/catalogue.json` |
 | Battery health | Code, from the reseller's notes (`flip/numbers.py`) |
-| Colour | Code if the text names it; otherwise the AI from the photo |
+| Colour | Code if the text names it; otherwise Gemma from the photos, and Haiku's look when Gemma is unsure |
 | eBay's category and fields (Brand, Model, Storage Capacity, Colour...) | Code, in eBay's words (`data/ebay_fields.json`, `data/ebay_map.json`); phones so far |
 | Condition | Code, from the reseller's notes |
 | Condition note, description | The AI, then checked by code |

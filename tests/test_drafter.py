@@ -16,7 +16,7 @@ from flip.audit import AuditLog
 from flip.catalogue import fill_from_catalogue, load_catalogue, load_conditions
 from flip.costs import cost_pence
 from flip.drafter import draft_listing
-from flip.prompts import answer_schema, listing_prompt
+from flip.prompts import answer_schema, colour_schema, listing_prompt
 from tests.fakes import FakeModel
 
 CATALOGUE = load_catalogue()
@@ -154,9 +154,10 @@ def test_your_notes_typed_in_a_hurry_back_gemmas_answer():
              "description": "This is an Apple iPhone 13 mini with 128GB of storage and is unlocked. The phone is used and "
                             "has a crack on the front screen and a few scratches on the back. It is sold with a battery "
                             "health of 88%."}
-    api = FakeModel("claude-haiku-5-5")
+    api = FakeModel("claude-haiku-5-5", {"colour": "unsure"})
     result = draft(entry, local=FakeModel("gemma3:4b", gemma), api=api)
-    assert (result["attempts"][0]["problems"], api.asked, result["reasons"]) == ([], [], ["fill in: colour"])
+    assert (result["attempts"][0]["problems"], result["reasons"]) == ([], ["fill in: colour"])
+    assert list(api.asked[0]["schema"]["properties"]) == ["colour"]  # Haiku looked at the colour only, nothing redrafted
     assert result["title"] == "Apple iPhone 13 mini 128GB Unlocked"
 
 
@@ -335,6 +336,69 @@ def test_every_attempt_and_outcome_goes_in_the_audit_log(tmp_path):
     assert [model for model, _ in attempts] == ["gemma3:4b", "claude-haiku-5-5"]
     assert "charger" in attempts[0][1]
     assert log.db.execute("select item_id, status from drafts").fetchall() == [("t1", "ready")]
+
+
+UNSURE_GEMMA = {**GOOD, "colour": "unsure", "description": GOOD["description"].replace(" in Midnight", "")}
+
+
+def test_gemma_unsure_of_the_colour_gets_haikus_look_at_the_colour_alone(tmp_path):
+    log = AuditLog(tmp_path / "audit.sqlite3")
+    local, api = FakeModel("gemma3:4b", UNSURE_GEMMA), FakeModel("claude-haiku-5-5", {"colour": "Midnight"})
+    result = draft(local=local, api=api, log=log)
+    assert (result["status"], result["item"]["colour"], result["colour_from"], result["colour_by"]) == \
+        ("ready", "Midnight", "photos", "claude-haiku-5-5")
+    assert result["answer"] == UNSURE_GEMMA  # Gemma's draft stands: Haiku only said the colour
+    assert [(a["model"], a.get("colour_only", False)) for a in result["attempts"]] == \
+        [("gemma3:4b", False), ("claude-haiku-5-5", True)]
+    asked = api.asked[0]
+    assert asked["schema"] == colour_schema(IPHONE_13) and asked["photos"] == [PHOTO]
+    assert (asked["system"], asked["user"]) == (local.asked[0]["system"], local.asked[0]["user"])
+    assert result["title"] == "Apple iPhone 13 128GB Midnight Unlocked"
+    assert [m for (m,) in log.db.execute("select model from attempts order by id")] == ["gemma3:4b", "claude-haiku-5-5"]
+
+
+def test_a_colour_look_costs_but_doesnt_count_as_haiku_writing_the_draft(tmp_path):
+    """The test agents' (14 Sep): "done on this Mac" fell to half when Haiku only looked at the colour."""
+    log = AuditLog(tmp_path / "audit.sqlite3")
+    for look in ({"colour": "Midnight"}, {"colour": "unsure"}):
+        draft(local=FakeModel("gemma3:4b", UNSURE_GEMMA), api=FakeModel("claude-haiku-5-5", look), log=log)
+    stats = log.stats()
+    assert stats["done_on_this_mac"] == 1.0  # Gemma wrote both drafts
+    haiku = next(m for m in stats["models"] if m["model"] == "claude-haiku-5-5")
+    assert (haiku["attempts"], haiku["cost_pence"] > 0) == (2, True)  # its looks are still counted, and paid for
+    assert [job for (job,) in log.db.execute("select job from attempts order by id")] == ["draft", "colour"] * 2
+
+
+def test_haiku_unsure_too_or_failing_leaves_the_colour_for_you():
+    for look in ({"colour": "unsure"}, {"colour": "Purple"}, Reply("claude-haiku-5-5", error="the API timed out")):
+        result = draft(local=FakeModel("gemma3:4b", UNSURE_GEMMA), api=FakeModel("claude-haiku-5-5", look))
+        assert (result["status"], result["reasons"], result["item"]["colour"]) == ("needs you", ["fill in: colour"], None)
+        assert (result["colour_from"], result["colour_by"]) == (None, None)
+        assert result["attempts"][-1]["colour_only"] and result["answer"] == UNSURE_GEMMA
+    assert result["attempts"][-1]["problems"] == ["the API timed out"]
+
+
+def test_no_second_look_at_the_colour_unless_gemma_drafted_from_photos_in_auto_mode():
+    haiku = lambda: FakeModel("claude-haiku-5-5", {"colour": "Midnight"})
+    api = haiku()
+    assert draft(local=FakeModel("gemma3:4b", UNSURE_GEMMA), api=api, mode="local")["item"]["colour"] is None
+    assert draft(local=FakeModel("gemma3:4b", UNSURE_GEMMA), api=api, photos=[])["item"]["colour"] is None
+    assert api.asked == []  # local mode never asks the API; with no photos there's nothing to look at
+    api = FakeModel("claude-haiku-5-5", UNSURE_GEMMA)
+    result = draft(local=None, api=api, mode="api")
+    assert (len(api.asked), result["item"]["colour"]) == (1, None)  # the API drafted it: its "unsure" stands
+    api = FakeModel("claude-haiku-5-5", UNSURE_GEMMA)
+    result = draft(local=FakeModel("gemma3:4b", BAD), api=api)
+    assert (len(api.asked), result["item"]["colour"]) == (1, None)  # Gemma failed and Haiku drafted it: no third ask
+    down = Reply("gemma3:4b", error="the local model isn't running (connection refused)", reachable=False)
+    api = haiku()
+    assert draft(local=FakeModel("gemma3:4b", down), api=api)["attempts"][-1]["model"] == "gemma3:4b"
+    assert api.asked == []  # never the API in place of a local model that can't be reached
+    known = {**ENTRY, "original_title": "iPhone 13 128GB unlocked Midnight"}
+    api = haiku()
+    assert draft(known, local=FakeModel("gemma3:4b", {k: v for k, v in GOOD.items() if k != "colour"}),
+                 api=api)["colour_from"] == "listing"
+    assert api.asked == []  # code read the colour from the title: nobody was asked for it
 
 
 def test_with_no_photos_the_ais_colour_is_a_guess_and_stays_for_you():

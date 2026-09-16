@@ -3,7 +3,7 @@
 // the orange warning row, the steps behind a draft, and the line icons.
 import { type KeyboardEvent, type PointerEvent, type ReactNode, useRef } from "react";
 import type { Attempt } from "./api";
-import { cost, writerName } from "./format";
+import { cost, modelName, writerName } from "./format";
 import { money } from "./prices";
 
 export function Head({ icon, title, sub, right }: { icon: ReactNode; title: string; sub: string; right?: ReactNode }) {
@@ -106,7 +106,8 @@ export function Steps({ attempts }: { attempts: Attempt[] }) {
       {attempts.map((a, i) => (
         <li key={i}>
           <span className={a.problems.length ? "failed" : "passed"}>
-            {writerName(a.model)} {a.problems.length ? `failed: ${a.problems.join("; ")}` : "passed"}
+            {a.colour_only ? `${modelName(a.model)}, colour only:` : writerName(a.model)}{" "}
+            {a.problems.length ? `failed: ${a.problems.join("; ")}` : "passed"}
           </span>
           <span className="meta">{a.seconds.toFixed(1)}s · {cost(a.cost_pence)}</span>
         </li>

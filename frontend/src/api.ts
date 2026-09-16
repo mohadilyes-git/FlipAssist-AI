@@ -5,7 +5,8 @@
 export type Kind = "lower" | "asking" | "more";
 export type Writer = "auto" | "template" | "ai";
 
-export type Attempt = { model: string; problems: string[]; seconds: number; cost_pence: number };
+/** colour_only: a second look at the colour alone, when the local model was unsure from the photos */
+export type Attempt = { model: string; problems: string[]; seconds: number; cost_pence: number; colour_only?: boolean };
 
 export type Reading = {
   flaws: string[];
@@ -68,6 +69,8 @@ export type ListingDraft = {
   /** checked against the model's colours; null when neither the listing nor the photos settle it */
   colour: string | null;
   colour_from: "listing" | "photos" | null;
+  /** the model that picked it from the photos */
+  colour_by?: string | null;
   filled_by_code: Record<string, unknown>;
   /** eBay UK's category; phones so far */
   ebay_category: EbayCategory | null;

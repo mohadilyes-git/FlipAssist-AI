@@ -6,7 +6,7 @@
 // from here: you copy it into eBay.
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { api, type ItemSpecific, type ListingDraft } from "../api";
-import { CONDITIONS, cost, seconds, writerName } from "../format";
+import { CONDITIONS, cost, modelName, seconds, writerName } from "../format";
 import { CameraIcon, CheckIcon, ChevronIcon, CrossIcon, Head, Steps, TagIcon, Warn, WarningIcon } from "../ui";
 
 const MAX_PHOTOS = 8;
@@ -169,7 +169,8 @@ function Drafted({ draft, ebayTitle, setEbayTitle, text, setText, specifics, set
   const [why, setWhy] = useState(false);
   const ready = draft.status === "ready";
   // no colour: no answer passed (like the condition), the AI was unsure from the photos, or there were none
-  const colour = draft.colour ? (draft.colour_from === "photos" ? `${draft.colour} (from the photos)` : draft.colour)
+  const picked = draft.colour_by ? `, by ${modelName(draft.colour_by)}` : "";
+  const colour = draft.colour ? (draft.colour_from === "photos" ? `${draft.colour} (from the photos${picked})` : draft.colour)
     : !draft.condition_id ? "Not drafted"
     : draft.photo_count ? "Unsure from the photos: check it" : "Not in the title or notes: fill it in";
   return (
@@ -202,6 +203,7 @@ function Drafted({ draft, ebayTitle, setEbayTitle, text, setText, specifics, set
               <p className="caps">{needed ? "eBay needs these" : "More details"}</p>
               {draft.item_specifics.filter((s) => s.required === needed).map((s) => (
                 <Specific key={s.name} specific={s} value={specifics[s.name] ?? ""} onChange={(v) => setSpecific(s.name, v)}
+                  by={s.name === "Colour" && draft.colour_from === "photos" && draft.colour_by ? modelName(draft.colour_by) : ""}
                   empty={s.name === "Colour" ? colour : "eBay needs this: fill it in"} />
               ))}
             </Fragment>
@@ -225,7 +227,7 @@ function Drafted({ draft, ebayTitle, setEbayTitle, text, setText, specifics, set
           </dl>
         )}
         <p className="tip-row sub">
-          <span>{writerName(draft.attempts.at(-1)?.model ?? null)} · {seconds(draft.attempts)} · {cost(draft.cost_pence)}</span>
+          <span>{writerName(draft.attempts.filter((a) => !a.colour_only).at(-1)?.model ?? null)} · {seconds(draft.attempts)} · {cost(draft.cost_pence)}</span>
           {draft.attempts.length > 0 && (
             <button type="button" className="link" aria-expanded={why} onClick={() => setWhy(!why)}>Why</button>
           )}
@@ -237,10 +239,10 @@ function Drafted({ draft, ebayTitle, setEbayTitle, text, setText, specifics, set
 }
 
 /** One of eBay's fields, in eBay's words: yours to change, with eBay's values to pick from. */
-function Specific({ specific, value, onChange, empty }: { specific: ItemSpecific; value: string; onChange: (value: string) => void; empty: string }) {
+function Specific({ specific, value, onChange, empty, by = "" }: { specific: ItemSpecific; value: string; onChange: (value: string) => void; empty: string; by?: string }) {
   const id = `ebay-${specific.name.toLowerCase().replace(/[^a-z]+/g, "-")}`;
   const note = !value.trim() ? (specific.hint ? `eBay needs this: ${specific.hint}, check it` : specific.required ? empty : "")
-    : value !== (specific.value ?? "") ? "your edit" : specific.source ? `from ${specific.source}` : "";
+    : value !== (specific.value ?? "") ? "your edit" : specific.source ? `from ${specific.source}${by ? `, by ${by}` : ""}` : "";
   return (
     <div className="specific">
       <label className="row-name" htmlFor={id}>{specific.name}</label>

@@ -17,7 +17,7 @@ AUDIT_DB = Path(__file__).resolve().parent.parent / "private" / "audit.sqlite3"
 TABLES = """
 create table if not exists attempts (
     id integer primary key, at text, item_id text, model text, answer text, error text,
-    problems text, tokens_in integer, tokens_out integer, seconds real, cost_pence text);
+    problems text, tokens_in integer, tokens_out integer, seconds real, cost_pence text, job text);
 create table if not exists drafts (
     id integer primary key, at text, item_id text, status text, reasons text, title text, answer text, job text,
     listing text);
@@ -49,14 +49,18 @@ class AuditLog:
         for column in ("job", "listing"):  # a log from before the API, or before approving taught your style
             if column not in columns:
                 self.db.execute(f"alter table drafts add column {column} text")
+        if "job" not in {row[1] for row in self.db.execute("pragma table_info(attempts)")}:  # before colour looks
+            self.db.execute("alter table attempts add column job text")
 
-    def attempt(self, item_id, reply, problems, cost):
+    def attempt(self, item_id, reply, problems, cost, job="draft"):
+        """Keep one attempt. job: "draft", or "colour" for a second look at the colour alone."""
         with self.lock:
             self.db.execute(
                 "insert into attempts (at, item_id, model, answer, error, problems, tokens_in, tokens_out, seconds,"
-                " cost_pence) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " cost_pence, job) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (now(), item_id, reply.model, json.dumps(reply.answer, ensure_ascii=False), reply.error,
-                 json.dumps(problems, ensure_ascii=False), reply.tokens_in, reply.tokens_out, reply.seconds, str(cost)))
+                 json.dumps(problems, ensure_ascii=False), reply.tokens_in, reply.tokens_out, reply.seconds, str(cost),
+                 job))
             self.db.commit()
 
     def draft(self, result):
@@ -105,22 +109,24 @@ class AuditLog:
         """The cost meter: how drafts ended, which model did the work, what it
         cost, and how often you changed a draft before sending it. "Done on
         this Mac" is the share of passing answers that came from the template
-        or the local model, not the paid API."""
+        or the local model, not the paid API. A look at the colour alone is
+        counted in its model's attempts and cost, but it didn't write the draft."""
         with self.lock:
             ended = dict(self.db.execute("select status, count(*) from drafts group by status").fetchall())
-            rows = self.db.execute("select model, problems, cost_pence from attempts").fetchall()
+            rows = self.db.execute("select model, problems, cost_pence, coalesce(job, 'draft') from attempts").fetchall()
             # each draft once, as last approved: a log from before kept every approval
             approved, edited = self.db.execute(
                 "select count(*), coalesce(sum(edited), 0) from approvals"
                 " where id in (select max(id) from approvals group by draft_id)").fetchone()
-        models = {}
-        for model, problems, cost in rows:
+        models, wrote = {}, {}
+        for model, problems, cost, job in rows:
             use = models.setdefault(model, {"model": model, "attempts": 0, "passed": 0, "cost_pence": Decimal(0)})
             use["attempts"] += 1
             use["passed"] += problems == "[]"
             use["cost_pence"] += pence(cost)
-        passed = sum(m["passed"] for m in models.values())
-        local = sum(m["passed"] for m in models.values() if not m["model"].startswith("claude"))
+            wrote[model] = wrote.get(model, 0) + (problems == "[]" and job != "colour")
+        passed = sum(wrote.values())
+        local = sum(n for model, n in wrote.items() if not model.startswith("claude"))
         drafts, cost = sum(ended.values()), sum(m["cost_pence"] for m in models.values())
         return {"drafts": drafts, "ready": ended.get("ready", 0), "needs_you": ended.get("needs you", 0),
                 "done_on_this_mac": round(local / passed, 3) if passed else 0.0,

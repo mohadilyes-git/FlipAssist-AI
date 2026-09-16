@@ -12,6 +12,11 @@ export function writerName(model: string | null): string {
   return model ? (WRITERS[model] ?? model) : "Nobody yet";
 }
 
+/** A model's short name, for inside a sentence: "Gemma", "Claude Haiku". */
+export function modelName(model: string): string {
+  return writerName(model).split(/,| \(/)[0];
+}
+
 /** Who read the listing: "read by Gemma, on this Mac", or "read by code (no AI)". */
 export function readBy(model: string): string {
   return model === "code" ? "read by code (no AI)" : `read by ${writerName(model)}`;

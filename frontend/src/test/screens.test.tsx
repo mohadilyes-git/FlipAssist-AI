@@ -252,6 +252,40 @@ describe("List on eBay", () => {
     expect(form.get("title")).toBe("iphone 13 128gb");
   });
 
+  it("says who picked the colour, and a colour-only look doesn't count as writing the draft", async () => {
+    serve({ "POST /api/listings/draft": [200, { ...LISTED, colour: "Midnight", colour_from: "photos",
+      colour_by: "claude-haiku-5-5", attempts: [LISTED.attempts[0],
+        { model: "claude-haiku-5-5", problems: [], seconds: 2.1, cost_pence: 0.0125, colour_only: true }],
+      cost_pence: 0.0125 }] });
+    const user = userEvent.setup();
+    render(<ListingScreen />);
+    await user.type(screen.getByLabelText("The seller's title"), "iphone 13 128gb");
+    await user.click(screen.getByRole("button", { name: "Draft listing" }));
+    expect(await screen.findByText("Midnight (from the photos, by Claude Haiku)")).toBeTruthy();
+    // a phone's eBay Colour field says who picked it too
+    cleanup();
+    serve({ "POST /api/listings/draft": [200, { ...LISTED, colour: "Midnight", colour_from: "photos",
+      colour_by: "claude-haiku-5-5", ebay_category: { id: "9355", name: "Mobile & Smart Phones", path: "Mobile Phones" },
+      item_specifics: [{ name: "Colour", value: "Black", required: true, source: "the photos: Midnight", options: ["Black"] }],
+      attempts: LISTED.attempts, cost_pence: 0 }] });
+    render(<ListingScreen />);
+    await user.type(screen.getByLabelText("The seller's title"), "iphone 13 128gb");
+    await user.click(screen.getByRole("button", { name: "Draft listing" }));
+    expect(await screen.findByText("from the photos: Midnight, by Claude Haiku")).toBeTruthy();
+    cleanup();
+    serve({ "POST /api/listings/draft": [200, { ...LISTED, colour: "Midnight", colour_from: "photos",
+      colour_by: "claude-haiku-5-5", attempts: [LISTED.attempts[0],
+        { model: "claude-haiku-5-5", problems: [], seconds: 2.1, cost_pence: 0.0125, colour_only: true }],
+      cost_pence: 0.0125 }] });
+    render(<ListingScreen />);
+    await user.type(screen.getByLabelText("The seller's title"), "iphone 13 128gb");
+    await user.click(screen.getByRole("button", { name: "Draft listing" }));
+    await screen.findByText("Midnight (from the photos, by Claude Haiku)");
+    expect(screen.getByText(/^Gemma, on this Mac ·/)).toBeTruthy(); // Gemma wrote it; Haiku only looked at the colour
+    await user.click(screen.getByRole("button", { name: "Why" }));
+    expect(screen.getByText("Claude Haiku, colour only: passed")).toBeTruthy();
+  });
+
   it("leaves out a photo too big to send, or a file that isn't a photo, and says so", async () => {
     const user = userEvent.setup({ applyAccept: false });
     const { container } = render(<ListingScreen />);

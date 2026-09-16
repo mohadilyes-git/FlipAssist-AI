@@ -6,7 +6,9 @@
    condition note and description, held to that one condition.
 3. The checks decide, model by model (flip.attempts): local first, one try on
    the paid model if a check fails, and never the API in place of a local
-   model that can't be reached.
+   model that can't be reached. When the local model's answer passes but it
+   can't tell the colour from the photos, the paid model gets one look at
+   the colour alone (about 0.01p).
 4. eBay's category and fields ("item specifics") come from the same facts, in
    eBay's own words (flip.ebay): "Apple iPhone 13", "128 GB", "Black".
 5. A draft is "ready" only when nothing is missing. Anything the AI was unsure
@@ -21,7 +23,7 @@ from flip.attempts import try_models
 from flip.catalogue import fill_from_catalogue, words
 from flip.checks import UNSURE, canonical, check_listing_answer, condition_for, has_fault, sources_text
 from flip.ebay import item_specifics
-from flip.prompts import answer_schema, listing_prompt
+from flip.prompts import answer_schema, colour_schema, listing_prompt
 from flip.title import build_title
 
 
@@ -32,7 +34,7 @@ def draft_listing(entry, catalogue, conditions, local=None, api=None, mode="auto
     item = fill_from_catalogue(title, notes, catalogue, description)
     result = {"item_id": entry.get("id"), "status": "needs you", "reasons": [], "warnings": item["warnings"],
               "item": item, "answer": None, "title": None, "attempts": [], "ebay": None,
-              "colour_from": "listing" if item.get("colour") else None}
+              "colour_from": "listing" if item.get("colour") else None, "colour_by": None}
     if not item["model_id"]:
         result["reasons"].append("the model isn't in the catalogue")
         return finish(result, log)
@@ -53,10 +55,16 @@ def draft_listing(entry, catalogue, conditions, local=None, api=None, mode="auto
     # a colour the AI picked from the photos, once checked, completes the item; one code read stays.
     # With no photos it had nothing to look at, so its pick is a guess: the colour stays for you
     colour = (result["answer"] or {}).get("colour")
-    if photos and not item.get("colour") and colour and str(colour).strip().lower() != UNSURE:
+    colour_by = result["attempts"][-1]["model"] if result["answer"] is not None else None
+    # the local model's answer passed but it couldn't tell the colour: the paid model gets one look at the
+    # colour alone (auto mode, where an answer from the local model is the only attempt so far)
+    if photos and not item.get("colour") and unsure(colour) and mode == "auto" and api is not None \
+            and len(result["attempts"]) == 1 and result["answer"] is not None:
+        colour, colour_by = second_look(api, system, user, photos, model, result, log)
+    if photos and not item.get("colour") and colour and not unsure(colour):
         item = {**item, "colour": canonical(colour, model["colours"], model.get("colour_aliases")),
                 "missing": [field for field in item["missing"] if field != "colour"]}
-        result["colour_from"] = "photos"
+        result["colour_from"], result["colour_by"] = "photos", colour_by
     # code's title and what's left to fill in stand even when no answer passed
     result["item"] = item
     result["title"] = build_title(item)
@@ -95,6 +103,35 @@ def seller_faults(description, notes):
         quote = " ".join(said[:MAX_QUOTE]) + ("…" if len(said) > MAX_QUOTE else "")
         found.append(f'The seller says "{quote}": your notes don\'t mention it. Check it before you list it.')
     return found
+
+
+def unsure(colour):
+    return str(colour).strip().lower() == UNSURE
+
+
+def second_look(api, system, user, photos, model, result, log):
+    """The paid model's look at the colour alone, with the same prompt and
+    photos, held to the model's colours: (colour, the model that said it), or
+    (None, None) if its answer failed. It's an attempt like any other (cost,
+    audit log), marked colour_only so the draft is still the local model's."""
+    look = {"item_id": result["item_id"], "reasons": [], "attempts": []}
+    colours = [*model["colours"], UNSURE]
+    answer = try_models("api", {"api": api}, ask=lambda ai: ai.ask(system, user, list(photos), colour_schema(model)),
+                        check=lambda found: [] if found.get("colour") in colours else
+                        [f"the colour {found.get('colour')!r} isn't one of this model's"], result=look,
+                        log=ColourLook(log) if log else None)
+    result["attempts"] += [{**a, "colour_only": True} for a in look["attempts"]]
+    return (answer["colour"], look["attempts"][-1]["model"]) if answer else (None, None)
+
+
+class ColourLook:
+    """The audit log, with each attempt kept as a look at the colour alone (job "colour")."""
+
+    def __init__(self, log):
+        self.log = log
+
+    def attempt(self, item_id, reply, problems, cost):
+        self.log.attempt(item_id, reply, problems, cost, job="colour")
 
 
 def finish(result, log):

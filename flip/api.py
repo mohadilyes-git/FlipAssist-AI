@@ -94,6 +94,7 @@ class Attempt(BaseModel):
     problems: list[str]
     seconds: float
     cost_pence: float
+    colour_only: bool = Field(False, description="a second look at the colour alone, not a draft")
 
 
 class Reading(BaseModel):
@@ -152,6 +153,8 @@ class ListingDraft(BaseModel):
                                            "the photos settle it")
     colour_from: Literal["listing", "photos"] | None = Field(
         description="listing: code read it from the title, description or notes; photos: the AI picked it from them")
+    colour_by: str | None = Field(None, description="the model that picked the colour from the photos: the local "
+                                                    "model, or the paid one when the local one was unsure")
     filled_by_code: dict = Field(description="model, storage, network, specs...: from the catalogue, no AI")
     ebay_category: EbayCategory | None = Field(description="eBay UK's category; phones so far")
     item_specifics: list[ItemSpecific] = Field(description="eBay's fields filled by code, in eBay's order and words")
@@ -337,7 +340,7 @@ class Gate:
 
 def attempts(found):
     return [Attempt(model=a["model"], problems=a["problems"], seconds=round(a["seconds"], 2),
-                    cost_pence=float(a["cost_pence"] or 0)) for a in found]
+                    cost_pence=float(a["cost_pence"] or 0), colour_only=a.get("colour_only", False)) for a in found]
 
 
 def new_id():
@@ -471,7 +474,7 @@ def draft_a_listing(title: str = Form(min_length=1, max_length=300), description
         draft_id=result["draft_id"], status=result["status"], ebay_title=result["title"],
         condition_id=answer.get("condition_id"), condition_note=answer.get("condition_note"),
         description=answer.get("description"), colour=item.get("colour"),
-        colour_from=result["colour_from"],
+        colour_from=result["colour_from"], colour_by=result["colour_by"],
         filled_by_code={k: v for k, v in item.items()  # code's facts only: a colour from the photos is the AI's
                         if k not in ("warnings", "missing") and not (k == "colour" and result["colour_from"] == "photos")},
         ebay_category=(result.get("ebay") or {}).get("category"),

@@ -150,6 +150,18 @@ def test_a_listing_drafted_from_the_form_and_photos(client):
     assert fields["Colour"] == ("Black", True, "the photos: Midnight")
 
 
+def test_a_colour_gemma_couldnt_see_comes_from_haikus_look_and_says_so(client):
+    unsure = {**LISTED, "colour": "unsure", "description": LISTED["description"].replace(" in Midnight", "")}
+    client.use(local=FakeModel("gemma3:4b", unsure), api_model=FakeModel("claude-haiku-5-5", {"colour": "Blue"}))
+    draft = client.post("/listings/draft", data={"title": "iPhone 13 128GB unlocked",
+                                                 "notes": "boxed, battery 87%, light scratch on the back"},
+                        files=[("photos", ("back.jpg", JPEG, "image/jpeg"))]).json()
+    assert (draft["colour"], draft["colour_from"], draft["colour_by"]) == ("Blue", "photos", "claude-haiku-5-5")
+    assert [(a["model"], a["colour_only"]) for a in draft["attempts"]] == \
+        [("gemma3:4b", False), ("claude-haiku-5-5", True)]
+    assert draft["cost_pence"] == round(sum(a["cost_pence"] for a in draft["attempts"]), 4) > 0
+
+
 def test_a_listing_outside_phones_has_no_ebay_fields_yet(client):
     client.use(local=FakeModel("gemma3:4b", {**LISTED, "colour": "White"}))
     draft = client.post("/listings/draft", data={"title": "PS5 Slim digital 1TB", "notes": "boxed"}).json()

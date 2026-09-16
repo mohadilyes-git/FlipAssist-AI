@@ -36,6 +36,12 @@ def answer_schema(item, model, conditions):
     return {"type": "object", "properties": fields, "required": list(fields), "additionalProperties": False}
 
 
+def colour_schema(model):
+    """The shape for a second look at the colour alone: one of the model's colours, or "unsure"."""
+    return {"type": "object", "properties": {"colour": {"type": "string", "enum": [*model["colours"], UNSURE]}},
+            "required": ["colour"], "additionalProperties": False}
+
+
 def listing_prompt(item, model, entry, photo_count, condition=None):
     """The system prompt and the message about this one item. condition is
     eBay's condition code set from the notes ({"id", "label"}), when it's settled."""
