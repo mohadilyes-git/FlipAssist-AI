@@ -172,7 +172,9 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
             <span className="chips-divider" aria-hidden="true" />
             <span className="label">Writer</span>
             {(["auto", "template", "ai"] as Writer[]).map((w) => (
-              <Chip key={w} on={writer === w} label={w === "auto" ? "Auto" : w === "template" ? "No AI" : "AI"}
+              <Chip key={w} on={writer === w} label={w === "auto" ? "Auto" : w === "template" ? "No AI writing" : "AI"}
+                hint={w === "template" ? "The AI still reads the listing's flaws; your sentences (or AlertFlip's) "
+                  + "write the message" : undefined}
                 onClick={() => setWriter(w)} />
             ))}
           </div>

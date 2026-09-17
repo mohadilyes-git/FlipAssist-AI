@@ -187,7 +187,7 @@ curl -s http://127.0.0.1:8000/messages/draft -H "X-API-Key: $FLIP_API_KEY" -H "C
 
 A Mac-style window in AlertFlip's design (`frontend/`, React and TypeScript), light or dark:
 - **Set up your style**, on first launch: reply to 8 listings (each shows one habit, like whether you mention flaws), or paste messages you've already sent. Nothing gets trained: it learns from your own messages with plain code. It ends with everything it learned, each with a Remove button.
-- **AI message:** price cards and a slider, the message with the seller's "no offers" note, what was read, and why, step by step.
+- **AI message:** price cards and a slider, the message with the seller's "no offers" note, what was read, and why, step by step. The writer is Auto, AI, or No AI writing: then code writes, but the AI still reads the listing's flaws first.
 - **List on eBay:** photos, notes, and the draft to check.
 - **Home:** the cost meter, and whether Gemma, the backup and the key are ready.
 - **Your style:** the style card and the phrasebook, each thing yours to remove or use again, and the messages it learns from, each yours to delete.

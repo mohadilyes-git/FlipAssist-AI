@@ -91,6 +91,14 @@ describe("AI message", () => {
     expect(await screen.findByText(/^No draft passed · /)).toBeTruthy();
   });
 
+  it("calls the no-AI writer what it is: the AI still reads the listing", () => {
+    render(<MessageScreen />);
+    const chip = screen.getByRole("button", { name: "No AI writing" });
+    expect(chip.getAttribute("title")).toBe("The AI still reads the listing's flaws; your sentences (or AlertFlip's) "
+      + "write the message");
+    expect(screen.queryByRole("button", { name: "No AI" })).toBeNull();
+  });
+
   it("shows why, step by step", async () => {
     serve({ "POST /api/messages/draft": [200, DRAFT] });
     const user = userEvent.setup();
