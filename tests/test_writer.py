@@ -20,10 +20,13 @@ CHATTY = style_card([{"my_message": "Hiya! Is the iPhone still up for grabs? Cou
 # ── your phrasebook ─────────────────────────────────────────────────────────
 
 def test_your_phrasebook_is_the_sentences_you_use_again_and_again():
+    # every one of these offered under asking, so that's the only kind with a sentence of its own
     assert PAST["phrases"] == {"opener": "Hi mate, is this still available?", "offer": "Would you take £[OFFER] cash?",
-                               "closing": "Can collect today.", "emoji": ""}
+                               "offer_lower": "Would you take £[OFFER] cash?", "offer_asking": None,
+                               "offer_more": None, "closing": "Can collect today.", "emoji": ""}
     assert phrasebook([{"my_message": "Hiya, £100?"}, {"my_message": "Hey! Would £90 do?"}]) == \
-        {"opener": None, "offer": None, "closing": "", "emoji": ""}
+        {"opener": None, "offer": None, "offer_lower": None, "offer_asking": None, "offer_more": None,
+         "closing": "", "emoji": ""}
 
 
 def test_messages_that_repeat_are_written_without_ai_and_ones_that_vary_by_ai():

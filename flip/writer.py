@@ -134,7 +134,20 @@ LOWBALL = re.compile(r"\b(?:cheeky|cheek|lowball|low ball|low offer|lowest|sorry
 # what may follow the price in "I can pay £X ...": nothing else from a question makes sense there
 SAFE_TAIL = re.compile(r"^(?:\s*(?:cash(?: on collection| in hand)?|for (?:it|this|them|these)|on collection))?\s*$",
                        re.IGNORECASE)
-SENTENCES = re.compile(r"(?<=[.!?])\s+")
+SENTENCES = re.compile(r"(?<=[.!?])\s+|(?<=[.!?][\U0001F300-\U0001FAFF☀-➿])\s+")  # "£170?😊 Can collect" is two
+# a greeting at the start of a sentence, as typed, with or without a comma: "Hi mate, ", "Hi mate ", "Hiya 👋 "
+LEADING_GREETING = re.compile(r"(?:hi|hiya|hello|hey|alright|morning|afternoon|evening|yo)\b(?:\s+(?:mate|there|bro|"
+                              r"pal|buddy|m8|hun|all))?(?:\s*[,!.?\-–—]+\s*|\s*[\U0001F300-\U0001FAFF☀-➿]+\s*|\s+)",
+                              re.IGNORECASE)
+# an offer asked without its "?": "would you take £170 cash.", "how about £220 cash"
+ASKS_OFFER = re.compile(r"(?:would|could|will|can|do|does)\s+(?:you|u|ya)\b|(?:how|what) about\b|any chance\b|"
+                        r"would\s+£", re.IGNORECASE)
+# the asking price named in an offer sentence: "I'll pay the full asking of £[OFFER]", "the full £[OFFER]"
+FULL_ASKING = re.compile(r"\b(?:the\s+)?full(?:\s+asking)?(?:\s+price)?(?:\s+of)?(?=\s+£)|\basking(?:\s+price)?"
+                         r"(?:\s+of)?(?=\s+£)", re.IGNORECASE)
+# an over-asking offer that already says why: "if you can save it for me"
+HELD = re.compile(r"\b(?:hold|save|keep|reserve|put (?:it )?aside|set (?:it )?aside)\b|take (?:it|the (?:ad|advert|"
+                  r"listing|post)) down|end (?:the |your )?listing|off the market", re.IGNORECASE)
 EMOJI_END = re.compile("[\U0001F300-\U0001FAFF☀-➿]+$")
 QUESTION_FILLER = {"does", "it", "come", "with", "a", "an", "the", "what", "whats", "s", "is", "any", "how", "hows",
                    "are", "all", "included", "or", "and", "original"}
@@ -326,25 +339,60 @@ def split_sign_off(sentence):
     return core, sentence[len(core):].strip()
 
 
+def split_greeting(sentence):
+    """A sentence's greeting, as typed with what follows it, and the rest:
+    ("Hi mate, ", "would you take £[OFFER]?"), ("Hi mate ", "I can pay..."),
+    ("Hi mate 👋 ", ...); ("", sentence) when it doesn't open with one."""
+    found = LEADING_GREETING.match(sentence)
+    return (found.group(), sentence[found.end():]) if found and found.end() < len(sentence) else ("", sentence)
+
+
+def asks(sentence):
+    """Whether a sentence asks, with or without its "?": "would you take £170 cash." does."""
+    core = split_greeting(split_sign_off(sentence)[0])[1]
+    return ends_asking(core) or bool(ASKS_OFFER.match(core))
+
+
 def as_statement(sentence):
     """At or over the asking price the offer is said, not asked:
     'Would you take £[OFFER] cash?' -> 'I can pay £[OFFER] cash.' Only a safe
-    ending is kept after the price ("cash", "for it"), and the sign-off
-    after the sentence: "...£[OFFER]?😊" -> "...£[OFFER]. 😊"."""
+    ending is kept after the price ("cash", "for it"), and your greeting as
+    you type it and the sign-off: "...£[OFFER]?😊" -> "...£[OFFER]. 😊"."""
     core, sign = split_sign_off(sentence)
-    if not ends_asking(core) or "[OFFER]" not in core:
+    if not asks(core) or "[OFFER]" not in core:
         return sentence
-    greeting = opening(core)
-    tail = re.sub(r"^\s*(?:quid|pounds)\b", "", core[core.index("[OFFER]") + len("[OFFER]"):].rstrip(" ?"))
+    greeting, _ = split_greeting(core)
+    tail = re.sub(r"^\s*(?:quid|pounds)\b", "", core[core.index("[OFFER]") + len("[OFFER]"):].rstrip(" ?.!"))
     tail = tail if SAFE_TAIL.match(tail) else ""
-    return f"{greeting + ', ' if greeting else ''}I can pay £[OFFER]{tail}.{' ' + sign if sign else ''}"
+    return f"{greeting}I can pay £[OFFER]{tail}.{' ' + sign if sign else ''}"
+
+
+def as_question(sentence):
+    """Under the asking price the offer is asked, not said: 'I can pay
+    £[OFFER] cash.' -> 'Would you take £[OFFER] cash?', for when your usual
+    sentence is one you write paying asking. Only a safe ending is kept after
+    the price, and your greeting and sign-off: 'Hi mate, I can pay £[OFFER]. 👍'
+    -> 'Hi mate, would you take £[OFFER]? 👍'."""
+    core, sign = split_sign_off(sentence)
+    if asks(core) or "[OFFER]" not in core:
+        return sentence
+    greeting, _ = split_greeting(core)
+    tail = re.sub(r"^\s*(?:quid|pounds)\b", "", core[core.index("[OFFER]") + len("[OFFER]"):].rstrip(" .!"))
+    tail = tail if SAFE_TAIL.match(tail) else ""
+    ask = f"would you take £[OFFER]{tail}?"
+    return f"{greeting + ask if greeting else ask[:1].upper() + ask[1:]}{' ' + sign if sign else ''}"
 
 
 def held(sentence):
     """Over asking, the reason to pay more: "I can pay £[OFFER] cash." -> "I can
-    pay £[OFFER] cash if you can hold it for me.", before any sign-off."""
+    pay £[OFFER] cash if you can hold it for me.", before any sign-off. Once:
+    your own reason stays ("if you can save it for me"), and a condition of
+    another kind gives way to it ("£[OFFER] if that's ok" -> "£[OFFER] if you can hold it for me")."""
     core, sign = split_sign_off(sentence)
-    return f"{core.rstrip(' .!?')} if you can hold it for me.{' ' + sign if sign else ''}"
+    if HELD.search(core):
+        return sentence
+    core = re.sub(r"\s+if\b.*$", "", core.rstrip(" .!?"), flags=re.IGNORECASE)
+    return f"{core} if you can hold it for me.{' ' + sign if sign else ''}"
 
 
 def with_reason(sentence, kind, point):
@@ -460,7 +508,12 @@ def write_offer(card, kind, offer, point=None, questions=(), at_least=0, item="i
     opener = phrases.get("opener")
     # your greeting sat in your offer sentence ("Hi mate, would you take..."): with that sentence gone, it opens
     opener = opener if opener is not None and (opener or phrases.get("offer")) else f"{card.get('greeting') or GREETING},"
-    offer_sentence = phrases.get("offer") or NEUTRAL[kind]
+    # how you word this kind of offer, else your usual offer sentence made to fit it, else a neutral one
+    offer_sentence = phrases.get(f"offer_{kind}") or phrases.get("offer") or NEUTRAL[kind]
+    if kind == "lower":  # under asking it's asked: "I can pay £70" from your asking-price habit would tell them
+        offer_sentence = as_question(offer_sentence)
+    if kind == "more" and not phrases.get("offer_more"):  # over asking isn't "the full asking of £235"
+        offer_sentence = re.sub(r"\s{2,}", " ", FULL_ASKING.sub("", offer_sentence))
     closing = collecting_from(phrases["closing"], pickup) if phrases.get("closing") else ""
     if kind != "lower":  # at or over asking: said, and never called low
         offer_sentence = as_statement(offer_sentence)
@@ -470,6 +523,11 @@ def write_offer(card, kind, offer, point=None, questions=(), at_least=0, item="i
         closing = closing if not LOWBALL.search(closing) else ""
     if kind == "more" and not point and not HOLD.search(offer_sentence):
         offer_sentence = held(offer_sentence)  # paying over asking says why
+    greeting, rest = split_greeting(offer_sentence)
+    if opener and LEADING_GREETING.match(opener) and greeting:  # one greeting: the opener's ("Hi mate, hi mate, would...")
+        offer_sentence = rest[:1].upper() + rest[1:]
+    elif not opener and not greeting and card.get("greeting"):  # your greeting sits in your other kinds' sentence
+        opener = f"{card['greeting']},"
     if not opener:  # "Hi mate, would you take £185?": anything added goes after "Hi mate,"
         opener, offer_sentence = greeting_apart(offer_sentence)
     reasoned = with_reason(offer_sentence, kind, point)

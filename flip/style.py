@@ -27,6 +27,7 @@ from pathlib import Path
 
 from flip.catalogue import contains, words
 from flip.checks import EMOJI, GREETING_WORDS, ends_asking, promised_in
+from flip.money import to_pence
 
 MENTIONS = {"collecting": r"\bcollect(?:ion|ing)?\b", "cash": r"\bcash\b", "today": r"\b(?:today|tonight|asap)\b",
             "postage": r"\bpost(?:age|ed|ing)\b|\bpost (?:it|them)\b",
@@ -34,13 +35,13 @@ MENTIONS = {"collecting": r"\bcollect(?:ion|ing)?\b", "cash": r"\bcash\b", "toda
                          r"damage\w*|fault\w*|flaw\w*|wear|mint)\b"}
 SHARE = 0.4  # a habit is something at least 40% of your messages do
 HABIT = 2  # a sentence in at least 2 of your messages is one you'd write again
-SENTENCES = re.compile(r"(?<=[.!?])\s+")
+SENTENCES = re.compile(r"(?<=[.!?])\s+|(?<=[.!?][\U0001F300-\U0001FAFF☀-➿])\s+")  # "£170?😊 Can collect" is two
 # one whole emoji, its skin tone and joins included: "👍🏽" is one, and a lone "🏽" is none
 WHOLE_EMOJI = re.compile("[\U0001F300-\U0001F3FA\U0001F400-\U0001FAFF☀-➿]"
                          "(?:[\U0001F3FB-\U0001F3FF]|\ufe0f|\u200d[\U0001F300-\U0001FAFF☀-➿])*")
 # the asking price said back, which isn't an offer: "still available at £220?", "you're asking £220"
-ASKING_SAID = re.compile(r"\b(?:available (?:at|for)|asking|listed (?:at|for)|price (?:is|of)|priced at)\s+£",
-                         re.IGNORECASE)
+ASKING_SAID = re.compile(r"\b(?:available (?:at|for)|asking|listed (?:at|for)|price (?:is|of)|priced at|still)\s+£",
+                         re.IGNORECASE)  # "is it still £220?" checks the price, it doesn't offer
 # title words that don't name the item
 TITLE_FILLER = {"with", "and", "for", "the", "of", "in", "on", "to", "or", "plus", "new", "used"}
 AMOUNT = r"(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{2})?"  # a comma only between thousands: "£185, cash" keeps its comma
@@ -55,6 +56,11 @@ create table if not exists removed (key text primary key, at text);
 # how the list of what it learned names your habits
 HABIT_NAMES = {"collecting": "coming to collect", "cash": "paying cash", "postage": "postage", "today": "today or asap"}
 SLOTS = (("opener", "Usual opener"), ("offer", "Offer sentence"), ("closing", "Closing"))
+# how you word the offer for each kind, when it's your habit there: under asking you may ask ("Would you do
+# £[OFFER]?") and at asking say it ("I'll pay the full £[OFFER]"). Listed only where it isn't your usual one
+KIND_SLOTS = (("offer_lower", "Offer under asking"), ("offer_asking", "Offer at asking"),
+              ("offer_more", "Offer over asking"))
+OFFER_SLOTS = ("offer", *(slot for slot, _ in KIND_SLOTS))
 CALLED = {"mate", "there", "bro", "pal", "buddy", "m8", "hun", "all"}  # "Hi mate", "Hi there"
 GREETING = "Hi"  # in place of a greeting you removed
 OLD_PRICE = re.compile(rf"£\s?{AMOUNT}"
@@ -131,8 +137,13 @@ def phrasebook(messages):
     ("" when that's nothing: most of your messages start with the offer).
     Plus the emoji you use most, or "". Only messages with one price count,
     so the price in a habit is always the offer, and a sentence that names
-    its own item ("is the iPhone still available?") is never a habit."""
+    its own item ("is the iPhone still available?") is never a habit. The
+    offer is learned for each kind too (offer_lower, offer_asking,
+    offer_more), from the messages whose offer was under, at or over the
+    listing's asking price: 3 messages paying asking ("I can pay £[OFFER]")
+    don't make the way you ask for less."""
     openers, offers, closings, emoji = Counter(), Counter(), Counter(), Counter()
+    by_kind = {slot: Counter() for slot, _ in KIND_SLOTS}
     for m in messages:
         if len(OLD_PRICE.findall(m["my_message"])) != 1 or ASKING_SAID.search(m["my_message"]):
             continue  # one price, the offer: not "still available at £220?" or "you're asking £220"
@@ -146,9 +157,28 @@ def phrasebook(messages):
         for counts, sentence in ((openers, opener), (offers, offer), (closings, closing)):
             if not names_item(sentence):
                 counts[sentence] += 1
+        kind = kind_of(m)
+        if kind and not names_item(offer):
+            by_kind[f"offer_{kind}"][offer] += 1
     habit = lambda counts: next((text for text, n in counts.most_common() if n >= HABIT), None)
     return {"opener": habit(openers), "offer": habit(offers), "closing": habit(closings),
+            **{slot: habit(counts) for slot, counts in by_kind.items()},
             "emoji": emoji.most_common(1)[0][0] if emoji else ""}
+
+
+def kind_of(message):
+    """The kind of offer a past message made, by its one price against the
+    listing's asking price: "lower", "asking" or "more"; None with no asking
+    price to tell by (a message pasted without one)."""
+    try:
+        asking = to_pence(message.get("asking_price") or "")
+        found = re.search(AMOUNT, OLD_PRICE.search(message["my_message"]).group())
+        offered = to_pence(found.group()) if found else None
+    except (ValueError, AttributeError):
+        return None
+    if not asking or offered is None:
+        return None
+    return "lower" if offered < asking else "asking" if offered == asking else "more"
 
 
 def describe(card, words=None):
@@ -199,11 +229,14 @@ def learned(card, removed=()):
         add("says-flaw", "Says the flaw", "as the reason for a lower offer")
     if card.get("emoji"):
         add("emoji", "Emojis", phrases.get("emoji") or "yes")
-    for slot, what in SLOTS:
+    offers = set()  # each offer sentence once, whichever kinds it's for: "Hiya, can do £… today." under and at asking
+    for slot, what in SLOTS + KIND_SLOTS:
         text = phrases.get(slot)
-        if text and words(text) and not (slot == "opener" and greeting_only(text)):
+        if text and words(text) and not (slot == "opener" and greeting_only(text)) and text.lower() not in offers:
             add(f"phrase:{slot}:{text.lower()}", what, text.replace("[OFFER]", "…"))
-    listed = [words(phrases[slot]) for slot, _ in SLOTS if phrases.get(slot)]
+            if slot in OFFER_SLOTS:
+                offers.add(text.lower())
+    listed = [words(phrases[slot]) for slot, _ in SLOTS + KIND_SLOTS if phrases.get(slot)]
     for ask in card.get("asks", []):
         asked = question_words(ask)
         if "offer" in ask.split() or not set(asked.split()) - GREETING_WORDS - CALLED \
@@ -222,7 +255,8 @@ def removed_row(key):
     kind, _, rest = key.partition(":")
     if kind == "phrase":
         slot, _, text = rest.partition(":")
-        return (dict(SLOTS)[slot], text.replace("[offer]", "…")) if slot in dict(SLOTS) else None
+        slots = dict(SLOTS + KIND_SLOTS)
+        return (slots[slot], text.replace("[offer]", "…")) if slot in slots else None
     return {"greeting": ("Opens with", rest[:1].upper() + rest[1:]), "mention": ("Mentions", HABIT_NAMES.get(rest, rest)),
             "says-flaw": ("Says the flaw", "as the reason for a lower offer"), "emoji": ("Emojis", "yes"),
             "ask": ("Asks every time", f"{rest}?")}.get(kind)
@@ -268,17 +302,18 @@ def without(card, removed):
     card = copy.deepcopy(card)
     phrases = card.setdefault("phrases", {})
     gone = {"greetings": [], "habits": [], "phrases": [], "asks": [], "emoji": False, "flaw": False}
-    for key in sorted(removed):
+    # sentences first, as they were learned: a greeting removed after would reword them out of reach
+    for key in sorted(removed, key=lambda key: (not key.startswith("phrase:"), key)):
         kind, _, rest = key.partition(":")
         if kind == "greeting":
             mine = (card.get("greeting") or "").lower() == rest
             gone["greetings"].append(card.pop("greeting") if mine else rest)
-            for slot, _ in SLOTS:  # your sentences keep their words, with "Hi" for the greeting, or none for "Hi"
+            for slot, _ in SLOTS + KIND_SLOTS:  # your sentences keep their words, with "Hi" for the greeting, or none for "Hi"
                 text = phrases.get(slot)
                 if text and opening(text).lower() == rest:
                     bare = ungreeted(text, opening(text))
-                    phrases[slot] = (bare if rest == GREETING.lower() or not bare else
-                                     f"{GREETING}, {bare[:1].lower()}{bare[1:]}") or None
+                    lowered = bare if re.match(r"I\b|I'", bare) else bare[:1].lower() + bare[1:]  # "I" keeps its capital
+                    phrases[slot] = (bare if rest == GREETING.lower() or not bare else f"{GREETING}, {lowered}") or None
         elif kind == "mention":
             card["mentions"] = [m for m in card.get("mentions", []) if m != rest]
             card["promises"] = [p for p in card.get("promises", []) if p != rest]
@@ -289,7 +324,7 @@ def without(card, removed):
         elif kind == "emoji":
             card["emoji"] = False
             phrases["emoji"] = ""
-            for slot, _ in SLOTS:
+            for slot, _ in SLOTS + KIND_SLOTS:
                 if phrases.get(slot) and not words(phrases[slot]):  # a closing that's only "👍"
                     phrases[slot] = None
             gone["emoji"] = True
@@ -297,8 +332,11 @@ def without(card, removed):
             slot, _, text = rest.partition(":")
             mine = (phrases.get(slot) or "").lower() == text
             gone["phrases"].append(phrases[slot] if mine else text)
-            if mine:
-                phrases[slot] = None  # no habit there: the writer words that part, or the AI writes
+            # no habit there: the writer words that part, or the AI writes. An offer sentence is one sentence
+            # to you, so it goes from every kind of offer that has it
+            for other in OFFER_SLOTS if slot in OFFER_SLOTS else (slot,):
+                if (phrases.get(other) or "").lower() == text:
+                    phrases[other] = None
             gone["asks"] += [question_words(q) for q in questions_in(text)]  # "...is this still available?" goes with it
         elif kind == "ask":
             card["asks"] = [a for a in card.get("asks", []) if question_words(a) != rest]
@@ -418,8 +456,14 @@ def phrase_rows(card):
     """The phrasebook as the app shows it, the offer price left out:
     [("Usual opener", "Hi mate,"), ("Offer sentence", "Would you take £… cash?")]."""
     book = (card or {}).get("phrases") or {}
-    named = (("opener", "Usual opener"), ("offer", "Offer sentence"), ("closing", "Closing"), ("emoji", "Emoji"))
-    return [(label, book[key].replace("[OFFER]", "…")) for key, label in named if book.get(key)]
+    named = (("opener", "Usual opener"), ("offer", "Offer sentence"), *KIND_SLOTS, ("closing", "Closing"),
+             ("emoji", "Emoji"))
+    rows, offers = [], set()
+    for key, label in named:
+        if book.get(key) and not (key in OFFER_SLOTS and book[key].lower() in offers):  # each offer sentence once
+            rows.append((label, book[key].replace("[OFFER]", "…")))
+            offers |= {book[key].lower()} if key in OFFER_SLOTS else set()
+    return rows
 
 
 class StyleBook:

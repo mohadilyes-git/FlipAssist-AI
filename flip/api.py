@@ -186,7 +186,8 @@ class Learned(BaseModel):
     """One thing your style puts in a message, yours to keep or remove."""
     key: str = Field(description="what to send to /style/learned to remove it or put it back")
     what: str = Field(description='"Opens with", "Mentions", "Says the flaw", "Emojis", "Usual opener", "Offer '
-                                  'sentence", "Closing" or "Asks every time"')
+                                  'sentence", "Offer under asking", "Offer at asking", "Offer over asking", '
+                                  '"Closing" or "Asks every time"')
     value: str = Field(description="the greeting, habit, sentence or question, the price as …")
     used: bool = Field(description="false once you've removed it: then no draft writes it")
 

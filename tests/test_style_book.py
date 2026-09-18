@@ -252,3 +252,145 @@ def test_a_question_in_a_removed_sentence_goes_with_it():
     opener = style_card([{"my_message": f"Hi mate, is this still available? Would you take £{p} cash?"} for p in (150, 90, 70)])
     card = without(opener, {"phrase:opener:hi mate, is this still available?"})
     assert check_not_removed("Hi, is this still available? Would you take £150 cash?", card)
+
+
+# ── each kind of offer in your words (14 Sep 2026) ───────────────────────────
+
+PAYS_ASKING = [{"id": f"a{n}", "listing_title": title, "asking_price": price, "marketplace": "facebook",
+                "my_message": f"Hi mate, I can pay £{price} cash. Can collect today."}
+               for n, (title, price) in enumerate([("iPhone 13 128GB", "220"), ("PS5 Slim disc", "300"),
+                                                   ("AirPods Pro 2", "150")])]
+ASKS_LESS = [{"id": f"l{n}", "listing_title": title, "asking_price": price, "marketplace": "facebook",
+              "my_message": f"Hi mate, would you do £{offer}? Can collect today."}
+             for n, (title, price, offer) in enumerate([("Switch OLED", "200", "170"), ("Pixel 8", "250", "210")])]
+
+
+def test_a_lower_offer_is_asked_even_when_your_habit_is_paying_asking():
+    """The 2 Sep find: 3 of 4 style messages paid asking, so a lower offer said "I can pay £70"."""
+    card = style_card(PAYS_ASKING)
+    assert card["phrases"]["offer"] == "Hi mate, I can pay £[OFFER] cash."
+    assert card["phrases"]["offer_lower"] is None  # you've never asked for less: nothing learned for it
+    assert write_offer(card, "lower", 7000) == "Hi mate, would you take £70 cash? Can collect today."
+    assert write_offer(card, "asking", 9000) == "Hi mate, I can pay £90 cash. Can collect today."
+
+
+def test_each_kind_of_offer_is_worded_the_way_you_word_that_kind():
+    card = style_card(PAYS_ASKING + ASKS_LESS)
+    phrases = card["phrases"]
+    assert (phrases["offer_lower"], phrases["offer_asking"], phrases["offer_more"]) == \
+        ("Hi mate, would you do £[OFFER]?", "Hi mate, I can pay £[OFFER] cash.", None)
+    assert write_offer(card, "lower", 7000) == "Hi mate, would you do £70? Can collect today."
+    assert write_offer(card, "asking", 9000) == "Hi mate, I can pay £90 cash. Can collect today."
+    assert write_offer(card, "more", 9500) == "Hi mate, I can pay £95 cash if you can hold it for me. Can collect today."
+    # shown once each: your usual sentence, and the kind that words it differently
+    assert phrase_rows(card)[:2] == [("Offer sentence", "Hi mate, I can pay £… cash."),
+                                     ("Offer under asking", "Hi mate, would you do £…?")]
+
+
+def test_a_message_with_no_asking_price_counts_for_your_usual_sentence_only():
+    pasted = [{**m, "asking_price": ""} for m in ASKS_LESS]
+    phrases = style_card(PAYS_ASKING + pasted)["phrases"]
+    assert phrases["offer_lower"] is None and phrases["offer_asking"] == "Hi mate, I can pay £[OFFER] cash."
+
+
+def test_a_kinds_sentence_is_yours_to_remove_and_removing_your_usual_one_takes_it_from_every_kind(tmp_path):
+    found = book(tmp_path, index=False)
+    found.add(PAYS_ASKING + ASKS_LESS, "added")
+    rows = {r["what"]: r for r in found.learned()}
+    assert rows["Offer under asking"]["value"] == "Hi mate, would you do £…?"
+    assert "Offer at asking" not in rows  # it's your usual sentence, listed once as that
+    assert found.use(rows["Offer under asking"]["key"], False)
+    card = found.card()
+    assert card["phrases"]["offer_lower"] is None and card["phrases"]["offer"] == "Hi mate, I can pay £[OFFER] cash."
+    assert write_offer(card, "lower", 7000) == "Hi mate, would you take £70 cash? Can collect today."
+    assert 'Never writes "Hi mate, would you do £[OFFER]?"' in describe(card)
+    found.use(rows["Offer sentence"]["key"], False)
+    phrases = found.card()["phrases"]
+    assert (phrases["offer"], phrases["offer_asking"]) == (None, None)  # one sentence to you, gone from every kind
+    assert {r["what"]: r["used"] for r in found.learned()}["Offer under asking"] is False  # still listed, to put back
+
+
+# ── what test agents tried, to break each kind of offer (14 Sep 2026) ─────────
+
+def sent(*rows):
+    return [{"id": f"k{n}", "listing_title": title, "asking_price": asking, "marketplace": "facebook", "my_message": text}
+            for n, (title, asking, text) in enumerate(rows)]
+
+
+@pytest.mark.parametrize("messages, kind, offer, message", [
+    # the opener greets, so the kind's own sentence doesn't greet again
+    (sent(("Switch OLED", "220", "Hi mate, is this still available? I can pay £220 cash."),
+          ("PS5 Slim", "300", "Hi mate, is this still available? I can pay £300 cash."),
+          ("AirPods Pro", "150", "Hi mate, is this still available? I can pay £150 cash."),
+          ("Garmin watch", "200", "Hi mate, would you do £170?"), ("Pixel 8", "250", "Hi mate, would you do £210?")),
+     "lower", 17000, "Hi mate, is this still available? Would you do £170?"),
+    # over asking isn't "the full asking of £235"
+    (sent(*[(t, a, f"Hi mate, I'll pay the full asking of £{a}. Can collect today.")
+            for t, a in [("Switch OLED", "220"), ("PS5 Slim", "300"), ("AirPods Pro", "150")]]),
+     "more", 23500, "Hi mate, I'll pay £235 if you can hold it for me. Can collect today."),
+    # a question without its "?" is still asking: said at and over asking
+    (sent(("Switch OLED", "200", "Hi mate, would you take £170 cash."), ("Pixel 8", "250", "Hi mate, would you take £210 cash."),
+          ("Kindle", "110", "Hi mate, would you take £90 cash.")),
+     "asking", 22000, "Hi mate, I can pay £220 cash."),
+    # an emoji typed straight after the "?" ends the sentence
+    (sent(*[(t, a, f"Hiya, would you take £{o}?😊 Can collect tonight.")
+            for t, a, o in [("Switch OLED", "200", "170"), ("Pixel 8", "250", "210"), ("Kindle", "110", "90")]]),
+     "asking", 20000, "Hiya, I can pay £200. 😊 Can collect tonight."),
+    # your greeting sits in your other kind's sentence: this kind's still has one
+    (sent(("Switch OLED", "200", "Hi mate, would you take £170 cash? Can collect today."),
+          ("Pixel 8", "250", "Hi mate, would you take £210 cash? Can collect today."),
+          ("Kindle Paperwhite", "110", "Hi mate, would you take £90 cash? Can collect today."),
+          ("PS5 digital", "220", "Hi mate! I'll pay the full £220. Can collect today."),
+          ("Xbox Series S", "200", "Hi mate! I'll pay the full £200. Can collect today.")),
+     "asking", 22000, "Hi mate, I'll pay the full £220. Can collect today."),
+    # a greeting with no comma stays yours
+    (sent(*[(t, a, f"Hi mate I can pay £{a} cash. Can collect today.")
+            for t, a in [("Switch OLED", "220"), ("PS5 Slim", "300"), ("AirPods Pro", "150")]]),
+     "lower", 17000, "Hi mate would you take £170 cash? Can collect today."),
+    # one reason over asking: yours if it has one, else hold it in place of another "if"
+    (sent(*[(t, a, f"Hi mate, I can pay £{o} if that's ok. Can collect today.")
+            for t, a, o in [("Switch OLED", "200", "170"), ("Pixel 8", "250", "250"), ("Kindle", "110", "90")]]),
+     "more", 23500, "Hi mate, I can pay £235 if you can hold it for me. Can collect today."),
+    (sent(*[(t, a, f"Hiya, I'll pay £{o} if you can save it for me.")
+            for t, a, o in [("Switch OLED", "200", "210"), ("Pixel 8", "250", "260"), ("Kindle", "110", "120")]]),
+     "more", 23500, "Hiya, I'll pay £235 if you can save it for me."),
+    # "is it still £220?" checks the price: it isn't an offer to copy
+    (sent(("Switch OLED", "220", "Hi, is it still £220? Can collect today."), ("PS5 Slim", "300", "Hi, is it still £300? Can collect today."),
+          ("Garmin", "200", "Hi, would you take £170 for it? Can collect today."),
+          ("Pixel 8", "250", "Hi, could you do £210 cash? Can collect today.")),
+     "lower", 18500, "Hi, would you take £185 for it? Can collect today."),
+])
+def test_each_kind_of_offer_reads_right_whatever_your_messages_look_like(messages, kind, offer, message):
+    assert write_offer(style_card(messages), kind, offer) == message
+
+
+def test_removing_your_usual_sentence_or_greeting_leaves_one_greeting_and_your_capital_i(tmp_path):
+    found = book(tmp_path, index=False)
+    found.add(PAYS_ASKING + ASKS_LESS, "added")
+    found.use("phrase:offer:hi mate, i can pay £[offer] cash.", False)
+    assert write_offer(found.card(), "lower", 7000) == "Hi mate, would you do £70? Can collect today."
+    found.use("phrase:offer:hi mate, i can pay £[offer] cash.", True)
+    found.use("greeting:hi mate", False)
+    assert write_offer(found.card(), "asking", 22000) == "Hi, I can pay £220 cash. Can collect today."
+
+
+def test_a_removed_sentence_stays_out_after_you_remove_the_greeting_too(tmp_path):
+    found = book(tmp_path, index=False)
+    found.add(sent(("Garmin watch", "200", "Hi mate, would you do £170? Can collect today."),
+                   ("Pixel 8", "250", "Hi mate, would you do £210? Can collect today."),
+                   ("Kindle", "110", "Hi mate, would you do £90? Can collect today."),
+                   ("Switch OLED", "220", "Hi mate, I'll pay the full £220. Can collect today."),
+                   ("PS5 Slim", "300", "Hi mate, I'll pay the full £300. Can collect today.")), "added")
+    found.use(next(r["key"] for r in found.learned() if r["value"] == "Hi mate, I'll pay the full £…."), False)
+    assert write_offer(found.card(), "asking", 22000) == "Hi mate, I can pay £220. Can collect today."
+    found.use("greeting:hi mate", False)
+    assert write_offer(found.card(), "asking", 22000) == "Hi, I can pay £220. Can collect today."
+
+
+def test_a_sentence_you_use_for_two_kinds_is_listed_once():
+    card = style_card(sent(*[("Watch", "", f"Alright mate, £{p} cash?") for p in (150, 180, 90, 40, 200)],
+                           ("Garmin", "200", "Hiya, can do £170 today."), ("Pixel 8", "250", "Hiya, can do £210 today."),
+                           ("Switch Lite", "120", "Hiya, can do £120 today."), ("Kindle", "90", "Hiya, can do £90 today.")))
+    rows = [r["value"] for r in learned(card)]
+    assert rows.count("Hiya, can do £… today.") == 1
+    assert [label for label, _ in phrase_rows(card)].count("Offer at asking") == 0  # listed once, as under asking

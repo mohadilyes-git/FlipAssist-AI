@@ -15,7 +15,8 @@ export const priceText = (price: string) => {
 };
 
 // your sentences go in the phrasebook; everything else is a habit on the style card
-const SENTENCES = new Set(["Usual opener", "Offer sentence", "Closing", "Asks every time"]);
+const SENTENCES = new Set(["Usual opener", "Offer sentence", "Offer under asking", "Offer at asking",
+  "Offer over asking", "Closing", "Asks every time"]);
 export const habitsOf = (style: Style | null) => (style?.learned ?? []).filter((row) => !SENTENCES.has(row.what));
 export const sentencesOf = (style: Style | null) => (style?.learned ?? []).filter((row) => SENTENCES.has(row.what));
 // how long your messages are isn't a thing it puts in, so it's shown, not removed
