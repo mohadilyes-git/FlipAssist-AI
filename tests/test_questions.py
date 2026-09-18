@@ -109,3 +109,12 @@ def test_a_case_it_was_always_kept_in_doesnt_say_it_comes_with_one():
     assert check_no_answered_questions(asks, looked_after) == []
     for says in ("Screen protector on it, comes with the case", "Has a screen protector on it"):
         assert answered(says) & {"screen protector"}  # fitted, or included: that answers it
+
+
+def test_a_statement_before_the_question_isnt_asked():
+    """The explainer's (14 Sep): "could you hold it for me?" asks about holding it, not the lock."""
+    listing = "iPhone 13 128GB. Cracked screen, locked to EE. Comes with box."
+    assert check_no_answered_questions("Hi, I'll pay £300. I don't mind the cracked screen and locked to EE, could you "
+                                       "hold it for me?", listing) == []
+    assert check_no_answered_questions("Hi, would you take £250? Is it unlocked, does it come with the box?", listing) \
+        == ["the message asks what the listing already says: box, unlocked"]

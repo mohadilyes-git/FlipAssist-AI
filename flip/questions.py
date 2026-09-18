@@ -72,6 +72,11 @@ def open_questions(text, category=None, questions=None, flaws=None):
     return [q["ask"] for q in pool if not done & set(q["unless"])][:MAX_QUESTIONS]
 
 
+# where a sentence starts asking: "could you hold it", "does it come with", "any marks"
+ASKING_PART = re.compile(r"(?:could|would|can|will|do|does|did|is|are|was|has|have|any|what|when|where|how|why)\b",
+                         re.IGNORECASE)
+
+
 def check_no_answered_questions(message, text):
     """A message doesn't ask what the listing already says about what comes
     with the item: "Does it come with the box?" on a boxed listing reads as if
@@ -85,6 +90,12 @@ def check_no_answered_questions(message, text):
             if prices_in(question):  # the offer names the item ("for the booster box?"): only what follows asks
                 question = (re.split(r",|\band\b", question[question.index("£"):] if "£" in question else question,
                                      maxsplit=1) + [""])[1]
+            # a statement before the question in one sentence isn't asked: "I don't mind the cracked screen and
+            # locked to EE, could you hold it for me?" asks about holding it, not the lock
+            parts = re.split(r",\s*", question)
+            asking = [n for n, part in enumerate(parts) if ASKING_PART.match(part.strip())]
+            if asking:
+                question = ", ".join(parts[asking[0]:])
             asked |= {key for key in promises_in(question) if key in PROMISES}
     if asked & done:
         return [f"the message asks what the listing already says: {', '.join(sorted(asked & done))}"]

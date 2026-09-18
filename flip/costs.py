@@ -10,7 +10,10 @@ USD_TO_GBP = Decimal("0.80")  # the default rate; change it in .env when it move
 
 
 def cost_pence(model, tokens_in, tokens_out):
-    """The cost in pence, kept to fractions of a penny (one draft costs far less than 1p)."""
-    price_in, price_out = PRICES_USD.get(model, (Decimal(0), Decimal(0)))
+    """The cost in pence, kept to fractions of a penny (one draft costs far less than 1p).
+    A paid model with no price here (a Claude model added later) is never
+    counted free: it's priced as the dearest here until its own price is added."""
+    dearest = (max(p[0] for p in PRICES_USD.values()), max(p[1] for p in PRICES_USD.values()))
+    price_in, price_out = PRICES_USD.get(model) or (dearest if str(model).startswith("claude") else (Decimal(0), Decimal(0)))
     dollars = (price_in * tokens_in + price_out * tokens_out) / 1_000_000
     return dollars * Decimal(os.environ.get("USD_TO_GBP", USD_TO_GBP)) * 100
