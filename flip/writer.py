@@ -91,6 +91,8 @@ CAPITALS = {"face id": "Face ID", "touch id": "Touch ID", "hdmi": "HDMI", "usb":
             "oled": "OLED", "lcd": "LCD", "ios": "iOS", "iphone": "iPhone", "ipad": "iPad", "airpods": "AirPods",
             "airpod": "AirPod", "macbook": "MacBook", "ps5": "PS5", "ps4": "PS4", "joy-con": "Joy-Con", "joy-cons": "Joy-Cons"}
 # words a listing's title has before the flaw that aren't the flaw: "iPhone 11 64GB Unlocked back glass cracked"
+# a title word with one of these after it is the flaw's own: "locked TO EE", "used WITH care"
+TIED_ON = {"to", "on", "with", "by", "for", "from", "in", "at"}
 TITLE_WORDS = {"unlocked", "locked", "used", "boxed", "new", "sim", "free", "simfree", "grade", "refurbished",
                "smartphone", "phone", "mobile", "apple", "samsung", "google", "sony", "nintendo", "microsoft",
                "console", "network", "ee", "o2", "vodafone", "three", "gb", "tb", "edition", "disc", "digital"}
@@ -114,7 +116,8 @@ JUST_SAYS = re.compile(r"^(?:(?:slightly|lightly|a bit|bit|very|quite|heavily|ba
                        r"(?:cracked|scratched|scuffed|dented|chipped|faulty|bent|broken|damaged|worn|marked|stained|"
                        r"smashed|shattered|loose|stiff|dead|unlocked|locked|blacklisted|swollen)"
                        r"(?:\s+(?:and|&)\s+(?:cracked|scratched|scuffed|dented|chipped|faulty|bent|broken|damaged|worn|"
-                       r"marked|stained))?$", re.IGNORECASE)
+                       r"marked|stained))?$"
+                       r"|^(?:network\s+)?locked\s+to\s+\S+$", re.IGNORECASE)  # "that it's locked to EE"
 NO_FAULT = re.compile(r"^no\s+(?:sound|power|picture|signal|display|image|wifi|charge|charging|service|audio|video|"
                       r"face id|touch id)\b", re.IGNORECASE)
 # good condition in a shape this can say: "as it's in excellent condition"
@@ -201,7 +204,8 @@ def untitled(part):
     tokens = part.split()
     known, title = model_words(), False
     while len(tokens) > 1 and (re.search(r"\d", tokens[0]) or tokens[0].lower().strip(",-–") in known) \
-            and " ".join(tokens[:2]).lower() not in PART_NAMES:  # "PS5 disc drive not working": the drive's
+            and " ".join(tokens[:2]).lower() not in PART_NAMES \
+            and tokens[1].lower() not in TIED_ON:  # "PS5 disc drive not working": the drive's; "locked to EE" stays
         tokens, title = tokens[1:], True
     while title and len(tokens) > 1 and tokens[0].lower().strip(",-–") in colour_words():  # "iPhone 13 Midnight ..."
         tokens = tokens[1:]
@@ -474,13 +478,17 @@ def priced(text, offer):
     return text.replace("£[OFFER]", offer_words(offer)).replace("[OFFER]", f"{offer // 100:,}")
 
 
-def default_offer(kind, offer, point=None, questions=(), at_least=0, item="item", pickup="", in_person=False):
+def default_offer(kind, offer, point=None, questions=(), at_least=0, item="item", pickup="", in_person=False,
+                  cash=True):
     """With no past messages, the message AlertFlip writes (LOCAL, POSTED):
     the reason for a lower offer in a sentence of its own, and at or over
     asking after the offer as with your own sentences. in_person: on Facebook or
     Gumtree, where you come and collect (from the listing's pickup place)
-    and pay cash. None if the listing's point can't be said."""
+    and pay cash. cash: False when the listing says no cash ("would you take
+    £[OFFER] for it?"). None if the listing's point can't be said."""
     opener, offer_sentence, closing = (LOCAL if in_person else POSTED)[kind]
+    if not cash:
+        offer_sentence = re.sub(r"\s+cash\b", "", offer_sentence)
     offer_sentence, closing = collecting_from(offer_sentence, pickup), collecting_from(closing, pickup)
     if kind == "lower" and point:
         reason = reason_sentence(point)
@@ -493,7 +501,8 @@ def default_offer(kind, offer, point=None, questions=(), at_least=0, item="item"
     return priced(fit(opener, [*middle, *merge_questions(questions)], closing, at_least, item), offer)
 
 
-def write_offer(card, kind, offer, point=None, questions=(), at_least=0, item="item", pickup="", in_person=False):
+def write_offer(card, kind, offer, point=None, questions=(), at_least=0, item="item", pickup="", in_person=False,
+                cash=True):
     """One offer message from your phrasebook (card["phrases"]), or, if you
     have no past messages, AlertFlip's (default_offer); None if the listing's
     point can't be said in a sentence this knows (then the AI writes).
@@ -501,9 +510,10 @@ def write_offer(card, kind, offer, point=None, questions=(), at_least=0, item="i
     reason (flip.offers), only when it's to be said. questions: the open
     ones, for a longer message. at_least: the words a longer message needs.
     item: what to call the item. pickup: where the listing says to collect.
-    in_person: a Facebook or Gumtree listing (local_market)."""
+    in_person: a Facebook or Gumtree listing (local_market). cash: False when
+    the listing says no cash (your own sentences then come without it: the drafter's without_cash)."""
     if not card:
-        return default_offer(kind, offer, point, questions, at_least, item, pickup, in_person)
+        return default_offer(kind, offer, point, questions, at_least, item, pickup, in_person, cash)
     phrases = card.get("phrases") or {}
     opener = phrases.get("opener")
     # your greeting sat in your offer sentence ("Hi mate, would you take..."): with that sentence gone, it opens

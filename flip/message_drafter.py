@@ -36,17 +36,18 @@ import time
 from flip.ai import Reply
 from flip.attempts import try_models
 from flip.catalogue import fill_from_catalogue, load_catalogue, model_names, models_disagree, words
-from flip.checks import (HOLD, check_message, check_message_manner, check_no_unasked_promises, ends_asking,
-                         names_other_model, promised_in)
+from flip.checks import (HOLD, LOCK_TALK, NO_CASH, check_message, check_message_manner, check_no_unasked_promises,
+                         ends_asking, names_other_model, promised_in)
 from flip.money import offer_for, to_pence
 from flip.numbers import read_numbers
 from flip.offers import check_condition_talk, copied_question, point_for, question_for, says_point
-from flip.prompts import MESSAGE_SCHEMA, buying_line, message_prompt
+from flip.prompts import MESSAGE_SCHEMA, RETRY, buying_line, message_prompt, offer_words
 from flip.questions import check_no_answered_questions, load_questions, open_questions
 from flip.reader import code_reading, in_listing
 from flip.retrieval import listing_text
-from flip.style import OLD_PRICE, SENTENCES, check_not_removed, describe, question_words, scrubbed, without_prices
-from flip.writer import make_longer, repeats, write_offer
+from flip.style import (IN_THE_OFFER, OLD_PRICE, OFFER_SLOTS, SENTENCES, check_not_removed, describe, question_words,
+                        scrubbed, without_prices)
+from flip.writer import make_longer, reason_sentence, repeats, write_offer
 
 USUAL_WORDS = 15  # how long a message is before you have past messages to go by
 LONGER_AT_LEAST = 30
@@ -76,6 +77,17 @@ LOCAL_MARKETS = re.compile(r"\b(?:facebook|fb|gumtree)\b", re.IGNORECASE)
 POSTED_MARKETS = re.compile(r"\b(?:ebay|vinted)\b", re.IGNORECASE)
 # what a message promises before you have past messages: AlertFlip's way on Facebook and Gumtree
 LOCAL_HABITS = {"collecting", "cash"}
+# before you have past messages, on Facebook and Gumtree: what code adds for the cash and collecting a message
+# leaves out (after a lower offer, the whole sentence: "would you take £380 cash and come and collect it?" didn't read)
+CASH_AND_COLLECT = {frozenset({"cash", "collecting"}): "I can pay cash and come and collect it.",
+                    frozenset({"collecting"}): "I can come and collect it.", frozenset({"cash"}): "I can pay cash."}
+# what code adds, as the retry tells the AI
+ADDED_NAMES = {"the reason": "the reason", "cash and collecting": "the cash-and-collect sentence"}
+# a message that won't collect: asking the seller to bring or post it, or saying collecting can't be done. Code
+# adds no "I can come and collect it." to one of these: the checks say what's wrong instead
+WONT_COLLECT = re.compile(r"\byou (?:to )?(?:drop|bring|deliver|post|send)\b|\b(?:drop|bring) (?:it|them) (?:round|over|to me)\b|"
+                          r"\bdeliver(?:y|ed)?\b|\bpost (?:it|them)\b|\b(?:can'?t|cannot|can not|unable to|won'?t be able to) "
+                          r"collect|\bcollect(?:ion|ing)? (?:is |isn'?t |won'?t be )?(?:not )?possible\b", re.IGNORECASE)
 # a seller's battery health, for the reason of a lower offer (battery_in): health in so many words...
 HEALTH_CUE = re.compile(r"\b(?:health|b/?h|max(?:imum)?\s+cap(?:acity)?|(?:battery|batt)\s+(?:capacity|condition))\b|🔋",
                         re.IGNORECASE)
@@ -216,6 +228,10 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     found = fill_from_catalogue(title, "", catalogue, listing.get("description") or "")
     model = next((m for m in catalogue if m["id"] == found.get("model_id")), None)
     in_person = local_market(listing.get("marketplace"))  # Facebook or Gumtree: you collect and pay cash
+    locks = bool(LOCK_TALK.search(sources))  # the listing talks about iCloud or locks: a message may say what it says
+    no_cash = bool(NO_CASH.search(sources))  # the listing says no cash: no message offers it, yours included
+    if no_cash and card:
+        card = without_cash(card)
     point = point_for(kind, sources, reading["flaws"], battery_in(sources, model))
     style_decides = mention is None
     if style_decides:  # your style decides; before you have one, AlertFlip's: a lower offer gives its reason
@@ -233,7 +249,8 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     query = listing_text(title, listing.get("marketplace") or "")
     examples = index.similar(query, leave_out=leave_out) if index else []
     # how a message may say you'll buy: as your messages do, or before you have any, AlertFlip's way
-    allowed = habits(card, examples) if card else LOCAL_HABITS if in_person else set()
+    allowed = habits(card, examples) if card else (LOCAL_HABITS - ({"cash"} if no_cash else set())) if in_person \
+        else set()
     gone = card.get("removed") or {}
     allowed -= set(gone.get("habits", []))  # removed from your style: your old examples don't bring it back
     once = [q for e in examples for q in asked_once(e["my_message"], set(card.get("asks", [])))]
@@ -278,9 +295,9 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
             problems += check_message_manner(
                 message, greeting="Hi" if not card else True if card.get("greeting") else None,
                 usual=length == "usual", short=not card and length == "usual",
-                must=sorted(LOCAL_HABITS) if not card and in_person else (),
+                must=sorted(allowed) if not card and in_person else (),
                 cash=not posted_market(listing.get("marketplace")), emoji=bool(card.get("emoji")),
-                praise=kind == "more" and mention)
+                praise=kind == "more" and mention, locks=locks, no_cash=no_cash)
             problems += check_not_removed(message, card)
             sentences = re.split(r"(?<=[.!?])\s+|\n+", message)
             if model and any(names_other_model(words(sentence), model, catalogue) for sentence in sentences):
@@ -299,7 +316,8 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     if writer == "template" or writer == "auto" and (not card or repeats(card)):
         ready = written_without_ai(result, lambda answer: check(answer, rewrite=False), card, kind, offer,
                                    point if mention else None, longer, at_least,
-                                   item_name(found.get("model_id"), title), pickup, previous, log, in_person)
+                                   item_name(found.get("model_id"), title), pickup, previous, log, in_person,
+                                   not no_cash)
         again = ready and rewrite_of and words(result["answer"]["message"]) == words(rewrite_of)
         if again and writer == "auto":
             yours = result["answer"]  # the AI words the rewrite; this stays if it can't
@@ -313,13 +331,36 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
                 log.draft(result)
             return result
 
+    # before you have past messages, code adds after a usual lower offer the reason and the cash-and-collect
+    # sentence, which the AI wrote badly (the seller's words pasted in, "£320 cash and come and collect it")
+    added = ([*(["the reason"] if mention else []), *(["cash and collecting"] if in_person else [])]
+             if not card and kind == "lower" and length == "usual" else [])
     system, user = message_prompt(listing, offer, describe(card, longer["words"] if longer else None), shown,
-                                  kind, point if mention else None, longer, pickup or None, rewrite_of or None,
-                                  buying_line(allowed, in_person, bool(card)))
+                                  kind, None if "the reason" in added else point if mention else None, longer,
+                                  pickup or None, rewrite_of or None,
+                                  buying_line(allowed, in_person, bool(card), offer_words(offer),
+                                              "cash and collecting" in added, cash=not no_cash),
+                                  local=in_person, added=added, locks=locks, cash=not no_cash)
+    written = {}  # the AI's own words, before code's
+
+    def finished(reply):
+        message = reply.answer.get("message") if isinstance(reply.answer, dict) else None
+        written["message"] = message
+        if not card and isinstance(message, str) and message.strip():
+            more = code_sentences(message, point if "the reason" in added else None, in_person, not no_cash)
+            if more:
+                reply.answer = {**reply.answer, "message": after_the_offer(message, more)}
+        return reply
+
+    def again(ai, answer, problems):  # one free try on this Mac, told what was turned down
+        told = RETRY.format(tried=written.get("message") or answer.get("message"), problems="; ".join(problems),
+                            added=f" Code adds {' and '.join(ADDED_NAMES[a] for a in added)} after yours." if added else "")
+        return finished(ai.ask(system, f"{user}\n\n{told}", [], MESSAGE_SCHEMA, vary=bool(rewrite_of)))
+
     result["answer"] = try_models(
         mode, {"local": local, "api": api},
-        ask=lambda ai: ai.ask(system, user, [], MESSAGE_SCHEMA, vary=bool(rewrite_of)),
-        check=check, result=result, log=log)
+        ask=lambda ai: finished(ai.ask(system, user, [], MESSAGE_SCHEMA, vary=bool(rewrite_of))),
+        check=check, result=result, log=log, again=again)
     if result["answer"] is not None:
         result["status"], result["writer"] = "ready", result["attempts"][-1]["model"]
     elif yours:  # no other wording passed: your own message stays, as it was
@@ -330,16 +371,60 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     return result
 
 
+def code_sentences(message, point, in_person, cash=True):
+    """What code adds after the AI's message before you have past messages:
+    a lower offer's reason (writer.reason_sentence) when the message doesn't
+    say it, and on Facebook and Gumtree the cash and collecting it leaves out
+    ("I can pay cash and come and collect it.", or the half it's missing):
+    no cash when the listing says no cash (cash False), and no collecting for
+    a message that won't collect (WONT_COLLECT: the checks say what's wrong)."""
+    more = []
+    if point and not says_point(message, point):
+        more.append(reason_sentence(point) or "")
+    wanted = (LOCAL_HABITS - ({"cash"} if not cash else set()) - ({"collecting"} if WONT_COLLECT.search(message)
+                                                                  else set())) if in_person else set()
+    missing = frozenset(wanted - promised_in(message))
+    if missing:
+        more.append(CASH_AND_COLLECT[missing])
+    return " ".join(m for m in more if m)
+
+
+def after_the_offer(message, more):
+    """The message with code's sentences right after the one with the offer,
+    as AlertFlip writes them: "Hi, would you take £150? I'm offering that
+    because ... I can pay cash and come and collect it. Let me know." At the
+    end if no sentence has the price."""
+    sentences = [part.strip() for part in SENTENCES.split(message.strip()) if part.strip()]
+    at = next((n + 1 for n, part in enumerate(sentences) if "£" in part), len(sentences))
+    if sentences and sentences[at - 1][-1:] not in ".!?":
+        sentences[at - 1] += "."
+    return " ".join([*sentences[:at], more, *sentences[at:]])
+
+
+def without_cash(card):
+    """Your style card for a listing that says no cash: cash is out of it the
+    way a habit you removed is (out of your sentences too: "...£[OFFER] cash?"
+    -> "...£[OFFER]?"), so neither code nor the AI offers it."""
+    card = {**card, "mentions": [m for m in card.get("mentions", []) if m != "cash"],
+            "promises": [p for p in card.get("promises", []) if p != "cash"],
+            "phrases": {slot: IN_THE_OFFER["cash"].sub("", text) if slot in (*OFFER_SLOTS, "closing") and text else text
+                        for slot, text in (card.get("phrases") or {}).items()}}
+    gone = card.get("removed") or {"greetings": [], "habits": [], "phrases": [], "asks": [], "emoji": False,
+                                   "flaw": False}
+    return {**card, "removed": {**gone, "habits": sorted({*gone.get("habits", []), "cash"})}}
+
+
 def written_without_ai(result, check, card, kind, offer, point, longer, at_least, item, pickup, previous, log,
-                       in_person=False):
+                       in_person=False, cash=True):
     """flip.writer's message, through the same checks as the AI's: True and
     the result is ready if it passes. If not, its problems are in the
     attempts and the AI gets its turn (or, with writer="template", you do).
-    in_person: a Facebook or Gumtree listing (local_market)."""
+    in_person: a Facebook or Gumtree listing (local_market). cash: False
+    when the listing says no cash."""
     started = time.monotonic()
     questions = longer["questions"] if longer else []
     text = make_longer(previous, questions, at_least, item) if previous else \
-        write_offer(card, kind, offer, point, questions, at_least, item, pickup, in_person)
+        write_offer(card, kind, offer, point, questions, at_least, item, pickup, in_person, cash)
     answer = {"message": text} if text is not None else None
     problems = check(answer) if answer else [f"there's no plain wording for what the listing says: "
                                              f"{' / '.join(point['says'])}"]

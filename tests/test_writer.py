@@ -261,3 +261,10 @@ def test_a_sellers_run_on_flaw_reads_as_a_sentence():
     assert write_offer({}, "asking", 11000, point) == \
         "Hi, is this still available? I'm happy to pay the full £110. I don't mind the issue with the screen – it " \
         "turns on and off. Could you hold it for me?"
+
+
+def test_a_network_lock_keeps_its_own_words():
+    """14 Sep: "locked to EE" came out as "the to EE": "locked" was taken for a title word."""
+    assert flaw_phrase("locked to EE") == "that it's locked to EE"
+    assert flaw_phrase("network locked to Vodafone") == "that it's locked to Vodafone"
+    assert flaw_phrase("iPhone 11 64GB back glass cracked") == "that the back glass is cracked"

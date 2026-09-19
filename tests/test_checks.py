@@ -4,7 +4,7 @@ one good and many bad, each bad one failing for the right reason."""
 import pytest
 
 from flip.catalogue import fill_from_catalogue, load_catalogue, load_conditions
-from flip.checks import (KEYWORDS, check_listing_answer, check_message, check_message_manner,
+from flip.checks import (KEYWORDS, NO_CASH, check_listing_answer, check_message, check_message_manner,
                          check_no_unasked_promises, has_fault, numbers_in, offer_asked, promised_in, promises_in,
                          real_words, slipped, sources_text)
 from flip.offers import read_listing
@@ -961,13 +961,35 @@ def test_no_fault_said_in_everyday_words_is_no_fault(fine):
                                                             'seller replies: "iCloud"'),
     ("Hi, would you take £235? I can send a deposit now.", 'offers to pay before collecting: "deposit"'),
     ("Hi, would you take £235? I can pay you now if you hold it.", 'offers to pay before collecting: "pay you now"'),
-    ("Hi, I'll pay £250. I'll pay cash.", "says \"I'll pay\" twice"),
+    ("Hi, I'll pay £420 as you've said.", 'says the seller said or agreed something, but it\'s the first message: '
+                                          '"as you\'ve said"'),
+    ("Hi, would you take £235 as agreed?", 'says the seller said or agreed something, but it\'s the first message: '
+                                           '"as agreed"'),
     ("Hi, it looks lovely. Would you take £235?", 'compliments the item: "looks lovely"'),
     ("Hi, would you take £235? 😊", "has an emoji, which your messages don't use"),
     ("Hi, is it available? Would you take £235? Does it have a box?", "asks 3 questions: at most 2"),
 ])
 def test_alertflips_rules_hold_for_every_message(message, problem):
     assert check_message_manner(message) == [f"the message {problem}"]
+
+
+def test_the_users_own_calls_on_alertflips_rules():
+    """14 Sep: "I'll pay" twice is fine; iCloud and locks may be said back when the listing talks about them; and a
+    listing that says no cash gets no cash offered."""
+    assert check_message_manner("Hi, I'll pay £250. I'll pay cash.") == []
+    assert check_message_manner("Hi, would you take £235? I see it's signed out of iCloud.", locks=True) == []
+    assert check_message_manner("Hi, would you take £235 as you said in the listing it has a crack?") == []
+    assert check_message_manner("Hi, would you take £235 cash? I can come and collect.", no_cash=True) == [
+        "the message offers cash, but the listing says no cash"]
+
+
+@pytest.mark.parametrize("listing, says_no", [
+    ("No cash, bank transfer only.", True), ("Cash not accepted.", True), ("PayPal only please.", True),
+    ("Only bank transfer.", True), ("Cash on collection.", False), ("No offers, cash only.", False),
+    ("No cashback deals.", False),
+])
+def test_a_listing_that_says_no_cash(listing, says_no):
+    assert bool(NO_CASH.search(listing)) == says_no
 
 
 def test_can_collect_straight_away_is_no_payment():

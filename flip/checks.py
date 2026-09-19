@@ -43,7 +43,16 @@ COMPLIMENT = re.compile(
     r"(?:console|phone|item|one|bit of kit|piece|laptop|watch|bike|set|headphones|earbuds|camera|tv|machine|unit|device|"
     r"tablet|ipad|iphone|kit)\b|(?<!not in )(?<!not )\bgreat condition\b|\bbeautiful\b|\bstunning\b|\bgorgeous\b",
     re.IGNORECASE)
-I_PAY = re.compile(r"\b(?:I'?ll|I will|will|I'?d|I would)\s+(?:\w+ly\s+)?(?:pay|be paying)\b", re.IGNORECASE)
+# a listing that won't take cash: then no message offers it (the user, 14 Sep: "mention cash unless the listing
+# description says no cash")
+NO_CASH = re.compile(r"\bno cash(?: payments?)?\b|\bcash (?:is )?not (?:accepted|taken)\b|\bnot (?:accepting|taking) cash\b|"
+                     r"\b(?:bank transfer|transfer|pay ?pal|card|bacs)(?: payments?)? only\b|"
+                     r"\bonly (?:accept(?:ing)? )?(?:bank transfer|transfer|pay ?pal|card|bacs)\b", re.IGNORECASE)
+# a conversation there hasn't been: the first message can't say "as you've said" or "as agreed" (it may
+# point to the listing: "as you said in the listing")
+PRIOR_TALK = re.compile(r"\b(?:as|like) (?:you(?:'ve| have)? (?:said|mentioned|agreed|offered|discussed|told me)|"
+                        r"we (?:said|agreed|discussed))\b(?! (?:in|on) (?:the|your) (?:listing|ad|advert|post|"
+                        r"description))|\bas (?:agreed|discussed|promised)\b", re.IGNORECASE)
 # ending a listing: dealing outside eBay, but on Facebook just taking it down
 ENDING = re.compile(r"end (?:the |your )?listing", re.IGNORECASE)
 # a sentence asking without a question mark: "Are you about Saturday", "Hi is it still available"
@@ -1217,12 +1226,14 @@ def offer_asked(message, offer):
 
 
 def check_message_manner(message, greeting=None, usual=True, short=False, must=(), cash=True, emoji=False,
-                         praise=False):
+                         praise=False, locks=False, no_cash=False):
     """AlertFlip's rules for a message to a seller (its seller-message
     function), on top of check_message's: no asking about iCloud or locks
     (that's for once the seller replies), no paying before collecting, no
-    "I'll pay" twice, no compliments about the item, and a usual message asks
-    at most two questions (a longer one asks what the listing leaves open).
+    compliments about the item, no talk of a conversation there hasn't been
+    ("as you've said": it's the first message), and a usual message asks at
+    most two questions (a longer one asks what the listing leaves open).
+    "I'll pay" twice is fine (the user, 14 Sep).
 
     greeting: "Hi" when it must open with that, True for any greeting (yours),
     None when your messages don't open with one. short: AlertFlip's 250
@@ -1230,7 +1241,9 @@ def check_message_manner(message, greeting=None, usual=True, short=False, must=(
     it has to say you'll buy ("collecting", "cash": on Facebook and Gumtree
     with no past messages). cash: False on eBay and Vinted, where you pay
     through the site. emoji: whether your messages use them. praise: whether
-    this draft gives the listing's good condition as its reason.
+    this draft gives the listing's good condition as its reason. locks: the
+    listing talks about iCloud or locks, so the message may say what it says.
+    no_cash: the listing says no cash (NO_CASH), so the message mustn't offer it.
     """
     if not isinstance(message, str) or not message.strip():
         return []  # check_message reports that
@@ -1246,14 +1259,14 @@ def check_message_manner(message, greeting=None, usual=True, short=False, must=(
     asked = questions_asked(message)
     if usual and asked > MAX_QUESTIONS:
         problems.append(f"the message asks {asked} questions: at most {MAX_QUESTIONS}")
-    for pattern, what in ((LOCK_TALK, "asks about iCloud or locks, which is for once the seller replies"),
+    for pattern, what in (*(() if locks else ((LOCK_TALK, "asks about iCloud or locks, which is for once the "
+                                                          "seller replies"),)),
                           (PAY_FIRST, "offers to pay before collecting"),
+                          (PRIOR_TALK, "says the seller said or agreed something, but it's the first message"),
                           *(() if praise else ((COMPLIMENT, "compliments the item"),))):
         found = pattern.search(message)
         if found:
             problems.append(f"the message {what}: \"{found.group()}\"")
-    if len(I_PAY.findall(message)) > 1:
-        problems.append("the message says \"I'll pay\" twice")
     if not emoji and EMOJI.search(message):
         problems.append("the message has an emoji, which your messages don't use")
     missing = [habit for habit in must if habit not in promised_in(message)]
@@ -1261,6 +1274,8 @@ def check_message_manner(message, greeting=None, usual=True, short=False, must=(
         problems.append(f"the message doesn't say {' and '.join(SAYS[m] for m in missing)}: on Facebook and Gumtree it does")
     if not cash and "cash" in promised_in(message):  # "the Johnny Cash LP" offers none
         problems.append("the message offers cash, but on eBay and Vinted you pay through the site")
+    elif no_cash and "cash" in promised_in(message):
+        problems.append("the message offers cash, but the listing says no cash")
     return problems
 
 

@@ -7,6 +7,7 @@ import pytest
 
 from flip.ai import Reply
 from flip.catalogue import load_catalogue
+from flip.checks import check_message_manner
 from flip.message_drafter import battery_in, draft_message
 from flip.offers import point_for
 from flip.reader import code_reading, place
@@ -344,8 +345,8 @@ PS5 = {"id": "p", "title": "PS5 Slim Disc Console", "asking_price": "350", "mark
     (   'asking',
         35000,
         "Hi, I'll pay the full £350 cash, and will pay it when I come and collect. Could you hold it for me?",
-        False),
-    ('asking', 35000, "Hi, I'll happily pay the full £350 cash. I'll pay when I come and collect.", False),
+        True),  # "I'll pay" twice is fine (14 Sep)
+    ('asking', 35000, "Hi, I'll happily pay the full £350 cash. I'll pay when I come and collect.", True),  # "I'll pay" twice is fine (14 Sep)
     (   'lower',
         30000,
         'Hi is it still available\nWould you take £300 cash for it\nAre you about Saturday\nI can come and collect',
@@ -393,7 +394,8 @@ def test_never_off_the_platform_on_vinted(kind, offer, message, passes):
 
 
 @pytest.mark.parametrize("marketplace, title, message, passes", [
-    ("facebook", "Johnny Cash At Folsom Prison vinyl LP", "Hi, would you take £300 for the Johnny Cash LP? I can come and collect.", False),
+    # the name offers no cash (check_message_manner below), so since 14 Sep code adds "I can pay cash." and it passes
+    ("facebook", "Johnny Cash At Folsom Prison vinyl LP", "Hi, would you take £300 for the Johnny Cash LP? I can come and collect.", True),
     ("ebay", "Johnny Cash At Folsom Prison vinyl LP", "Hi, would you take £300 for the Johnny Cash LP?", True),
     ("facebook", "Pokemon 151 Booster Box", "Hi, would you take £300 cash for the booster box? I can come and collect.", True),
 ])
@@ -401,6 +403,11 @@ def test_a_name_is_no_promise_and_no_question(marketplace, title, message, passe
     listing = {"id": "n", "title": title, "asking_price": "350", "marketplace": marketplace, "description": "Collection only."}
     result = draft_message(listing, kind="lower", offer=30000, local=Says(message), mode="local", writer="ai")
     assert (result["status"] == "ready") == passes
+    if "Johnny Cash" in message and marketplace == "facebook":
+        assert check_message_manner(message, must=["cash", "collecting"]) == [
+            "the message doesn't say you'll pay cash: on Facebook and Gumtree it does"]
+        assert result["answer"]["message"] == ("Hi, would you take £300 for the Johnny Cash LP? I can pay cash. "
+                                               "I can come and collect.")
 
 
 # ── odds and ends ───────────────────────────────────────────────────────────

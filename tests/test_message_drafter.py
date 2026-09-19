@@ -108,7 +108,7 @@ def test_the_offer_comes_from_code_and_a_good_message_is_used(tmp_path):
 
 def test_a_wrong_price_gets_one_try_on_the_api():
     wrong = {"message": "Hi mate, would you take £160?"}
-    result = ai_draft(LISTING, style_card(PAST), local=FakeModel("gemma3:4b", wrong),
+    result = ai_draft(LISTING, style_card(PAST), local=FakeModel("gemma3:4b", wrong, wrong),
                       api=FakeModel("claude-haiku-5-5", GOOD))
     assert result["status"] == "ready"
     assert "the message must offer exactly £170.00 and no other price" in result["attempts"][0]["problems"]
@@ -117,7 +117,7 @@ def test_a_wrong_price_gets_one_try_on_the_api():
 def test_contact_details_or_paying_off_the_platform_fail():
     phone = {"message": "Hi mate, would you take £170? Text me on 07700 900123."}
     transfer = {"message": "Hi mate, would you take £170? I can pay by bank transfer."}
-    result = ai_draft(LISTING, local=FakeModel("gemma3:4b", phone), api=FakeModel("claude-haiku-5-5", transfer))
+    result = ai_draft(LISTING, local=FakeModel("gemma3:4b", phone, phone), api=FakeModel("claude-haiku-5-5", transfer))
     assert (result["status"], result["reasons"]) == ("needs you", ["no answer passed the checks"])
 
 
@@ -150,7 +150,7 @@ def test_otherwise_the_draft_leaves_it_out_and_asks_you():
 
 
 def test_a_draft_that_leaves_out_the_flaw_you_said_yes_to_fails():
-    result = ai_draft(BROKEN, style_card(PAST), local=FakeModel("gemma3:4b", GOOD),
+    result = ai_draft(BROKEN, style_card(PAST), local=FakeModel("gemma3:4b", GOOD, GOOD),
                       api=FakeModel("claude-haiku-5-5", WITH_FLAW), mention=True)
     assert result["attempts"][0]["problems"] == ['the message leaves out what the listing says: "Broken back"']
     assert result["status"] == "ready"
@@ -167,7 +167,7 @@ def test_paying_more_gives_the_good_condition_and_is_said_never_asked():
     asked = {"message": "Hi mate, would you take £210 cash as it's in good condition? I can come and collect."}
     said = {"message": "Hi, is this still available? I can pay £210 cash as it's in good condition, and I can come "
                        "and collect."}
-    result = ai_draft(LISTING, local=FakeModel("gemma3:4b", asked), api=FakeModel("claude-haiku-5-5", said),
+    result = ai_draft(LISTING, local=FakeModel("gemma3:4b", asked, asked), api=FakeModel("claude-haiku-5-5", said),
                       kind="more", mention=True)
     assert (result["status"], result["offer"], result["point"]) == ("ready", 21000, ["Good condition"])
     assert result["attempts"][0]["problems"] == [
@@ -176,7 +176,7 @@ def test_paying_more_gives_the_good_condition_and_is_said_never_asked():
 
 def test_a_flawed_item_is_never_praised_for_paying_more():
     praise = {"message": "Hi mate, I can pay £210 cash as it's in good condition. I can come and collect."}
-    result = ai_draft(BROKEN, local=FakeModel("gemma3:4b", praise), kind="more")
+    result = ai_draft(BROKEN, local=FakeModel("gemma3:4b", praise, praise), kind="more")
     assert result["point"] == [] and result["status"] == "needs you"
     assert result["attempts"][0]["problems"] == [
         "the message talks about the condition, but this draft leaves that out",
@@ -203,7 +203,7 @@ def test_a_longer_draft_says_more_with_the_questions_the_listing_doesnt_answer()
 
 
 def test_a_longer_draft_that_isnt_longer_gets_one_try_on_the_api():
-    result = ai_draft(LISTING, style_card(PAST), local=FakeModel("gemma3:4b", GOOD),
+    result = ai_draft(LISTING, style_card(PAST), local=FakeModel("gemma3:4b", GOOD, GOOD),
                       api=FakeModel("claude-haiku-5-5", LONG), length="longer")
     assert result["attempts"][0]["problems"] == ["the message is 14 words, but a longer one needs at least 20"]
     assert result["status"] == "ready"
@@ -221,7 +221,7 @@ def test_a_longer_draft_can_start_from_the_one_on_screen():
 
 def test_longer_means_longer_than_the_draft_on_screen():
     on_screen = " ".join(["word"] * 60)  # 60 words: aim 70, and fewer than 61 isn't longer
-    result = ai_draft(LISTING, style_card(PAST), local=FakeModel("gemma3:4b", LONG), length="longer",
+    result = ai_draft(LISTING, style_card(PAST), local=FakeModel("gemma3:4b", LONG, LONG), length="longer",
                       previous=on_screen)
     assert result["attempts"][0]["problems"][0] == "the message is 30 words, but a longer one needs at least 61"
     # a draft already at the longest asks no AI at all
@@ -246,7 +246,7 @@ def test_a_longer_draft_for_a_listing_the_catalogue_doesnt_know_asks_the_general
 def test_a_longer_draft_mustnt_ask_what_the_listing_already_says():
     asks_again = {"message": "Hi mate, is this still available? I can do £170 cash and collect today or whenever "
                              "suits you. Is it unlocked? Does it come with the box? Cheers"}
-    result = ai_draft(LISTING, style_card(PAST), local=FakeModel("gemma3:4b", asks_again),
+    result = ai_draft(LISTING, style_card(PAST), local=FakeModel("gemma3:4b", asks_again, asks_again),
                       api=FakeModel("claude-haiku-5-5", LONG), length="longer")
     assert result["attempts"][0]["problems"] == ["the message asks what the listing already says: box, unlocked"]
     assert result["status"] == "ready"
@@ -336,12 +336,12 @@ def test_when_the_message_without_ai_fails_a_check_the_ai_gets_its_turn(monkeypa
 
 def test_a_message_never_promises_collecting_or_cash_your_messages_dont(tmp_path):
     promise = {"message": "Hiya, would you take £170? I can arrange collection quickly."}
-    result = draft_message(LISTING, QUIET, local=FakeModel("gemma3:4b", promise),
+    result = draft_message(LISTING, QUIET, local=FakeModel("gemma3:4b", promise, promise),
                            api=FakeModel("claude-haiku-5-5", {"message": "Hiya, would you take £170? 😊"}))
     assert result["attempts"][0]["problems"] == ["the message promises collecting, which your own messages don't"]
     assert result["status"] == "ready"
     # an example message of yours that collects makes it yours to say
-    shown = draft_message(LISTING, QUIET, index(tmp_path), local=FakeModel("gemma3:4b", promise))
+    shown = draft_message(LISTING, QUIET, index(tmp_path), local=FakeModel("gemma3:4b", promise, promise))
     assert shown["status"] == "ready"
 
 
@@ -418,7 +418,7 @@ def test_words_the_writer_cant_say_go_to_the_ai():
 
 
 def test_a_message_never_names_another_model():
-    local = FakeModel("gemma3:4b", {"message": "Hi mate, would you take £170 for the iPhone 14? Can collect today."})
+    local = FakeModel("gemma3:4b", {"message": "Hi mate, would you take £170 for the iPhone 14? Can collect today."}, {"message": "Hi mate, would you take £170 for the iPhone 14? Can collect today."})
     result = ai_draft(LISTING, style_card(PAST), local=local)
     assert "the message names a different item from the listing's" in result["attempts"][0]["problems"]
 
@@ -446,7 +446,7 @@ def test_the_price_you_picked_is_the_price_drafted_and_must_fit_its_kind():
 
 
 def test_a_message_never_collects_from_a_place_the_listing_doesnt_give():
-    local = FakeModel("gemma3:4b", {"message": "Hi mate, would you take £170 cash? Can collect from Bradford today."})
+    local = FakeModel("gemma3:4b", {"message": "Hi mate, would you take £170 cash? Can collect from Bradford today."}, {"message": "Hi mate, would you take £170 cash? Can collect from Bradford today."})
     result = ai_draft(LISTING, style_card(PAST), local=local)
     assert "the message says it'll collect from a place the listing doesn't: Bradford" in result["attempts"][0]["problems"]
 
@@ -481,7 +481,7 @@ REWORDED = {"message": "Hi mate, would £170 cash work for you? I can collect to
 
 
 def test_a_rewrite_asks_for_other_words_and_refuses_the_same_message():
-    local, api = FakeModel("gemma3:4b", {"message": ON_SCREEN}), FakeModel("claude-haiku-5-5", REWORDED)
+    local, api = FakeModel("gemma3:4b", {"message": ON_SCREEN}, {"message": ON_SCREEN}), FakeModel("claude-haiku-5-5", REWORDED)
     result = ai_draft(LISTING, style_card(PAST), None, local, api, rewrite_of=ON_SCREEN)
     assert result["attempts"][0]["problems"] == ["it's the message on screen again: a rewrite says it in other words"]
     assert (result["status"], result["answer"], result["writer"]) == ("ready", REWORDED, "claude-haiku-5-5")
@@ -512,7 +512,7 @@ def test_with_no_ai_a_rewrite_gives_your_message_back_and_says_why():
 
 def test_when_no_other_wording_passes_your_own_message_stays():
     yours = draft_message(LISTING, style_card(PAST))["answer"]["message"]
-    local, api = FakeModel("gemma3:4b", {"message": yours}), FakeModel("claude-haiku-5-5", {"message": yours})
+    local, api = FakeModel("gemma3:4b", {"message": yours}, {"message": yours}), FakeModel("claude-haiku-5-5", {"message": yours})
     result = draft_message(LISTING, style_card(PAST), None, local, api, rewrite_of=yours)
     assert (result["status"], result["writer"], result["answer"]["message"], result["reasons"]) == \
         ("ready", "template", yours, [])
@@ -542,7 +542,7 @@ def test_a_question_asked_about_another_listing_is_never_shown_to_the_ai_or_copi
     """A real draft (2 Sep): "Does it still work perfectly fine?" from a message about another phone."""
     copied = {"message": "Hi, I can pay £110 for it. Does it still work perfectly fine?"}
     plain = {"message": "Hi, I can pay £110 for it. Is it still available?"}
-    local, api = FakeModel("gemma3:4b", copied), FakeModel("claude-haiku-5-5", plain)
+    local, api = FakeModel("gemma3:4b", copied, copied), FakeModel("claude-haiku-5-5", plain)
     result = ai_draft(BLUE, style_card(WORKS_FINE), Past(WORKS_FINE), local, api, kind="asking")
     assert "perfectly fine" not in local.asked[0]["user"] and "Is it still available?" in local.asked[0]["user"]
     assert result["attempts"][0]["problems"] == [
@@ -581,14 +581,30 @@ def test_your_offer_sentence_is_your_style_not_a_question_about_another_listing(
 def test_with_no_past_messages_the_ai_is_given_alertflips_rules():
     local = FakeModel("gemma3:4b", {"message": "Hi, would you take £170 cash? I can come and collect."})
     ai_draft(LISTING, local=local)
-    user = local.asked[0]["user"]
-    assert "Buying: the reseller pays cash and can come and collect it: say both" in user
-    assert '- Opens with "Hi"' in user and "- Two or three short sentences, under 250 characters" in user
+    user, system = local.asked[0]["user"], local.asked[0]["system"]
+    # a lower offer on Facebook: code adds the cash-and-collect sentence, so the AI is told to leave it out
+    assert "Buying: don't mention cash, collecting or postage: a sentence saying cash and collecting is added after yours" in user
+    assert '- Opens with "Hi"' in user and "- One or two short sentences, under 220 characters" in user
     assert "- At most two questions" in user and "- No emojis and no sign-off" in user
-    assert "Never ask about iCloud" in local.asked[0]["system"]
+    assert '(none yet). The shape of a good one, not their words: "Hi, would you take £[OFFER] for it?"' in user
+    assert user.endswith("- Ask nothing about the item itself.\n- Be one or two short sentences, the greeting and the "
+                         "offer: the rest is added after yours.")
+    assert "Your message must:\n- Start with \"Hi\".\n- Ask if they'd take £170, under their asking price: " \
+           "\"would you take £170 for it?\"" in user
+    assert "iCloud" not in system and "I'll pay ... I'll pay" not in system  # not named unless the listing does
+    asking = FakeModel("gemma3:4b", {"message": "Hi, is this still available? I can pay £200 cash and come and "
+                                                "collect it. Could you hold it for me?"})
+    assert ai_draft(LISTING, local=asking, kind="asking")["status"] == "ready"
+    assert 'say both in one sentence with the offer, like "I can pay £200 cash and come and collect it"' in \
+        asking.asked[0]["user"]
     ebay = FakeModel("gemma3:4b", {"message": "Hi, would you take £170?"})
     assert ai_draft({**LISTING, "marketplace": "ebay"}, local=ebay)["status"] == "ready"
-    assert "Buying: it's paid through the site and posted: don't mention cash or collecting" in ebay.asked[0]["user"]
+    assert "Buying: don't mention cash, collecting or postage" in ebay.asked[0]["user"]
+    assert "- Be two or three short sentences, under 250 characters." in ebay.asked[0]["user"]
+    locked = FakeModel("gemma3:4b", {"message": "Hi, would you take £170 cash? I can come and collect."})
+    ai_draft({**LISTING, "description": "Good condition, boxed. Signed out of iCloud."}, local=locked)
+    assert "Don't ask about iCloud, Find My or locks; you may say what the listing says about them." in \
+        locked.asked[0]["system"]
 
 
 def test_with_your_style_the_ai_buys_the_way_your_messages_do():
@@ -603,12 +619,11 @@ def test_gemmas_short_draft_of_31_oct_no_longer_passes():
     """Gemma wrote "I can pay £235" for a lower offer on an iPhone 14 Pro, and the old checks let it through."""
     listing = {**LISTING, "title": "iPhone 14 Pro – 128GB – Silver", "asking_price": "250",
                "description": "Excellent condition, with no scratches, scuffs or visible damage! Battery Health: 80%"}
-    result = ai_draft(listing, local=FakeModel("gemma3:4b", {"message": "I can pay £235"}), offer=23500)
+    short = {"message": "I can pay £235"}
+    result = ai_draft(listing, local=FakeModel("gemma3:4b", short, short), offer=23500)
     assert result["status"] == "needs you"
-    assert result["attempts"][0]["problems"] == [
-        'the message leaves out what the listing says: "battery health 80%"',
-        'the message doesn\'t open with "Hi"',
-        "the message doesn't say you'll pay cash and you'll come and collect: on Facebook and Gumtree it does"]
+    # since 14 Sep code adds the reason and the cash-and-collect sentence; it still doesn't open with "Hi"
+    assert [a["problems"] for a in result["attempts"]] == [['the message doesn\'t open with "Hi"']] * 2
     # and the seller's "no scratches, scuffs or visible damage" is no flaw
     assert result["reading"]["flaws"] == [] and result["point"] == ["battery health 80%"]
 
@@ -634,3 +649,74 @@ def test_paying_more_says_why_only_when_you_said_yes_to_the_reason():
                                               "listing down. I can come and collect."})
     ai_draft(LISTING, local=said, kind="more", mention=True)
     assert "Doesn't say why" not in said.asked[0]["user"] and "Condition: give this from the listing" in said.asked[0]["user"]
+
+
+# ── with no past messages: code's sentences and one free retry (14 Sep 2026) ──
+
+CRACKED = {**LISTING, "title": "iPhone 12 64GB", "description": "Back glass is cracked. Works perfectly. Collection only."}
+
+
+def test_code_adds_the_reason_and_cash_and_collecting_after_a_lower_offer():
+    """The explainer's read of 42 drafts: the AI pasted the seller's words in ("because Faulty HDMI port, no
+    picture") and merged cash and collecting into the offer ("£320 cash and come and collect it")."""
+    local = FakeModel("gemma3:4b", {"message": "Hi, would you take £170 for it?"})
+    result = ai_draft(CRACKED, local=local, offer=17000, mode="local")
+    assert (result["status"], result["answer"]["message"]) == (
+        "ready", "Hi, would you take £170 for it? I'm offering that because the back glass is cracked. "
+                 "I can pay cash and come and collect it.")
+    assert "Condition: don't mention it" in local.asked[0]["user"]  # code says it, the AI doesn't
+    ebay = ai_draft({**CRACKED, "marketplace": "ebay"}, local=FakeModel("gemma3:4b", {"message": "Hi, would you take "
+                                                                                                  "£170 for it?"}),
+                    offer=17000, mode="local")
+    assert ebay["answer"]["message"] == "Hi, would you take £170 for it? I'm offering that because the back glass is cracked."
+
+
+def test_a_listing_that_says_no_cash_gets_no_cash_offered():
+    """The user, 14 Sep: "mention cash unless the listing description says no cash"."""
+    no_cash = {**CRACKED, "description": "Back glass is cracked. Works perfectly. No cash, bank transfer only."}
+    local = FakeModel("gemma3:4b", {"message": "Hi, would you take £170 for it?"})
+    result = ai_draft(no_cash, local=local, offer=17000, mode="local")
+    assert result["answer"]["message"].endswith("I can come and collect it.") and "cash" not in \
+        result["answer"]["message"].split("bank")[0].lower()
+    assert "the listing says no cash" in local.asked[0]["user"]
+    template = draft_message(no_cash, offer=17000, writer="template")
+    assert template["answer"]["message"] == ("Hi, would you take £170 for it? I'm offering that because the back glass "
+                                             "is cracked. I can come and collect.")
+    cash = FakeModel("gemma3:4b", {"message": "Hi, would you take £170 cash? I can come and collect."},
+                     {"message": "Hi, would you take £170 cash? I can come and collect."})
+    assert "the message offers cash, but the listing says no cash" in \
+        ai_draft(no_cash, local=cash, offer=17000, mode="local")["attempts"][0]["problems"]
+    yours = draft_message(no_cash, style_card(PAST), offer=17000, writer="template")
+    assert "cash" not in yours["answer"]["message"].lower()  # your own "...cash?" comes without it here
+
+
+def test_code_never_adds_collecting_to_a_message_that_wont_collect():
+    drop = {"message": "Hi, would you take £170 for it? Happy for you to drop round with it tonight."}
+    result = ai_draft(CRACKED, local=FakeModel("gemma3:4b", drop, drop), offer=17000, mode="local")
+    assert "the message doesn't say you'll come and collect: on Facebook and Gumtree it does" in \
+        result["attempts"][0]["problems"]
+
+
+def test_one_free_retry_on_this_mac_before_haiku_told_what_was_turned_down():
+    wrong = {"message": "Hi, would you take £160 for it?"}
+    local, api = FakeModel("gemma3:4b", wrong, {"message": "Hi, would you take £170 for it?"}), \
+        FakeModel("claude-haiku-5-5")
+    result = ai_draft(CRACKED, local=local, api=api, offer=17000)
+    assert (result["status"], api.asked) == ("ready", [])  # the retry passed: Haiku never asked
+    assert [a["model"] for a in result["attempts"]] == ["gemma3:4b", "gemma3:4b"]
+    retry = local.asked[1]["user"]
+    assert 'Your last try was: "Hi, would you take £160 for it?"' in retry  # its own words, not code's
+    assert "It was turned down: the message must offer exactly £170.00 and no other price" in retry
+    assert retry.endswith("Code adds the reason and the cash-and-collect sentence after yours.")
+    down = Reply("gemma3:4b", error="the local model isn't running (connection refused)", reachable=False)
+    local = FakeModel("gemma3:4b", down)
+    assert ai_draft(CRACKED, local=local, api=FakeModel("claude-haiku-5-5"), offer=17000)["status"] == "needs you"
+    assert len(local.asked) == 1  # nothing to retry when Gemma isn't running
+
+
+def test_code_sentences_go_right_after_the_offer():
+    padded = {"message": "Hi, would you take £170 for it? Just checking that's agreeable. Let me know."}
+    result = ai_draft(CRACKED, local=FakeModel("gemma3:4b", padded), offer=17000, mode="local")
+    assert result["answer"]["message"] == ("Hi, would you take £170 for it? I'm offering that because the back glass is "
+                                           "cracked. I can pay cash and come and collect it. Just checking that's "
+                                           "agreeable. Let me know.")

@@ -56,6 +56,10 @@ Drafts eBay listings and offer messages for a reseller. Plain code does everythi
     - more: *Hi, I'll pay £265 cash if you take the listing down and sell it to me. I can come and collect.*
 
     Before this (12 Sep) the same listing got *Hi, would you take £235 for it? Thanks.* from code, and *I can pay £235* from Gemma, which passed the checks of the time.
+
+    Cash is said unless the listing says no cash ("No cash, bank transfer only", "PayPal only"): then neither code, the AI nor the reseller's own sentences offer it.
+  - **When the AI writes before there are past messages**, it gets the shape of a good message for its kind and a short list of what the message must do, last, where a small model follows it. On Facebook and Gumtree it says cash and collecting in the offer's own sentence ("I can pay £300 cash and come and collect it"). After a lower offer, code adds the reason and that sentence itself ("I'm offering that because the back glass is cracked. I can pay cash and come and collect it."), as the AI pasted the seller's words in badly; elsewhere code adds whichever half is missing, never to a message that asks the seller to deliver. iCloud and locks aren't named at all unless the listing talks about them.
+  - **A failed answer gets one free try on Gemma before Haiku**, told what was turned down in the checks' own words.
   - Three kinds of offer, each priced by code. The AI never picks a price.
     - Lower: 15% under asking by default, rounded down to a tidy number.
     - The asking price.
@@ -81,8 +85,8 @@ Drafts eBay listings and offer messages for a reseller. Plain code does everythi
     - If their messages vary, the AI writes. It's shown the past messages for the most similar listings, found by meaning (MiniLM embeddings in a Chroma vector database, all on this machine), with their old prices hidden.
     - The pickup place from the listing goes in ("Can collect from Leeds LS6 today") only when the message says it'll collect: the reseller's own messages talk about collecting, or, with none yet, it's a Facebook or Gumtree listing.
   - **The AI gets AlertFlip's rules too** (the app's own instructions to Claude), and code checks every draft against them, whoever wrote it:
-    - no asking about iCloud, Find My or locks (that's for once the seller replies), no paying before collecting, no "I'll pay" twice, no compliments about the item, at most two questions in a usual message, no emojis unless the reseller uses them;
-    - with no past messages: it opens with "Hi", stays under 250 characters, and says cash and collecting on Facebook and Gumtree; never cash on eBay or Vinted;
+    - no asking about iCloud, Find My or locks (that's for once the seller replies; saying back what the listing says about them is fine), no paying before collecting, no compliments about the item, no talk of a conversation there hasn't been ("as you've said", "as agreed"), at most two questions in a usual message, no emojis unless the reseller uses them. "I'll pay" twice is fine;
+    - with no past messages: it opens with "Hi", stays under 250 characters, and says cash and collecting on Facebook and Gumtree; never cash on eBay or Vinted, nor where the listing says no cash;
     - nothing the reseller removed from their style.
   - The same checks and fallback as listings, plus checks of their own:
     - the exact offer and no other price;
@@ -129,6 +133,8 @@ So code writes unless the reseller's messages vary. All three judges agreed on t
 | "No offers" | the usual words only | 1 of 1, never wrong |
 
 Without the checks, Gemma claimed flaws on 2 clean listings and said "no offers" on 21 that never did. The reader needed Haiku once in 24 tries, for 0.005p in total.
+
+**The AI's messages before the reseller has a style (14 Sep).** 42 messages (14 made-up listings, each kind of offer), Gemma 3 4B on this Mac: 10 passed the checks first time before these changes, 39 after, and 3 would go to Haiku (32 before). Asking about iCloud went from 4 to 0. The changes were first tried outside the app by the explainer session, then measured again in the app as built.
 
 **Messages before the reseller has a style (12 Sep).** Giving a lower offer's reason by itself, as AlertFlip does, means every misreading of the listing ends up in the message. So four test agents wrote 651 cases to break it, and a second agent re-ran every failure: 242 confirmed. They included:
 - labels with their answers ("Faults: none", "Scratches – no", "Any damage? Nope", "Scratches ❌") read as flaws;
