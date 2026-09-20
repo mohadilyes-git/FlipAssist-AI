@@ -19,8 +19,8 @@ must say the point, not ask it. Asking about the condition is otherwise fine
 import re
 
 from flip.catalogue import contains, words
-from flip.checks import (FAULTS, LEVELS, MARKS, NEGATIONS, NEW_SEALED, NOT_A_FLAW, PROBLEM, answered, clauses, has_fault,
-                         ends_asking, prices_in, promises_in, stated_parts)
+from flip.checks import (FAULTS, LEVELS, MARKS, NEGATIONS, NEW_SEALED, NOT_A_FLAW, OTHER_ITEMS, PROBLEM, answered,
+                         clauses, ends_asking, has_fault, prices_in, promises_in, stated_parts)
 
 # the seller says the price already allows for the flaw: a lower offer mustn't use it again
 PRICED_IN = re.compile(r"\b(?:hence (?:the |why )?(?:the |low |cheap )?price|priced accordingly|priced to reflect|"
@@ -173,6 +173,20 @@ def quote(part, kinds, typos=False):
     return " ".join(tokens).strip(" *-–—:")
 
 
+def this_items_parts(text):
+    """The listing's parts (PARTS) that are about this item: from a mention
+    of other items to the end of its sentence isn't ("Mint, unlike most phones
+    at this price which have scratches"), what comes before it is ("Small
+    crack on the back, unlike most listings...")."""
+    found = []
+    for sentence in re.split(r"(?<=[.!?])\s+|\n+", text):
+        for part in PARTS.split(sentence):
+            if OTHER_ITEMS.search(part):
+                break  # "cheaper alternatives often come with damage or visible wear"
+            found.append(part)
+    return found
+
+
 def read_listing(text):
     """What the listing says about the item's condition, in the seller's own
     words: {"flaws": ["Broken back"], "good": [], "priced_in": False}. A part
@@ -180,7 +194,7 @@ def read_listing(text):
     from a scratch"."""
     text = answered(re.sub(r"\bcondition\s*[:\-–—]\s*", "condition ", text, flags=re.IGNORECASE))  # "Condition: good"
     found = {"flaws": [], "good": [], "priced_in": bool(PRICED_IN.search(" ".join(words(text))))}
-    for part in PARTS.split(text):
+    for part in this_items_parts(text):
         said = condition_said(part, typos=True)
         if said & FLAWS:
             found["flaws"].append(quote(part, said & FLAWS, typos=True))

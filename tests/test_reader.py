@@ -334,3 +334,21 @@ def test_the_ais_reading_of_a_denied_list_item_is_dropped():
     text = "Excellent condition, with no scratches, scuffs or visible damage!"
     assert check_reading({"flaws": ["scuffs or visible damage"], "pickup": "", "no_offers": ""}, text) == [
         "the reading gives as flaws what the seller says isn't so: 'scuffs or visible damage'"]
+
+
+# ── what code read wrong on real Facebook listings (the explainer's, 14 Sep 2026; made-up sentences) ──
+
+EMPTY = {"flaws": [], "pickup": "", "no_offers": ""}
+
+
+@pytest.mark.parametrize("description, flaws", [
+    ("Apart from one tiny scratch on the corner of the screen (see photo) no other marks or damages.",
+     ["tiny scratch on the corner of the screen"]),
+    ("Small crack on the back, no further damage.", ["Small crack on the back"]),
+    ("No marks other than a small scratch on the back.", ["a small scratch on the back"]),  # "other than" excepts one
+    ("No cracks, scratches or damage. Cheaper alternatives often come with damage or visible wear.", []),
+    ("Mint condition, unlike most phones at this price which have scratches.", []),
+])
+def test_no_other_marks_and_other_phones_add_no_flaw(description, flaws):
+    """Rule 3 adds code's own flaws even when the AI read none: these were two of them."""
+    assert reading_from(EMPTY, f"iPhone 13 128GB\n{description}", "gemma")["flaws"] == flaws

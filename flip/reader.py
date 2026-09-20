@@ -36,7 +36,8 @@ import re
 
 from flip.attempts import try_models
 from flip.catalogue import contains, find_phrase, words
-from flip.checks import CONDITION_PROMISES, MARKS, NEGATIONS, NOT_A_FLAW, PROBLEM, answered, denied_by, slipped
+from flip.checks import (CONDITION_PROMISES, MARKS, NEGATIONS, NOT_A_FLAW, OTHER_ITEMS, PROBLEM, answered, denied_by,
+                         slipped)
 from flip.offers import PARTS, read_listing
 from flip.prompts import READING_SCHEMA, READING_SYSTEM, reading_prompt
 
@@ -157,7 +158,7 @@ def judge(piece, text):
         return "no"
     text = answered(text)  # "Faults: none" -> "no Faults"
     part = next((p for p in parts_of(text) if contains(plain_words(p), piece_words)), None)
-    if part is None:
+    if part is None or about_other_items(part, text):  # "...unlike most phones at this price which have scratches"
         return "no"
     part_words = plain_words(part)
     at = find_phrase(part_words, piece_words)[0]
@@ -175,6 +176,16 @@ def judge(piece, text):
         if not denied_by(lead, NEGATORS) and following != ["free"]:
             return "flaw"
     return "denied"
+
+
+def about_other_items(part, text):
+    """Whether a part of the listing comes at or after a mention of other
+    items in its sentence (OTHER_ITEMS): then it's about them, not this one."""
+    for sentence in re.split(r"(?<=[.!?])\s+|\n+", text):
+        at = sentence.find(part)
+        if at != -1:
+            return bool(OTHER_ITEMS.search(sentence[:at + len(part)]))
+    return False
 
 
 def in_denied_list(part, text):

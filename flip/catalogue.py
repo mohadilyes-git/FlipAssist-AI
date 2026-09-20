@@ -362,16 +362,35 @@ def find_options(text_words, model):
             for name, named in options_named(text_words, model).items()}
 
 
+# a network named with its lock: "locked to EE", "locked to 02" (a zero for the O), "Vodafone locked". The
+# names are eBay's (flip.ebay UK_NETWORKS)
+NETWORK_NAMES = {"ee": "EE", "o2": "O2", "02": "O2", "three": "Three", "vodafone": "Vodafone", "voda": "Vodafone",
+                 "virgin": "Virgin Mobile", "giffgaff": "giffgaff", "tesco": "Tesco Mobile", "sky": "Sky Mobile",
+                 "bt": "BT Mobile", "lebara": "Lebara", "lyca": "Lycamobile", "lycamobile": "Lycamobile",
+                 "smarty": "SMARTY", "voxi": "VOXI"}
+NETWORK = r"(ee|o2|02|three|vodafone|voda|virgin|giffgaff|tesco|sky|bt|lebara|lyca(?:mobile)?|smarty|voxi)"
+LOCKED_TO = re.compile(rf"\b(?:network\s+)?locked\s+(?:to|on(?:to)?)\s+(?:the\s+)?{NETWORK}(?:\s+(?:mobile|network))?\b"
+                       rf"|\b{NETWORK}\s+(?:network\s+)?locked\b")
+
+
 def find_network(text):
-    """'Unlocked' only when the text plainly says so. "Not unlocked", "never been
-    unlocked", "can be unlocked", "not sure if it's unlocked", "seller says
-    unlocked", "unlocked?", a lock or iCloud anywhere: that's for you to check.
+    """'Unlocked' only when the text plainly says so, and the network a lock
+    names ("locked to EE", "locked to 02": "EE", "O2"). "Not unlocked",
+    "never been unlocked", "can be unlocked", "not sure if it's unlocked",
+    "seller says unlocked", "unlocked?", a lock with no network named, iCloud
+    anywhere, or a network lock and "unlocked" both: that's for you to check.
     Curly apostrophes (iPhone keyboards type "isn’t") count as straight."""
     text = re.sub(r"[’‘ʼ]", "'", text.lower())
     if re.search(r"\b(?:not|never|isn'?t|hasn'?t|wasn'?t|cannot|can'?t|could|be)\s+(?:been\s+|be\s+)?unlocked\b",
                  text):
         return None
-    if re.search(r"\b(locked|icloud|blacklisted|barred)\b", text):
+    if re.search(r"\b(icloud|blacklisted|barred|activation)\b", text):
+        return None
+    locked_to = LOCKED_TO.search(text)
+    if locked_to and not re.search(r"\bunlocked\b", text):
+        before = re.findall(r"[a-z']+", text[max(0, locked_to.start() - 40):locked_to.start()])[-6:]
+        return None if set(before) & DOUBT_WORDS else NETWORK_NAMES[next(g for g in locked_to.groups() if g)]
+    if re.search(r"\blocked\b", text):
         return None
     tokens = re.findall(r"[a-z']+|[?.]", text)
     for i, token in enumerate(tokens):

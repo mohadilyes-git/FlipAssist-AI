@@ -48,6 +48,11 @@ COMPLIMENT = re.compile(
 NO_CASH = re.compile(r"\bno cash(?: payments?)?\b|\bcash (?:is )?not (?:accepted|taken)\b|\bnot (?:accepting|taking) cash\b|"
                      r"\b(?:bank transfer|transfer|pay ?pal|card|bacs)(?: payments?)? only\b|"
                      r"\bonly (?:accept(?:ing)? )?(?:bank transfer|transfer|pay ?pal|card|bacs)\b", re.IGNORECASE)
+# a sentence about other items, not this one: "cheaper alternatives often come with damage or visible wear"
+OTHER_ITEMS = re.compile(r"\b(?:(?:cheaper|other|similar)\s+)?alternatives?\b|\bother (?:phones?|ones|listings?|sellers?|"
+                         r"devices?|people)\b|\bcheaper ones\b|\bmost (?:phones|listings|sellers|people)\b|"
+                         r"\bunlike (?:other|most|many|some)\b|\b(?:often|usually|normally|typically) comes? with\b",
+                         re.IGNORECASE)
 # a conversation there hasn't been: the first message can't say "as you've said" or "as agreed" (it may
 # point to the listing: "as you said in the listing")
 PRIOR_TALK = re.compile(r"\b(?:as|like) (?:you(?:'ve| have)? (?:said|mentioned|agreed|offered|discussed|told me)|"
@@ -196,8 +201,10 @@ def denied_by(lead, negations=NEGATIONS):
         if word not in negations:
             continue
         rest = lead[n + 1:]
-        ended = set(rest) & (NEGATION_ENDS | NEGATED_THINGS) or \
-            any(verb in NEW_STATEMENT and set(rest[:k]) - {"t"} for k, verb in enumerate(rest))
+        ends = set(rest) & (NEGATION_ENDS | NEGATED_THINGS)
+        if "other" in ends and not any(w == "other" and after == "than" for w, after in zip(rest, rest[1:])):
+            ends.discard("other")  # "no OTHER marks" denies more of them; "no marks OTHER THAN a scratch" excepts one
+        ended = ends or any(verb in NEW_STATEMENT and set(rest[:k]) - {"t"} for k, verb in enumerate(rest))
         if not ended:
             return True
     return False

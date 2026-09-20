@@ -181,7 +181,7 @@ def test_your_notes_can_overrule_the_title():
 @pytest.mark.parametrize("title, network", [
     ("iPhone 14 unlocked", "Unlocked"),
     ("iPhone 14 sim free", "Unlocked"),
-    ("iPhone 14 locked to EE", None),
+    ("iPhone 14 locked to EE", "EE"),  # 14 Sep: a lock that names its network fills it in
     ("iPhone 14 not unlocked", None),
     ("iPhone 14 can be unlocked", None),
     ("iPhone 14 128GB sim, free postage", None),
@@ -190,6 +190,14 @@ def test_your_notes_can_overrule_the_title():
     ("iPhone 14 never been unlocked", None),
     ("iPhone 14 hasn't been unlocked", None),
     ("iPhone 14 has been unlocked", "Unlocked"),
+    # a network lock with its network named (the explainer's, 14 Sep: a zero for the O)
+    ("iPhone 14 128GB, does not include charger and is locked to 02.", "O2"),
+    ("iPhone 14 128GB locked to EE", "EE"),
+    ("iPhone 14 128GB Vodafone locked", "Vodafone"),
+    ("iPhone 14 128GB locked to the O2 network", "O2"),
+    ("iPhone 14 128GB not sure if locked to EE", None),
+    ("iPhone 14 128GB was locked to EE, now unlocked", None),
+    ("iPhone 14 128GB icloud locked to EE", None),
 ])
 def test_network(title, network):
     assert fill(title)["network"] == network
