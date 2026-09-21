@@ -348,6 +348,13 @@ EMPTY = {"flaws": [], "pickup": "", "no_offers": ""}
     ("No marks other than a small scratch on the back.", ["a small scratch on the back"]),  # "other than" excepts one
     ("No cracks, scratches or damage. Cheaper alternatives often come with damage or visible wear.", []),
     ("Mint condition, unlike most phones at this price which have scratches.", []),
+    ("Small crack on the back, unlike most listings I show it in the photos.", ["Small crack on the back"]),
+    # the seller's other phone: a brand-new phone got "water damage" from this (the explainer's #71, 14 Sep)
+    ("Brand new, in excellent condition and works perfectly. I bought this one abroad because my previous iPhone "
+     "got water damage and stopped working.", []),
+    ("My other phone has a cracked screen but this one is mint.", []),
+    ("Upgraded from my old phone, this one has a small crack on the back.", ["small crack on the back"]),
+    ("Comes with the charger from my old phone. Screen has a small crack.", ["Screen has a small crack"]),
 ])
 def test_no_other_marks_and_other_phones_add_no_flaw(description, flaws):
     """Rule 3 adds code's own flaws even when the AI read none: these were two of them."""

@@ -51,8 +51,14 @@ NO_CASH = re.compile(r"\bno cash(?: payments?)?\b|\bcash (?:is )?not (?:accepted
 # a sentence about other items, not this one: "cheaper alternatives often come with damage or visible wear"
 OTHER_ITEMS = re.compile(r"\b(?:(?:cheaper|other|similar)\s+)?alternatives?\b|\bother (?:phones?|ones|listings?|sellers?|"
                          r"devices?|people)\b|\bcheaper ones\b|\bmost (?:phones|listings|sellers|people)\b|"
-                         r"\bunlike (?:other|most|many|some)\b|\b(?:often|usually|normally|typically) comes? with\b",
+                         r"\bunlike (?:other|most|many|some)\b|\b(?:often|usually|normally|typically) comes? with\b|"
+                         # the seller's other phone: "my previous iPhone had suffered water damage"
+                         r"\bmy (?:previous|old|older|last|other|former|first|broken)\s+(?:\w+\s+)?(?:i?phones?|ones?|"
+                         r"handsets?|devices?|mobiles?|models?)\b",
                          re.IGNORECASE)
+# back to this item after other items in the same sentence: "...from my old phone, THIS ONE has a small crack"
+THIS_ITEM = re.compile(r"^\W*(?:(?:but|and|however|though|whereas|while)\s+)?(?:this (?:one|phone|iphone|handset|item|"
+                       r"console)|it|the (?:phone|iphone|screen|back|battery|case|frame|camera|body))\b", re.IGNORECASE)
 # a conversation there hasn't been: the first message can't say "as you've said" or "as agreed" (it may
 # point to the listing: "as you said in the listing")
 PRIOR_TALK = re.compile(r"\b(?:as|like) (?:you(?:'ve| have)? (?:said|mentioned|agreed|offered|discussed|told me)|"

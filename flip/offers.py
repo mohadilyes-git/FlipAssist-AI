@@ -19,8 +19,8 @@ must say the point, not ask it. Asking about the condition is otherwise fine
 import re
 
 from flip.catalogue import contains, words
-from flip.checks import (FAULTS, LEVELS, MARKS, NEGATIONS, NEW_SEALED, NOT_A_FLAW, OTHER_ITEMS, PROBLEM, answered,
-                         clauses, ends_asking, has_fault, prices_in, promises_in, stated_parts)
+from flip.checks import (FAULTS, LEVELS, MARKS, NEGATIONS, NEW_SEALED, NOT_A_FLAW, OTHER_ITEMS, PROBLEM, THIS_ITEM,
+                         answered, clauses, ends_asking, has_fault, prices_in, promises_in, stated_parts)
 
 # the seller says the price already allows for the flaw: a lower offer mustn't use it again
 PRICED_IN = re.compile(r"\b(?:hence (?:the |why )?(?:the |low |cheap )?price|priced accordingly|priced to reflect|"
@@ -173,18 +173,27 @@ def quote(part, kinds, typos=False):
     return " ".join(tokens).strip(" *-–—:")
 
 
-def this_items_parts(text):
-    """The listing's parts (PARTS) that are about this item: from a mention
-    of other items to the end of its sentence isn't ("Mint, unlike most phones
-    at this price which have scratches"), what comes before it is ("Small
-    crack on the back, unlike most listings...")."""
-    found = []
-    for sentence in re.split(r"(?<=[.!?])\s+|\n+", text):
-        for part in PARTS.split(sentence):
-            if OTHER_ITEMS.search(part):
-                break  # "cheaper alternatives often come with damage or visible wear"
-            found.append(part)
+def sentence_parts(sentence):
+    """A sentence's parts (PARTS), each with whether it's about other items:
+    from a mention of them on (OTHER_ITEMS: "Mint, unlike most phones at this
+    price which have scratches", "my previous iPhone had suffered water
+    damage and stopped working"), until a part comes back to this item
+    (THIS_ITEM: "..., this one has a small crack"). What comes before the
+    mention is about this item: "Small crack on the back, unlike most listings"."""
+    found, other = [], False
+    for part in PARTS.split(sentence):
+        if OTHER_ITEMS.search(part):
+            other = True
+        elif other and THIS_ITEM.match(part):
+            other = False
+        found.append((part, other))
     return found
+
+
+def this_items_parts(text):
+    """The listing's parts that are about this item (sentence_parts)."""
+    return [part for sentence in re.split(r"(?<=[.!?])\s+|\n+", text)
+            for part, other in sentence_parts(sentence) if not other]
 
 
 def read_listing(text):

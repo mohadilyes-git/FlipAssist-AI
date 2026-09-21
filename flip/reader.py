@@ -36,9 +36,8 @@ import re
 
 from flip.attempts import try_models
 from flip.catalogue import contains, find_phrase, words
-from flip.checks import (CONDITION_PROMISES, MARKS, NEGATIONS, NOT_A_FLAW, OTHER_ITEMS, PROBLEM, answered, denied_by,
-                         slipped)
-from flip.offers import PARTS, read_listing
+from flip.checks import CONDITION_PROMISES, MARKS, NEGATIONS, NOT_A_FLAW, PROBLEM, answered, denied_by, slipped
+from flip.offers import PARTS, read_listing, sentence_parts
 from flip.prompts import READING_SCHEMA, READING_SYSTEM, reading_prompt
 
 # the listing's parts: its sentences and clauses, and what follows "apart from" or "except"
@@ -179,12 +178,12 @@ def judge(piece, text):
 
 
 def about_other_items(part, text):
-    """Whether a part of the listing comes at or after a mention of other
-    items in its sentence (OTHER_ITEMS): then it's about them, not this one."""
+    """Whether a part of the listing is about other items, not this one
+    (flip.offers.sentence_parts): "my previous iPhone had suffered water damage"."""
     for sentence in re.split(r"(?<=[.!?])\s+|\n+", text):
-        at = sentence.find(part)
-        if at != -1:
-            return bool(OTHER_ITEMS.search(sentence[:at + len(part)]))
+        if part in sentence:
+            return any(other for piece, other in sentence_parts(sentence)
+                       if piece.strip() and (part in piece or piece.strip() in part))
     return False
 
 
