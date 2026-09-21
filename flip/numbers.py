@@ -75,7 +75,8 @@ TIME = re.compile(r"^[\s-]?(?:days?|weeks?|wks?|months?|mths?|mnths?|years?|yrs?
                   r"secs?|seconds?|nights?)(?![a-z])")
 DISTANCE = re.compile(r"^\s?(?:miles?|mi|kms?|kilomet(?:er|re)s?)(?![a-z])")
 CYCLE_BEFORE = re.compile(r"(?<![a-z])(?:cycles?|cycle count|cc)(?:\s+(?:is|of|at))?\s*[:=~-]{0,2}\s*\Z")
-CYCLE_AFTER = re.compile(r"^\s?(?:charge\s+)?cycles?(?![a-z])")
+# "87 cycles", "87 charge cycles", "77 battery cycles": a count, not the battery
+CYCLE_AFTER = re.compile(rf"^\s?(?:{TYPED_BATTERY}\s+)?(?:charge\s+)?cycles?(?![a-z])")
 # a £ after a number only when stuck to it ("128£"): in "128 £300" it's the next number's
 PRICE_AFTER = re.compile(r"^(?:[£$€]|\s?(?:o\.?n\.?o|ovno|quid|pounds?|gbp|each|pcm|firm|obo|no offers|"
                          r"or (?:near(?:est)?|best) offer|posted|delivered|shipped|cash|collected|paid|neg|"

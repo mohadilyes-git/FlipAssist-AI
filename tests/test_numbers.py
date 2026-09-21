@@ -142,6 +142,7 @@ def fill(title, notes=""):
     ("iPhone 15", "cycles 87", None, None),
     ("iPhone 15", "battery cycle count 87", None, None),
     ("iPhone 15", "battery 100% 87 cycles", None, "100"),
+    ("iPhone 15", "only 64 battery cycles and 100% battery health", None, "100"),
     ("iPhone 13", "collected from 128 Elm Close, bh 88", None, "88"),
     ("iPhone 13", "collect from 72 Oak Drive", None, None),
     ("iPhone 13", "imei ends 0512, bh 88", None, "88"),
