@@ -35,12 +35,11 @@ import time
 
 from flip.ai import Reply
 from flip.attempts import try_models
-from flip.catalogue import fill_from_catalogue, load_catalogue, model_names, models_disagree, words
+from flip.catalogue import fill_from_catalogue, load_catalogue, models_disagree, words
 from flip.checks import (HOLD, LOCK_TALK, NO_CASH, check_message, check_message_manner, check_no_unasked_promises,
                          ends_asking, names_other_model, promised_in)
 from flip.money import offer_for, to_pence
-from flip.numbers import read_numbers
-from flip.offers import check_condition_talk, copied_question, point_for, question_for, says_point
+from flip.offers import battery_now, check_condition_talk, copied_question, point_for, question_for, says_point
 from flip.prompts import MESSAGE_SCHEMA, RETRY, buying_line, message_prompt, offer_words
 from flip.questions import check_no_answered_questions, load_questions, open_questions
 from flip.reader import code_reading, in_listing
@@ -88,14 +87,8 @@ ADDED_NAMES = {"the reason": "the reason", "cash and collecting": "the cash-and-
 WONT_COLLECT = re.compile(r"\byou (?:to )?(?:drop|bring|deliver|post|send)\b|\b(?:drop|bring) (?:it|them) (?:round|over|to me)\b|"
                           r"\bdeliver(?:y|ed)?\b|\bpost (?:it|them)\b|\b(?:can'?t|cannot|can not|unable to|won'?t be able to) "
                           r"collect|\bcollect(?:ion|ing)? (?:is |isn'?t |won'?t be )?(?:not )?possible\b", re.IGNORECASE)
-# a seller's battery health, for the reason of a lower offer (battery_in): health in so many words...
-HEALTH_CUE = re.compile(r"\b(?:health|b/?h|max(?:imum)?\s+cap(?:acity)?|(?:battery|batt)\s+(?:capacity|condition))\b|🔋",
-                        re.IGNORECASE)
-# ...about the battery as it is now, and a figure, not a bound: "was 84%", "replaced at 81%", "over 85%", "85%+"
-NOT_NOW = re.compile(r"\b(?:was|were|used to be|had been|replaced|replacement|new battery|fitted|old (?:one|battery)|"
-                     r"over|above|more than|at least|min(?:imum)?|under|below|less than|nearly|almost|about|around|"
-                     r"approx\w*)\b|\d\s*%?\s*\+|>|<", re.IGNORECASE)
-CLAUSES = re.compile(r"[.;!?\n()]+|,(?!\d)")
+# a listing's clauses, for its battery health (battery_in): a decimal point isn't a full stop ("84.5%")
+CLAUSES = re.compile(r"(?:(?<!\d)\.|\.(?!\d)|[;!?\n()])+|,(?!\d)")
 
 
 def local_market(marketplace):
@@ -109,18 +102,15 @@ def posted_market(marketplace):
 
 
 def battery_in(text, model):
-    """The battery health a phone's listing gives ("Battery Health: 80%" ->
-    "80"), or None. A seller's "battery 80%" can be how charged it is in the
-    photos, so only a figure in a clause that says health in so many words
-    counts (HEALTH_CUE, read by flip.numbers), and only one about the battery
-    as it is now: not "was 84%", "replaced at 81%", "over 85%" (NOT_NOW).
-    Two figures are none."""
+    """The battery health a phone's listing gives as it is now ("Battery
+    Health: 80%" -> "80"), or None: read one clause at a time the way the
+    listing's flaws read it (flip.offers.battery_now), so not a charge level
+    ("battery level 60% in the photos"), the past ("was 84%", "replaced at
+    81%") or a bound ("over 85%"). A figure given only roughly ("under 80%")
+    isn't one to quote, and two figures are none."""
     if not model or model.get("category") != "phones":
         return None
-    found = set()
-    for clause in CLAUSES.split(text):
-        if HEALTH_CUE.search(clause) and not NOT_NOW.search(clause):
-            found |= read_numbers(clause, model, model_names())["battery"]
+    found = {said[0] for clause in CLAUSES.split(text) for said in [battery_now(clause)] if said and not said[3]}
     return next(iter(found)) if len(found) == 1 else None
 
 

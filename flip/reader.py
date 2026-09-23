@@ -15,8 +15,10 @@ can make things up, so code checks everything it reads:
    dots", "free of screen burn", "screen burn: none"). A reading that gives a
    denied flaw fails. What doesn't say anything's wrong ("battery health 90%",
    "unlocked to all networks", "see pics", "screen is perfect") isn't a flaw,
-   and a seller's own story is cut to the flaw ("I dropped it and cracked the
-   back" -> "cracked the back").
+   nor is a mark on the screen protector ("the protector itself is
+   scratched"); a battery health of 85% or under is ("Battery health 79%":
+   the user's line, read from their labels). A seller's own story is cut to
+   the flaw ("I dropped it and cracked the back" -> "cracked the back").
 3. The flaws code finds by itself are judged the same way and always stay:
    AI can add a flaw, never take one away. When the AI quotes the flaw more
    precisely ("cracked back" in "Good condition apart from cracked back"),
@@ -36,8 +38,9 @@ import re
 
 from flip.attempts import try_models
 from flip.catalogue import contains, find_phrase, words
-from flip.checks import CONDITION_PROMISES, MARKS, NEGATIONS, NOT_A_FLAW, PROBLEM, answered, denied_by, slipped
-from flip.offers import PARTS, read_listing, sentence_parts
+from flip.checks import CONDITION_PROMISES, ESIM, MARKS, NEGATIONS, NOT_A_FLAW, PROBLEM, answered, denied_by, slipped
+from flip.offers import (FLAWS, PARTS, backed, battery_apart, condition_said, esim_everywhere, figures_joined,
+                         low_battery, read_listing, sentence_parts, this_items_parts)
 from flip.prompts import READING_SCHEMA, READING_SYSTEM, reading_prompt
 
 # the listing's parts: its sentences and clauses, and what follows "apart from" or "except"
@@ -45,7 +48,7 @@ SPLIT = PARTS
 # where a clause starts, for whether a "no" before a flaw belongs to it: "No charger and the hinge is stiff"
 CLAUSE_WORDS = {"and", "but", "plus", "as", "because", "since", "though", "although", "however", "whereas", "while",
                 "which"}
-MAX_FLAW = 12  # words: a flaw, not a paragraph
+MAX_FLAW = 15  # words: a flaw, not a paragraph (a sentence about one flaw can run to 15)
 MAX_BEFORE = 6  # words back a "no" can still deny a flaw
 # a denial, its apostrophe gone the way plain_words takes it out: "arent", "doesnt", "free (of)"
 NEGATORS = NEGATIONS | {"zero", "free", "arent", "isnt", "doesnt", "hasnt", "havent", "dont", "wont", "cant", "wasnt",
@@ -104,6 +107,60 @@ NOT_A_PLACE = {"collect", "collection", "collected", "pick", "pickup", "post", "
                "weekday", "weekdays", "please", "text", "message", "call", "dm", "free", "available", "only", "none",
                "no", "n/a", "na", "unknown", "null", "nil", "stated", "specified", "person", "mine", "work", "office",
                "preferred", "anytime", "essential", "needed", "required", "possible", "welcome", "pm", "am"}
+# what comes with the item, and the item's own parts: a mark on a screen protector, a phone case or cover, the box
+# or a charger isn't the item's. A "case" is earbuds' own (their charging case), and a "back cover" a phone's back
+PROTECTORS = r"(?:(?:(?:screen|glass|lens|camera|privacy|tempered|back|front) ){0,2}protectors?|tempered glass(?! back)|" \
+             r"(?:screen|glass) guards?)(?: (?:on|over) (?:the |my )?(?:back |front |rear |main |selfie )?(?:screen|camera|" \
+             r"cameras|lens|lenses|back|front|display|glass))?"
+CASES = r"(?:(?:phone|clear|silicone|leather|rubber|protective|wallet|flip|magsafe|otterbox|spigen|carry|carrying|travel|" \
+        r"battery) ){0,2}(?<!charging )(?:case|cases|covers?)"
+THINGS_WITH_IT = r"box|boxes|packaging|charger|chargers|cable|cables|adapter|adaptor|plug"
+ACCESSORY = re.compile(rf"\b(?:{PROTECTORS}|{CASES}|{THINGS_WITH_IT})\b")
+ACCESSORY_WITH_BUDS = re.compile(rf"\b(?:{PROTECTORS}|(?:phone|clear|silicone|leather|rubber|protective) (?:case|cases|covers?)|"
+                                 rf"{THINGS_WITH_IT})\b")
+UNDER_IT = re.compile(r"\b(?:under|underneath|beneath|behind) (?:it|them|that|this)\b")  # "a small scratch under it"
+EARBUDS = re.compile(r"\b(?:air ?pods?|ear ?buds?|buds|earphones|headphones|beats)\b", re.IGNORECASE)
+# what's said about the thing that comes with it but isn't a mark on it, set aside first: what's included ("no
+# charger", "comes with the original box"), what made the marks ("light marks from being in a case"), where a mark
+# is ("a scratch under the screen protector", "the protector hides a small crack"), and the thing being there or
+# not ("screen protector fitted", "never used a screen protector", "took the screen protector off")
+WITH_IT = rf"(?:{PROTECTORS}|{CASES}|{THINGS_WITH_IT})"
+# ...said before it: included, the cause, where a mark is, used or not ("with a clear case", "from being in a case",
+# "under the screen protector", "never used a screen protector", "took the screen protector off")
+CONTEXT_BEFORE = (rf"\b(?:no|without|with|plus|including|includes|included|incl|from|by|due to|because of|caused by|under|"
+                  rf"underneath|beneath|behind|below|(?:kept|been|always|always been|was|being|put|stored|lived) in|into|had|"
+                  rf"has had|always had|kept with|using|used|use|never used|never had|didn['’ ]?t use|didnt use|not used|took|"
+                  rf"taken|take|peeled|removed|remove)\s+(?:(?:being|been|kept|in|using|wearing|putting it in)\s+)*(?:(?:a|an|"
+                  rf"the|its|my|original|apple|new|spare|free|cheap|old|his|her|their)\s+)*{WITH_IT}(?:\s+(?:off|on))?\b")
+# ...or after it: there and doing its job ("screen protector fitted", "the protector hides a small crack")
+CONTEXT_AFTER = (rf"\b{WITH_IT}(?:\s+(?:fitted|applied|attached|included|supplied|off|hides?|hiding|covers?|covering|over it|"
+                 rf"on top|on(?= since| from| always|$| it\b| the phone)|since (?:new|day one|purchase)|"
+                 rf"from (?:new|day one)))+\b")
+CONTEXT = re.compile(f"{CONTEXT_BEFORE}|{CONTEXT_AFTER}")
+INCLUDED = re.compile(CONTEXT_BEFORE)
+# a part that goes on about the one before it, with no subject of its own: "..., easy to peel off", "Screen
+# protector - cracked", "Original box, slightly damaged"; and the asides between ("(see photos)")
+NO_SUBJECT = re.compile(r"^(?:easy|easily|needs?|can|could|is|are|was|were|has|have|had|got|looks?|slightly|a bit|bit|also|"
+                        r"cracked|scratched|chipped|scuffed|marked|dented|damaged|peeling|lifting|starting|it|its|it['’]s|they|"
+                        r"they['’]re|theyre|one of them|both of them)\b", re.IGNORECASE)
+# the item's own part said to be fine, or not the one marked: "...not the screen", "the screen underneath is perfect"
+PART_IS_FINE = re.compile(r"\bnot (?:on )?(?:the |my )?(?:actual |real )?(?:screen|lens|camera|back|phone|glass|display)\b|"
+                          r"\b(?:the )?(?:actual |real )?(?:screen|lens|camera|back|phone|glass|display)(?: underneath| itself| "
+                          r"below| under it)?(?: is| are| s)? (?:fine|perfect|mint|ok|okay|flawless|unmarked|untouched|undamaged|"
+                          r"spotless|pristine)\b")
+ASIDE = re.compile(r"^(?:see |as (?:seen |shown )?in (?:the )?|check (?:the )?)?(?:pics?|photos?|pictures?|images?)$",
+                   re.IGNORECASE)
+WITH_IT_AT_END = re.compile(rf"(?:{WITH_IT})(?:\s+(?:itself|on it|on|fitted))?\s*$", re.IGNORECASE)
+PHONE_PARTS = {"screen", "display", "back", "rear", "frame", "housing", "camera", "cameras", "lens", "lenses", "body",
+               "glass", "side", "sides", "port", "button", "buttons", "speaker", "bezel", "phone", "iphone", "handset",
+               "device", "unit", "battery", "face", "microphone", "mic", "flash", "sim", "earpiece"}
+# a part that only points back at a flaw the listing names elsewhere: "the crack does not affect image quality",
+# "price reflects the camera lens damage". Its flaw is the other part's, said there
+POINTS_BACK = re.compile(r"\b(?:does|do|did|will|would|should) ?n[o']?t (?:really |at all |in any way )?(?:affect|effect|"
+                         r"impact|interfere with)|\b(?:doesnt|dont|wont|never) (?:affect|effect|impact)|"
+                         r"\b(?:has|have|with) no (?:effect|impact)\b|\bprice (?:reflects|reflected|takes? (?:\w+ )?into "
+                         r"account|allows? for|accounts? for)|\bpriced (?:to reflect|accordingly)|"
+                         r"\breflected in the price|\bhence the (?:low |cheap )?price", re.IGNORECASE)
 POSTCODE = re.compile(r"[A-Z]{1,2}\d[A-Z\d]?(?:\s*\d[A-Z]{2})?")
 MAX_PLACE = 6  # words: a place's name, not a sentence
 
@@ -136,11 +193,14 @@ def parts_of(text):
 MARK_WORDS = {word for kind in MARKS for word in CONDITION_PROMISES[kind]}
 
 
-def problems_at(piece):
+def problems_at(piece, esim_fine=False):
     """Where in a quote (its plain_words) each word that says something's
     wrong is: typos allowed ("scraches"), a guard against one or a part's
-    name not ("scratch resistant", "Intel chip")."""
+    name not ("scratch resistant", "Intel chip"). esim_fine: every one of
+    the model is eSIM only (flip.offers.esim_everywhere), so that's no flaw."""
     clean = NOT_A_FLAW.sub(lambda m: " " * len(m.group()), piece)
+    if esim_fine:
+        clean = ESIM.sub(lambda m: " " * len(m.group()), clean)
     found = {len(plain_words(clean[:m.start()])) for m in PROBLEM.finditer(clean)}
     found |= {n for n, word in enumerate(plain_words(clean)) if slipped(word) in MARK_WORDS}
     return sorted(found)
@@ -153,12 +213,20 @@ def judge(piece, text):
     is judged on its own: "no cracks only light scratches" is a flaw."""
     piece_words = plain_words(piece)
     at_words = problems_at(piece)
-    if not piece_words or not at_words or len(piece_words) > MAX_FLAW:
+    battery = low_battery(piece)
+    if not piece_words or not (at_words or battery) or len(piece.split()) > MAX_FLAW:
         return "no"
-    text = answered(text)  # "Faults: none" -> "no Faults"
+    text = figures_joined(answered(text))  # "Faults: none" -> "no Faults"; "Battery health\n79%" is one part
     part = next((p for p in parts_of(text) if contains(plain_words(p), piece_words)), None)
-    if part is None or about_other_items(part, text):  # "...unlike most phones at this price which have scratches"
-        return "no"
+    if part is None or about_other_items(part, text) or on_accessory(with_antecedent(part, text), text) \
+            or repeats_a_flaw(part, text) or offered_if_wanted(part, text):
+        return "no"  # "...unlike most phones at this price which have scratches", "the protector itself is cracked"
+    if battery and low_battery(part):
+        return "flaw"  # a figure the listing gives as the battery is now: no word says what's wrong
+    if ESIM.search(piece) and esim_everywhere(text):
+        at_words = problems_at(piece, esim_fine=True)
+        if not at_words:
+            return "no"
     part_words = plain_words(part)
     at = find_phrase(part_words, piece_words)[0]
     # the words of its own clause before it in the listing, then the quote's own words before the problem word
@@ -166,14 +234,17 @@ def judge(piece, text):
     after = part_words[at + len(piece_words):at + len(piece_words) + 2]
     if set(after) & DENIED_AFTER or in_denied_list(part, text):
         return "denied"
+    denied_last = False
     for n in at_words:
         # the words leading to it in its own clause: the listing's before the quote, then the quote's own
         # ("Hinge isn't loose"), from the last clause word on ("No charger AND the back is cracked")
         lead = head[-MAX_BEFORE:] + piece_words[:n]
         lead = lead[max((k + 1 for k, w in enumerate(lead) if w in CLAUSE_WORDS), default=0):]
         following = (piece_words[n + 1:] + after)[:1]  # "scratch free", "scratch-free screen": free of it
-        if not denied_by(lead, NEGATORS) and following != ["free"]:
+        listed = not lead and denied_last and (piece_words[n - 1:n] or head[-1:]) in (["and"], ["or"], ["nor"])
+        if not listed and not denied_by(lead, NEGATORS) and following != ["free"]:
             return "flaw"
+        denied_last = True
     return "denied"
 
 
@@ -185,6 +256,85 @@ def about_other_items(part, text):
             return any(other for piece, other in sentence_parts(sentence)
                        if piece.strip() and (part in piece or piece.strip() in part))
     return False
+
+
+def on_accessory(part, text):
+    """Whether a part's marks are all on what comes with the item, not on it:
+    each clause that says what's wrong names a protector, a phone case or
+    cover, the box or a charger, and none of the item's own parts ("The
+    protector itself is scratched and cracked at one corner", "case is a bit
+    worn", "box has a dent"). What's included isn't what's marked: "no
+    charger and the hinge is a bit stiff" is the hinge's. A clause with
+    nothing of its own before what's wrong goes on about the one before
+    ("...is scratched AND CRACKED at one corner"). "A crack on the screen
+    under the protector" names the screen and "back cover cracked" the back:
+    those are the phone's. In a listing of earbuds a case is theirs."""
+    accessory = ACCESSORY_WITH_BUDS if EARBUDS.search(text) else ACCESSORY
+    plain = PART_IS_FINE.sub(" ", CONTEXT.sub(" ", " ".join(plain_words(part))))
+    clauses = re.split(rf"\b(?:{'|'.join(sorted(CLAUSE_WORDS))})\b", plain)
+    found, last = [], False
+    for clause in clauses:
+        clean = NOT_A_FLAW.sub(" ", clause).strip()
+        if not PROBLEM.search(clean):
+            continue
+        if PROBLEM.match(re.sub(r"^(?:\w+ly|also|then|got|has|is|are) ", "", clean)) and found:
+            found.append(last)  # "and cracked at one corner": the last clause's
+            continue
+        last = bool(accessory.search(clean)) and not set(accessory.sub(" ", clean).split()) & PHONE_PARTS \
+            and not UNDER_IT.search(clean)
+        found.append(last)
+    return bool(found) and all(found)
+
+
+def with_antecedent(part, text):
+    """A part that goes on about what comes with the item, with that in front
+    of it, so on_accessory reads it as that thing's: "...cracks on the screen
+    protector, which can be replaced" -> "screen protector can be replaced",
+    "Screen protector - cracked", "The protector itself is scratched (see
+    photos), easy to peel off" -> "protector easy to peel off". After "which"
+    it's the words just before; otherwise only a part with no subject of its
+    own (NO_SUBJECT) goes on about the last one, asides aside. A part about
+    the item itself is left as it is."""
+    at = text.find(part)
+    if at < 0:
+        return part
+    start = max(text.rfind(stop, 0, at) for stop in ".!?\n") + 1
+    before = text[start:at]
+    if re.search(r"\bwhich[\s,]*$", before, re.IGNORECASE):
+        thing = WITH_IT_AT_END.search(re.sub(r"[\s,;:–—-]*\bwhich[\s,]*$", "", before, flags=re.IGNORECASE))
+        return f"{thing.group()} {part}" if thing else part
+    if not NO_SUBJECT.match(part.strip()):
+        return part
+    last = next((p for p in reversed(parts_of(before)) if not ASIDE.match(p)), "")
+    thing = ACCESSORY.search(INCLUDED.sub(" ", " ".join(plain_words(last))))  # "comes with box, it has a crack": the phone's
+    return f"{thing.group()} {part}" if thing and on_accessory(f"{last} cracked", text) else part
+
+
+IF_WANTED = re.compile(r"\bif (?:you|u) (?:want|like|prefer|wish|would like)\b[^.!?\n]*$", re.IGNORECASE)
+CHANGED = re.compile(r"\b(?:be|have|get) (?:it |them |the \w+ )?(?:replaced|repaired|fixed|swapped|changed)\b", re.IGNORECASE)
+
+
+def offered_if_wanted(part, text):
+    """Whether a part offers to change something if you'd like it, the "if"
+    said before a comma: "If you want, the battery can be replaced for £20"."""
+    at = text.find(part)
+    before = re.split(r"[.!?\n]", text[:at])[-1] if at >= 0 else ""
+    return bool(CHANGED.search(part)) and bool(IF_WANTED.search(before))
+
+
+def repeats_a_flaw(part, text):
+    """Whether a part only points back at a flaw the listing names in another
+    part (POINTS_BACK): "the crack does not affect image quality" after "Crack
+    on the camera lens", "price reflects the tiny issues" after "scuffs on the
+    side". A flaw said only there is still a flaw: "price reflects the cracked
+    back" in a listing that says nothing else about the back."""
+    if not POINTS_BACK.search(part):
+        return False
+    kinds = condition_said(part, typos=True) & FLAWS
+    others = [condition_said(other, typos=True) & FLAWS for other in this_items_parts(text) if other.strip() != part.strip()]
+    if not kinds:  # "the tiny issues": no kind of its own, so any flaw it points at
+        return any(others)
+    return all(any(backed(kind, listed) for listed in others) for kind in kinds)
 
 
 def in_denied_list(part, text):
@@ -252,7 +402,14 @@ def flaws_in(quote, text):
     """Rule 2 for one quote: each of its pieces that says something's wrong,
     in the seller's words. Asides ("see pics", "(top right)") and facts
     ("battery health 88%") aren't flaws."""
-    return [trimmed(piece) for piece in parts_of(quote) if judge(piece, text) == "flaw"]
+    found = []
+    for piece in parts_of(figures_joined(quote)):
+        if judge(piece, text) != "flaw":
+            continue
+        apart = battery_apart(piece)  # "Battery health 79% small crack on back": two flaws, each in its own words
+        found += [trimmed(piece)] if apart is None else \
+            [trimmed(p) if n != 1 else p for n, p in enumerate(apart) if n == 1 or (p and judge(p, text) == "flaw")]
+    return found
 
 
 def takes_offers(text):

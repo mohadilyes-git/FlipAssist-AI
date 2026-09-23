@@ -17,10 +17,14 @@ must say the point, not ask it. Asking about the condition is otherwise fine
 """
 
 import re
+from functools import lru_cache
 
-from flip.catalogue import contains, words
-from flip.checks import (FAULTS, LEVELS, MARKS, NEGATIONS, NEW_SEALED, NOT_A_FLAW, OTHER_ITEMS, PROBLEM, THIS_ITEM,
-                         answered, clauses, ends_asking, has_fault, prices_in, promises_in, stated_parts)
+from flip.catalogue import contains, load_catalogue, model_names, models_named, words
+from flip.checks import (ESIM, FAULTS, ISSUE_KINDS, ISSUES, LEVELS, MARKS, NEGATIONS, NEW_SEALED, NICK, NO_LONGER,
+                         NOT_A_FLAW, OTHER_ITEMS,
+                         PROBLEM, SELLER_FAULT_WORDS, SIGNS_OF_USE, THIS_ITEM, answered, clauses, ends_asking, has_fault,
+                         prices_in, promises_in, stated_parts)
+from flip.numbers import CUE as BATTERY_CUE, TYPED_BATTERY, battery_worded, figure, read_numbers
 
 # the seller says the price already allows for the flaw: a lower offer mustn't use it again
 PRICED_IN = re.compile(r"\b(?:hence (?:the |why )?(?:the |low |cheap )?price|priced accordingly|priced to reflect|"
@@ -39,19 +43,26 @@ GOOD = re.compile(r"\b(?:good|great|nice|lovely|decent|fab|fantastic|brilliant|t
 # damage the checks' mark words don't cover: "cosmetic damage", "smashed screen"
 DAMAGE = re.compile(r"\b(?:damage|damaged|smashed|shattered|bent|torn|ripped|stained|faded|peeling)\b")
 GOOD_LEVELS = ["good", "excellent", "flawless"]  # each one backs the ones before it
-FLAWS = MARKS | {"fault", "damage"}
+# what's wrong without a mark or a fault, each its own kind (flip.checks.ISSUE_KINDS): "issue: esim", "issue: untested"
+ISSUE_PATTERNS = {f"issue: {kind}": re.compile(rf"\b(?:{said})\b", re.IGNORECASE) for kind, said in ISSUE_KINDS.items()}
+FLAWS = MARKS | {"fault", "damage"} | set(ISSUE_PATTERNS)
+# a denial of what's wrong, for the kinds read by pattern: "free from nicks", "zero signs of use"
+DENIALS = NEGATIONS | {"free", "zero", "nothing"}
+NICKS = re.compile(rf"\b(?:{NICK})\b")  # a mark of the chip kind
+USED_SIGNS = re.compile(rf"\b(?:{SIGNS_OF_USE})\b")  # a mark of the general kind
 # faults sellers write that a reseller's notes rarely do: read in a listing for a message, never for a
 # listing's own condition (flip.checks.has_fault, where "battery needs replacing" isn't "for parts")
 SELLER_FAULTS = re.compile(r"\b(?:no (?:picture|signal|service|display|image|face id|touch id)|blacklisted|"
                            r"needs? (?:replacing|a new \w+|repair\w*|fixing)|drains? (?:fast|quickly|really fast)|"
                            r"swollen|lifting|crackl\w*|buzz\w*|rattl\w*|distort\w*|"
                            r"(?:left|right|one) (?:airpod|earbud|bud|joy ?con|controller|pad)s? "
-                           r"(?:is |are )?missing)\b")
+                           rf"(?:is |are )?missing|{SELLER_FAULT_WORDS})\b")
 # a listing's parts: its sentences and clauses, and what follows "apart from", "except" or "bar"
-PARTS = re.compile(r"[,.;!?\n()|•►▪→\U0001F300-\U0001FAFF☀-➿]|\s[-–—]\s|\b(?:but|which|though|although|otherwise|however|hence)\b"
+PARTS = re.compile(r"[,;!?\n()|•►▪→\U0001F300-\U0001F50A\U0001F50C-\U0001FAFF☀-➿]|(?<!\d)\.|\.(?!\d)|\s[-–—]\s|"
+                   r"\b(?:but|which|though|although|otherwise|however|hence)\b"
                    r"|\b(?:apart from|except(?: for)?|other than|save for)\b"
                    r"|\b(?:only|just)(?=\s+(?:a|an|one|some|the|few|couple|light|minor|small|tiny|slight|faint|"
-                   r"hairline|odd|little)\b)"
+                   r"hairline|odd|little)\b)(?!\s+an?\s+e[- ]?sim)"
                    r"|\bbar(?=\s+(?:a|an|one|some|the|small|tiny|minor|light|few)\b)", re.IGNORECASE)
 # "I don't mind the scratch" isn't "no scratch": the "don't" is about you, not the item
 ATTITUDE = re.compile(r"\b(?:don'?t|do not|doesn'?t|does not)\s+(?:mind|bother me|matter)\b"
@@ -105,20 +116,60 @@ REASON_FILLER = SMALL_WORDS | {"it", "its", "s", "is", "are", "be", "been", "in"
                                "sold", "already", "mentions", "great", "hear", "fine", "by", "me", "state", "phone",
                                "console", "device", "handset", "unit", "product", "thing", "works", "working", "ok",
                                "okay", "happy", "glad", "good"}
-# battery health at or under this is a reason to offer less: resellers price a phone down below 86%, and
+# battery health at or under this is a reason to offer less, and a flaw of the listing's: resellers price a phone
+# down below 86% (the user's line, read from their labels: every figure of 85 or under a flaw, 86 and up not), and
 # under 80% the iPhone itself says the battery needs a service
 LOW_BATTERY = 85
+# a battery figure apart from its label, put next to it before the listing is cut into parts: on the line under
+# it, after a dash, a bar, an arrow or ":-" ("Battery health\n79%", "Battery health - 82%", "Battery health:-\n79%"),
+# or in brackets ("Battery health (82%)")
+FIGURE_APART = re.compile(rf"(?<![a-z])((?:{TYPED_BATTERY}(?:\s+(?:health|life|capacity|condition))?|b/?h|health|capacity|"
+                          r"🔋)[ \t\u00a0]*)(?:[:\-–—|=>→➡\ufe0f()•][ \t\u00a0]*|\r?\n[ \t\u00a0]*)+"
+                          r"(?=~?\d{1,3}(?:\.\d+)?[ \t]*(?:%|per ?cent))", re.IGNORECASE)
+# ...only where the parts would be cut between them: "Battery Health: 80%" and "Battery health -78%" stay as written
+SPLITS = re.compile(r"[\n–—|→➡()•]|\s-\s|\s-$|^-\s")
+BRACKETED_FIGURE = re.compile(r"\(\s*(~?\d{1,3}(?:\.\d+)?\s*(?:%|per ?cent))\s*\)", re.IGNORECASE)
+# a figure in a seller's text, with its % if it has one ("84.5%", "80 percent", "81")
+FIGURE = re.compile(r"(?<![\d.£$€])(\d{1,3}(?:\.\d+)?)(\s*(?:%|per ?cent\b))?(?!\d)", re.IGNORECASE)
+# a figure with no % is the battery's only right after a word for its health: "BH 81", "Battery health: 79"
+HEALTH_WORD_BEFORE = re.compile(r"(?:health|\bbh|\bb/h|capacity|max(?:imum)? cap(?:acity)?|🔋)\s*(?:(?:is|at|of|on|now|"
+                                r"currently|still)\s+|[:=~-]\s*)*$", re.IGNORECASE)
+HEALTH_WORD = re.compile(r"health|\bbh\b|\bb/h\b|capacity|max(?:imum)? cap|🔋", re.IGNORECASE)
+# what makes a figure something other than the battery's health now, said right before it: a charge level or limit
+# ("Battery level 60%", "Battery charges to 80%"), the past ("was 84%", "replaced at 81%") or a bound upwards ("over
+# 85%", "at least 80%")...
+NOT_HEALTH_BEFORE = re.compile(r"\b(?:level|charged?|charging|charges|limit(?:ed)?|set (?:to|at)|percentage|showing|shows|"
+                               r"holds?|holding|lasts?|still on|down to|drops? to|"
+                               r"was|were|used to be|had been|replaced|replacement|new battery|fitted|"
+                               r"(?<!years )(?<!year )(?<!months )(?<!month )old (?:one|battery)|"
+                               r"before|previously|originally|over|above|more than|at least|min(?:imum)?|greater than)"
+                               r"(?:\s+\w+)?\s*[:=~-]*\s*$|(?<![-=])[<>]=?\s*$", re.IGNORECASE)  # "->" is an arrow
+# ...or right after it: "85%+", "80% charged", "60% left", "20% off", "80% condition", "80% or more", "10/10", "25 March",
+# "100% when I bought it"
+NOT_HEALTH_AFTER = re.compile(r"^\+|^\s*(?:\w+\s+)?(?:charged?|charging|limit|left|remaining)\b|^\s*(?:off|cheaper|discount|"
+                              r"condition|grade|cosmetic\w*|less than|more than|or (?:more|higher|above|better|over)|upwards|"
+                              r"and (?:above|up)|plus|deposit|upfront|when (?:i |we )?(?:bought|got) it|at purchase|"
+                              r"by (?:bedtime|the end of the "
+                              r"day|the evening|night)|after (?:a |an )?(?:full |whole )?(?:day|night|hours?))\b|"
+                              r"^\s*(?:/|out of)\s*\d|"
+                              r"^(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b", re.IGNORECASE)
+# a figure "in the photos" with no word for health is the charge the photos show: "Battery good on 50% in pics"
+IN_PHOTOS_AFTER = re.compile(r"^\s*(?:\w+\s+)?in (?:the )?(?:photos?|pics?|pictures?|images?)\b", re.IGNORECASE)
+# a figure the seller only gives roughly, or as a ceiling: still 85% or under ("under 80%", "around 80%", "~80%")
+ROUGHLY_BEFORE = re.compile(r"\b(just under|under|below|less than|about|around|approx\w*|roughly|nearly|almost|circa)\s*$|"
+                            r"(~)\s*$", re.IGNORECASE)
+PHONE = {"category": "phones"}
 ASK = {"lower": "Mention it as the reason for your offer?",
        "asking": "Say you don't mind it?",
        "more": "Give that as the reason you're paying more?"}
 
 
-def unnegated(pattern, text):
+def unnegated(pattern, text, negations=NEGATIONS):
     """True if the pattern is in the text without a "no" or "not" just before
     it, in the same sentence: "No box. Smashed screen." is still smashed."""
     for part in re.split(r"[.!?;\n]", text):
         joined = " ".join(words(part))
-        if any(not NEGATIONS & set(joined[:m.start()].split()[-3:]) for m in pattern.finditer(joined)):
+        if any(not negations & set(joined[:m.start()].split()[-3:]) for m in pattern.finditer(joined)):
             return True
     return False
 
@@ -137,6 +188,11 @@ def condition_said(text, typos=False):
         said.add("fault")
     if unnegated(DAMAGE, text):
         said.add("damage")
+    said |= {kind for kind, pattern in ISSUE_PATTERNS.items() if unnegated(pattern, text, DENIALS)}
+    if unnegated(NICKS, text, DENIALS):
+        said.add("chip")
+    if unnegated(USED_SIGNS, text, DENIALS):
+        said.add("mark")
     if unnegated(GOOD, text):
         said.add("good")
     return said
@@ -158,7 +214,8 @@ def quote(part, kinds, typos=False):
         # a fault the cut would end halfway through is said whole: "...it turns on" -> "...it turns on and off"
         plain = lambda end: " ".join(words(" ".join(tokens[start:end])))
         said, whole = plain(cut), plain(start + MAX_FAULT_QUOTE)
-        reach = max((m.end() for m in FAULTS.finditer(whole) if m.start() < len(said) < m.end()), default=0)
+        reach = max((m.end() for pattern in (FAULTS, ISSUES) for m in pattern.finditer(whole)
+                     if m.start() < len(said) < m.end()), default=0)
         while reach and cut < len(tokens) and len(plain(cut)) < reach:
             cut += 1
         # ...and so is a place the cut would end on "of the": "...on the bottom left of the screen"
@@ -168,9 +225,13 @@ def quote(part, kinds, typos=False):
         # the word kept before the flaw is for "small crack", not "and cracked the back"
         while len(tokens) > 1 and tokens[0].lower().strip(",") in JOINING:
             tokens = tokens[1:]
-        while len(tokens) > 1 and tokens[-1].lower() in DANGLING:
+        while len(tokens) > 1 and tokens[-1].lower() in DANGLING and not ENDS_A_FAULT.search(" ".join(words(" ".join(tokens)))):
             tokens = tokens[:-1]
     return " ".join(tokens).strip(" *-–—:")
+
+
+# a fault that ends on a word a quote otherwise wouldn't: "it no longer turns ON", "won't switch ON"
+ENDS_A_FAULT = re.compile(rf"(?:{FAULTS.pattern})\s*$|(?:{NO_LONGER})\s*$")
 
 
 def sentence_parts(sentence):
@@ -196,19 +257,132 @@ def this_items_parts(text):
             for part, other in sentence_parts(sentence) if not other]
 
 
+def figures_joined(text):
+    """A battery figure apart from its label put next to it, to be read as one
+    part: "Battery health\n79%", "Battery health - 82%" and "Battery health
+    (82%)" are all "Battery health 82%"."""
+    joined = lambda m: m.group(1).rstrip() + " " if SPLITS.search(m.group()[len(m.group(1)):]) else m.group()
+    return FIGURE_APART.sub(joined, BRACKETED_FIGURE.sub(lambda m: f" {m.group(1)} ", text)).replace("  ", " ")
+
+
+@lru_cache(maxsize=4096)
+def battery_now(part):
+    """The battery health one part of a seller's listing gives as it is now,
+    or None: (the figure as code writes it, "84.5"; where the seller's words
+    for it start and end in the part, from the battery word to the figure;
+    a word that makes it rough, "under" or "around", or ""). A model's name
+    or its storage is never the figure ("iPhone 13 battery is good", "64
+    battery"), and a figure with no % is one only right after a word for its
+    health ("BH 81"). Not a charge level, a limit, the past, a bound upwards,
+    a rating, a date or a discount (NOT_HEALTH_BEFORE, NOT_HEALTH_AFTER), and
+    two figures are none."""
+    figures = read_numbers(part, PHONE, model_names())["battery"]
+    lower = part.lower()
+    cues = list(BATTERY_CUE.finditer(lower))
+    if not figures or not cues:
+        return None
+    found = []
+    for at in FIGURE.finditer(lower):
+        value = figure(at.group(1))
+        before, after = lower[:at.start()], lower[at.end():]
+        if value not in figures or (not at.group(2) and not HEALTH_WORD_BEFORE.search(before)):
+            continue
+        if NOT_HEALTH_BEFORE.search(before) or NOT_HEALTH_AFTER.search(after) or \
+                (IN_PHOTOS_AFTER.search(after) and not HEALTH_WORD.search(lower)):
+            continue
+        rough = ROUGHLY_BEFORE.search(before)
+        start = [cue.start() for cue in cues if cue.end() <= at.start()]
+        end = [cue.end() for cue in cues if cue.start() >= at.end() and not lower[at.end():cue.start()].strip(" %")]
+        if not start and not end:
+            continue  # its battery word is somewhere else
+        found.append((value, start[-1] if start else at.start(), at.end() if start else end[0],
+                      (rough.group(1) or rough.group(2)).lower() if rough else ""))
+    return found[0] if len({value for value, *_ in found}) == 1 else None
+
+
+def esim_read(text):
+    """How to read a part of this listing: as it is, or on a phone that only
+    comes with eSIM (esim_everywhere) without saying so: "eSIM only" is no flaw
+    of an iPhone Air, though the seller's words around it stay as they are."""
+    if not esim_everywhere(text):
+        return lambda part: part
+    return lambda part: ESIM.sub(lambda m: " " * len(m.group()), part)
+
+
+def low_battery(part):
+    """A battery health of LOW_BATTERY or under that one part of the listing
+    gives as it is now (battery_now), in the seller's words from its battery
+    word to the figure ("Battery health is at 75%", "81% BH", "Battery is
+    77%"), or None."""
+    said = battery_now(part)
+    if not said or float(said[0]) > LOW_BATTERY:
+        return None
+    return part[said[1]:said[2]].strip(" :=~-–—")
+
+
+def battery_apart(piece):
+    """A piece that gives a low battery, cut into what comes before its words,
+    the battery's own words and what comes after: "Battery health 79% small
+    crack on back" -> ("", "Battery health 79%", "small crack on back"). None
+    for a piece with no low battery."""
+    said = battery_now(piece)
+    if not said or float(said[0]) > LOW_BATTERY:
+        return None
+    before = re.sub(r"(?:\s+(?:and|&|plus|with|but|the|a|an|its|his|her|my|is|at|on|of))+\s*$", "", piece[:said[1]])
+    return before.strip(" ,;:-–—&+"), piece[said[1]:said[2]].strip(" :=~-–—"), piece[said[2]:].strip(" ,;:-–—&+%")
+
+
+@lru_cache(maxsize=1)
+def models_by_id():
+    return {model["id"]: model for model in load_catalogue()}
+
+
+@lru_cache(maxsize=256)
+def esim_everywhere(text):
+    """Whether the phone a listing sells comes with eSIM only wherever it's
+    sold (the catalogue's "esim_only": the iPhone Air): then saying so is no
+    flaw. The phone is the one its title names, else every one the listing
+    names: an Air listing that mentions the seller's old iPhone 13 is still
+    an Air's."""
+    models = models_by_id()
+    catalogue = list(models.values())
+    named = models_named(re.split(r"\n|(?<=\S)\.\s", text, maxsplit=1)[0], catalogue) or models_named(text, catalogue)
+    return bool(named) and all(models[model].get("esim_only") for model in named)
+
+
+def battery_figure(flaw):
+    """The figure of a flaw that's only a low battery, as a reason says it
+    ("Battery Health: 80%" -> "80", "Battery health under 80%" -> "under
+    80"), or None: "Battery health 79% small crack" says more."""
+    apart = battery_apart(flaw)
+    if apart is None or PROBLEM.search(f"{apart[0]} {apart[2]}"):
+        return None
+    value, _, _, rough = battery_now(flaw)
+    return f"{rough} {value}".strip()
+
+
 def read_listing(text):
     """What the listing says about the item's condition, in the seller's own
     words: {"flaws": ["Broken back"], "good": [], "priced_in": False}. A part
     with a flaw is a flaw even when it also praises: "good condition apart
-    from a scratch"."""
+    from a scratch". A battery health of LOW_BATTERY or under is a flaw too
+    ("Battery health 79%"), and "eSIM only" isn't one where every one of the
+    model is (esim_everywhere)."""
     text = answered(re.sub(r"\bcondition\s*[:\-–—]\s*", "condition ", text, flags=re.IGNORECASE))  # "Condition: good"
+    text = figures_joined(text)
+    read_as = esim_read(text)
     found = {"flaws": [], "good": [], "priced_in": bool(PRICED_IN.search(" ".join(words(text))))}
     for part in this_items_parts(text):
-        said = condition_said(part, typos=True)
-        if said & FLAWS:
-            found["flaws"].append(quote(part, said & FLAWS, typos=True))
-        elif said & set(GOOD_LEVELS):
-            found["good"].append(quote(part, said & set(GOOD_LEVELS), typos=True))
+        apart = battery_apart(part)  # "Battery health 79% small crack on back": two flaws, each in its own words
+        for n, piece in enumerate(apart if apart else (part,)):
+            if apart and n == 1:
+                found["flaws"].append(piece)
+                continue
+            said = condition_said(read_as(piece), typos=True)
+            if said & FLAWS:
+                found["flaws"].append(quote(piece, said & FLAWS, typos=True))
+            elif said & set(GOOD_LEVELS):
+                found["good"].append(quote(piece, said & set(GOOD_LEVELS), typos=True))
     return found
 
 
@@ -224,7 +398,16 @@ def point_for(kind, text, flaws=None, battery=None):
     if flaws is not None:
         read["flaws"] = list(flaws)
     if read["flaws"] and (kind == "asking" or (kind == "lower" and not read["priced_in"])):
-        about, says = "flaw", read["flaws"]
+        figures = {battery_figure(flaw) for flaw in read["flaws"]}
+        if kind == "lower" and len(figures) == 1 and None not in figures:  # only the battery: said as AlertFlip says it
+            battery = figures.pop()
+            return {"about": "battery", "says": [f"battery health {battery}%"], "battery": battery}
+        says = read["flaws"]
+        if len(figures - {None}) > 1:  # two figures for one battery are none
+            says = [flaw for flaw in says if battery_figure(flaw) is None]
+        if not says:
+            return None
+        about = "flaw"
     elif kind == "lower" and battery and float(battery) <= LOW_BATTERY and not read["priced_in"]:
         return {"about": "battery", "says": [f"battery health {battery}%"], "battery": battery}
     elif kind == "more" and read["good"] and not read["flaws"]:
@@ -253,6 +436,8 @@ def same_flaw(a, b):
     """Whether two quotes say the same flaw: the same kinds of it, and the key
     words of one all in the other, or sharing the part ("screen cracked" and
     "The screen is cracked")."""
+    if battery_figure(a) or battery_figure(b):  # "81% BH" in the title, "Battery health 81%" below
+        return battery_figure(a) == battery_figure(b)
     keys_a, keys_b = key_words(a), key_words(b)
     if not keys_a or not keys_b or condition_said(a) != condition_said(b):
         return False
@@ -293,11 +478,15 @@ def says_point(text, point):
     """Whether a text says the point, in the listing's words or a general word
     for them ("the damage" for "broken back"). A flaw code has no word for
     ("black dot on the screen", read by flip.reader) is said when most of its
-    words are: "the black dot"."""
+    words are: "the black dot"; a battery figure ("81% BH") when the text
+    gives the same one ("the battery health is 81%")."""
     point_kinds = condition_said(". ".join(point["says"]))
     if any(backed(kind, point_kinds) for kind in condition_said(text)):
         return True
-    return any(not condition_said(part) and mostly_said(part, text) for part in point["says"])
+    figures = battery_worded(text)
+    # a battery figure is said only by the same figure: "the battery health is fine" doesn't say 80%
+    return any(not condition_said(part) and (bool(battery_worded(part) & figures) if battery_worded(part)
+                                             else mostly_said(part, text)) for part in point["says"])
 
 
 def key_words(text):
@@ -478,8 +667,8 @@ def backed(kind, listed):
     way round."""
     if kind in GOOD_LEVELS:
         return any(GOOD_LEVELS.index(level) >= GOOD_LEVELS.index(kind) for level in listed & set(GOOD_LEVELS))
-    if kind == "damage":
-        return bool(listed & FLAWS)
+    if kind == "damage":  # what's wrong with the item itself: not "eSIM only" or "untested"
+        return bool(listed & (MARKS | {"fault", "damage"}))
     if kind in MARKS:
         return bool({kind, "mark", "damage"} & listed) or (kind == "mark" and bool(listed & MARKS))
     return kind in listed
@@ -511,7 +700,7 @@ def check_condition_talk(message, listing_text, point, mention, kind="lower", of
             problems.append(f"the message names {quoted(point)} but doesn't say you don't mind it")
     elif stated or said_point:
         problems.append("the message talks about the condition, but this draft leaves that out")
-    listed = condition_said(listing_text)
+    listed = condition_said(esim_read(listing_text)(listing_text))
     unbacked = {claim for claim in stated if not backed(claim, listed)}
     said = WORKS_FOR.sub(" ", ". ".join(statements))
     if "yes" in promises_in(said).get("working", set()) and has_fault(listing_text) \

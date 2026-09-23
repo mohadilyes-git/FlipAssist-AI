@@ -23,7 +23,8 @@ import re
 from functools import lru_cache
 
 from flip.catalogue import load_catalogue, model_names
-from flip.checks import ASKS_YOU, HOLD, SIGN_OFF, ends_asking
+from flip.checks import ASKS_YOU, BATTERY_REPLACED, ESIM, HOLD, NO_LONGER, PROBLEM, SIGN_OFF, ends_asking
+from flip.offers import battery_figure
 from flip.prompts import offer_words
 from flip.style import opening
 
@@ -58,7 +59,7 @@ VERB_INSIDE = re.compile(r"\b(?:is|are|was|were|has|have|doesn'?t|don'?t|won'?t|
 # cushions worn", "Face ID not working" -> "the screen is cracked"
 STATES = (r"(?:slightly |a bit |very |quite |badly |really )?(?:cracked|smashed|shattered|damaged|broken|faded|worn|"
           r"scratched|chipped|dented|marked|scuffed|bent|stuck|loose|stiff|missing|faulty|dead|swollen|lifting|"
-          r"peeling|discoloured|discolored|yellowed|not working|not charging|not turning on)")
+          r"peeling|discoloured|discolored|yellowed|blank|not working|not charging|not turning on)")
 PART_STATE = re.compile(rf"^(?P<part>(?:[\w-]+ ){{0,3}}[\w-]+?) (?P<state>{STATES})$", re.IGNORECASE)
 # "Screen: cracked", "Back: small crack": a seller's label and what's wrong
 LABELLED = re.compile(r"^(?P<label>[A-Za-z][A-Za-z ]{1,24}?)\s*[:=]\s*(?P<value>\S.*)$")
@@ -238,6 +239,57 @@ def clean_flaw(part):
     return " ".join(tokens)
 
 
+# flaws said one way, whatever the seller's words (23 Sep): what the iPhone itself reports, a replaced battery,
+# eSIM only, an iOS limit, untested. Each is (what it says, how it's said); {0} is the first group the pattern takes
+PART = r"(battery|screen|display|camera)"
+SAID_AS = [
+    (re.compile(rf"\bunable to verify\b.*\bgenuine (?:apple )?{PART}", re.IGNORECASE), "that the iPhone can't verify the {0} is genuine"),
+    (re.compile(r"(?:\breplaced\b.*\bwith an? )?\bnon[- ]?(?:apple|genuine|original) batter(?:y|ies)\b", re.IGNORECASE),
+     "that the battery has been replaced with a non-Apple one"),
+    (re.compile(rf"\bnon[- ]?(?:apple|genuine|original) {PART}", re.IGNORECASE), "that it has a non-Apple {0}"),
+    (re.compile(rf"\b(?:{BATTERY_REPLACED})", re.IGNORECASE), "that the battery has been replaced"),
+    (re.compile(rf"\b{PART}\b.*\bunknown\b|\bunknown {PART}", re.IGNORECASE), "that the {0} shows as an unknown part"),
+    (ESIM, "that it's eSIM only"),
+    (re.compile(r"\bup to i ?os ?(\d+)", re.IGNORECASE), "that it only runs up to iOS {0}"),
+    (re.compile(r"\blast (?:i ?os |software )?(?:version|update)\b|\bno longer (?:gets?|getting|receives?|receiving|supported|"
+                r"updated)\b", re.IGNORECASE), "that it doesn't get iOS updates any more"),
+    (re.compile(r"\buntested\b|\bnot (?:been )?tested\b|\b(?:haven|hasn)['’]?t (?:been )?tested\b", re.IGNORECASE),
+     "that it's untested"),
+    (re.compile(r"\b(?:can['’]?t|cannot|can not|unable to) confirm\b(.*)$", re.IGNORECASE), "that you can't confirm{0}"),
+    (re.compile(r"\bonly charges? (?:wireless|on (?:an? |the )?wireless|with (?:an? |the )?wireless)", re.IGNORECASE),
+     "that it only charges wirelessly"),
+    (re.compile(r"\b(?:not sure|unsure|no idea|don['’]?t know|do not know)\b.*\bwrong\b", re.IGNORECASE),
+     "that you're not sure what's wrong with it"),
+    (re.compile(rf"\b(?:(?:would|will) )?{NO_LONGER}", re.IGNORECASE), "that it {whole}"),
+    (re.compile(r"\bdust\b.*\b(?:inside|into|in|under|behind)\b.*", re.IGNORECASE), "that {whole}"),
+    (re.compile(r"\b((?:front |back |rear |selfie |main |wide |ultra wide )?cameras?) (?:is |goes |went |just |shows? |"
+                r"showing |stays? )?black\b", re.IGNORECASE), "that the {0} shows black"),
+    (re.compile(r"\b(screen|display) (?:goes|went|turns|turned|stays|stayed|going|turning) black\b", re.IGNORECASE),
+     "that the {0} goes black"),
+]
+
+
+MIXED = "mixed"  # one of SAID_AS with something else wrong: no plain wording, so the AI (or you) words it
+
+
+def said_as(part):
+    """One of the flaws said one way (SAID_AS), when it's all the quote says:
+    "Battery changed 4 months ago" -> "that the battery has been replaced",
+    "eSIM only" -> "that it's eSIM only". MIXED for one that says more
+    ("eSIM only and a small scratch"), None for any other quote."""
+    for pattern, said in SAID_AS:
+        found = pattern.search(part)
+        if not found:
+            continue
+        rest = part[:found.start()] + " " + part[found.end():]
+        if PROBLEM.search(rest):
+            return MIXED
+        whole = re.sub(r"^(?:as|because|since|so)\s+", "", found.group().strip(" .,;:!"), flags=re.IGNORECASE)
+        group = next((g for g in found.groups() if g), "") if found.groups() else ""
+        return said.format(group.lower().rstrip(" .,;:!") if group else "", whole=whole)
+    return None
+
+
 def flaw_phrase(part):
     """One flaw in the seller's words, to go after "given", "because" or "I
     don't mind": 'the broken back', 'that it doesn't charge', 'that the
@@ -246,6 +298,12 @@ def flaw_phrase(part):
     sentence: the seller's own story ("I dropped it"), a denied fault ("not
     spares or repairs"), nothing left that says what's wrong, or more words
     than a reason should have."""
+    figure = battery_figure(part)
+    if figure:  # "Battery Health: 80%", "81% BH": as AlertFlip says it
+        return f"that the battery health is {figure}%"
+    said = said_as(part)
+    if said:
+        return None if said is MIXED else said
     part = clean_flaw(part)
     if not part or FIRST_PERSON.search(part) or len(part.split()) > MAX_FLAW:
         return None

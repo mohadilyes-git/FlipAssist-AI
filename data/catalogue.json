@@ -480,6 +480,7 @@
     {
       "id": "iphone-air",
       "category": "phones",
+      "esim_only": true,
       "brand": "Apple",
       "model": "iPhone Air",
       "aliases": ["iphone air", "iphone 17 air", "ip air", "ip 17 air"],

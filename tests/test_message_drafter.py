@@ -317,6 +317,24 @@ def test_with_no_past_messages_a_lower_offer_gives_the_low_battery_as_its_reason
     assert draft_message(listing, style_card(PAST), kind="lower", offer=23500)["mentioned"] is False
 
 
+def test_a_replaced_battery_is_the_reason_whoever_replaced_it():
+    """The user's rule (23 Sep): a battery that's been replaced is always a flaw, even by Apple. Made up here."""
+    listing = {"id": "r1", "title": "iPhone 12 64GB Black", "asking_price": "200", "marketplace": "facebook",
+               "description": "Battery replaced by Apple last year, works perfectly."}
+    assert draft_message(listing, kind="lower", offer=18000)["answer"]["message"] == \
+        "Hi, would you take £180 cash for it? I'm offering that because the battery has been replaced. " \
+        "I can come and collect."
+
+
+def test_a_lower_offer_gives_the_flaw_and_the_low_battery_together():
+    """A low battery is a flaw like the others (the user's line, 23 Sep: 85% or under), made up here."""
+    listing = {"id": "c79", "title": "iPhone 13 128GB Midnight", "asking_price": "250", "marketplace": "facebook",
+               "description": "Cracked back, works fine.\nBattery health 79%"}
+    assert draft_message(listing, kind="lower", offer=23500)["answer"]["message"] == \
+        "Hi, would you take £235 cash for it? I'm offering that because of the cracked back and because the " \
+        "battery health is 79%. I can come and collect."
+
+
 def test_messages_that_vary_are_written_by_the_ai():
     local = FakeModel("gemma3:4b", WITH_FLAW)
     result = draft_message(BROKEN, style_card(TALKER), local=local)
@@ -624,8 +642,8 @@ def test_gemmas_short_draft_of_31_oct_no_longer_passes():
     assert result["status"] == "needs you"
     # since 14 Sep code adds the reason and the cash-and-collect sentence; it still doesn't open with "Hi"
     assert [a["problems"] for a in result["attempts"]] == [['the message doesn\'t open with "Hi"']] * 2
-    # and the seller's "no scratches, scuffs or visible damage" is no flaw
-    assert result["reading"]["flaws"] == [] and result["point"] == ["battery health 80%"]
+    # and the seller's "no scratches, scuffs or visible damage" is no flaw; the 80% battery is (23 Sep: 85% or under)
+    assert result["reading"]["flaws"] == ["Battery Health: 80%"] and result["point"] == ["battery health 80%"]
 
 
 def test_what_you_removed_from_your_style_is_never_shown_to_the_ai():

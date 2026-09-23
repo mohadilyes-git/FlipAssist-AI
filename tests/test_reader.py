@@ -299,7 +299,8 @@ def test_a_flaw_the_seller_denies_is_dropped_and_the_reading_stays_on_this_mac()
     gemma = {"flaws": ["no scratches"], "pickup": "", "no_offers": ""}
     api = FakeModel("claude-haiku-5-5")  # it has no answers: asking it would fail the test
     reading = read_listing_with_ai(LIKE_NEW, FakeModel("gemma3:4b", gemma), api)
-    assert (reading["read_by"], reading["flaws"], api.asked) == ("gemma3:4b", [], [])
+    # "no scratches" is gone; the 80% battery is code's own flaw (85% or under)
+    assert (reading["read_by"], reading["flaws"], api.asked) == ("gemma3:4b", ["80% battery health"], [])
 
 
 def test_a_made_up_flaw_still_fails_the_reading():
@@ -359,3 +360,128 @@ EMPTY = {"flaws": [], "pickup": "", "no_offers": ""}
 def test_no_other_marks_and_other_phones_add_no_flaw(description, flaws):
     """Rule 3 adds code's own flaws even when the AI read none: these were two of them."""
     assert reading_from(EMPTY, f"iPhone 13 128GB\n{description}", "gemma")["flaws"] == flaws
+
+
+# ── the user's labels (23 Sep): a battery at 85% or under, and words the list was missing (made-up listings) ──
+
+@pytest.mark.parametrize("line, flaw", [
+    ("Battery health 82%", "Battery health 82%"),
+    ("82% battery health", "82% battery health"),
+    ("Battery health -78%", "Battery health -78%"),
+    ("Battery is 76%", "Battery is 76%"),
+    ("battery health is at 85% but works well", "battery health is at 85%"),
+    ("Battery health is 81 percent", "Battery health is 81 percent"),
+    ("Battery Health: 72% Maximum Capacity", "Battery Health: 72%"),
+    ("Battery health\n77%.", "Battery health 77%"),  # the figure on the line under its label
+])
+def test_a_battery_at_85_or_under_is_a_flaw_in_the_sellers_words(line, flaw):
+    text = f"iPhone 12 64GB Blue\n{line}"
+    assert code_reading(text)["flaws"] == [flaw]
+    assert flaws_in(flaw, text) == [flaw]  # and when the AI quotes it
+    assert code_reading("iPhone 13 128GB 81% BH unlocked + case")["flaws"] == ["81% BH"]
+
+
+@pytest.mark.parametrize("line", [
+    "Battery health 86%", "Battery health 100%", "Battery health was 84% in the summer",
+    "Battery health over 85%", "85%+ battery health", "79% charged in the photos",
+    "only 70 battery cycles, battery health 95%", "Screen 80% bright",
+])
+def test_a_battery_figure_that_isnt_its_health_now_is_no_flaw(line):
+    assert code_reading(f"iPhone 12 64GB Blue\n{line}")["flaws"] == []
+
+
+@pytest.mark.parametrize("line, code_too", [
+    ("One morning it would no longer turn on", True), ("Not sure what's wrong with it", True),
+    ("A small nick on the frame", True), ("Two nicks on the back", True), ("Sold untested", True),
+    ("Can't confirm it charges", True), ("It only charges wirelessly", True), ("Front camera is blank", True),
+    ("Unable to verify this iPhone has a genuine Apple display", True), ("Fitted with a non-Apple screen", True),
+    ("Battery shows unknown part", True), ("e-SIM only", True), ("Only runs up to iOS 16", True),
+    # code has no word for a dot, so only the AI reads it: a sentence of one flaw can run to 15 words
+    ("There is a tiny white dot near the top left corner of the screen", False),
+    ("The battery can easily be replaced with a new one", False),  # no "if" makes it a choice
+])
+def test_what_the_word_list_was_missing_is_a_flaw(line, code_too):
+    text = f"iPhone 12 64GB Blue\n{line}"
+    assert flaws_in(line, text) == [line]
+    assert code_reading(text)["flaws"] == ([line] if code_too else [])
+
+
+@pytest.mark.parametrize("line", [
+    "No parts have ever been replaced", "Nothing has been repaired", "6.1-inch 2556x1179-pixel display",
+    "48 megapixel main camera", "Swapped from my Google Pixel 8", "Back glass can be replaced if you want",
+    "The screen protector has a few scratches", "Cracked screen protector, easy to peel off", "In great nick",
+    "Hi, Nick here, message me", "Dual eSIM and nano SIM", "Updated up to iOS 26",
+])
+def test_what_says_nothing_is_wrong_with_the_phone_is_no_flaw(line):
+    text = f"iPhone 12 64GB Blue\n{line}"
+    assert flaws_in(line, text) == [] and code_reading(text)["flaws"] == []
+
+
+def test_a_mark_on_the_screen_under_the_protector_is_the_phones():
+    text = "iPhone 12 64GB Blue\nSmall crack on the screen under the protector"
+    assert flaws_in("Small crack on the screen under the protector", text) == \
+        ["Small crack on the screen under the protector"]
+
+
+def test_esim_only_is_a_flaw_except_on_a_phone_that_only_comes_that_way():
+    us = "iPhone 15 Pro 128GB Black, eSIM only"
+    assert code_reading(us)["flaws"] == ["eSIM only"] and flaws_in("eSIM only", us) == ["eSIM only"]
+    air = "iPhone Air 256GB Sky Blue, eSIM only"  # every iPhone Air is
+    assert code_reading(air)["flaws"] == [] and flaws_in("eSIM only", air) == []
+
+
+
+# ── the user's labels, round 2 (23 Sep): a replaced battery is always a flaw, more missed words, and what only
+# comes with it or only points back at a flaw is none (made-up listings, the explainer's look-alikes) ───────────
+
+@pytest.mark.parametrize("line", [
+    "Battery changed 3 months ago", "New battery fitted last year", "Replacement battery from Apple",
+    "Battery replaced by Apple in 2025", "Battery replaced at 81%", "Battery has been swapped", "Battery is brand new",
+    "Light signs of use on the frame", "Rear camera needs a clean", "Dust got inside the lens",
+    "Runs the last version for this model", "No longer gets iOS updates", "Rear camera shows black",
+    "A few dead pixels in the corner", "Screen has been replaced", "It has a black dot on the screen",
+])
+def test_round_two_flaws(line):
+    text = f"iPhone 12 64GB Blue\n{line}"
+    assert flaws_in(line, text) == [line]
+
+
+@pytest.mark.parametrize("line", [
+    "Original Apple battery", "Battery health 100%", "Battery lasts all day", "Healthy battery", "Battery like new",
+    "Battery never replaced", "Battery has never been changed", "No signs of use", "Barely any signs of use",
+    "Water and dust resistant", "IP68 water and dust resistance", "Updated to iOS 26", "iOS 18.2 installed",
+    "iOS 27 downloaded", "Black Titanium, camera perfect", "Camera takes great photos", "1179-pixel-wide display",
+    "Google Pixel 9 Pro in the photos", "Physical SIM and eSIM", "SIM tray and e-SIM", "Turns on fine",
+    "MagSafe wireless charging", "Genuine Apple iPhone", "Fully tested", "The phone case is cracked",
+    "Box has a small dent", "Charger cable is a bit worn", "Cracked screen protector, which can be replaced",
+    "The protector is scratched and cracked at one corner",
+])
+def test_round_two_no_flaws(line):
+    text = f"iPhone 12 64GB Blue\n{line}"
+    assert flaws_in(line, text) == [] and code_reading(text)["flaws"] == []
+
+
+@pytest.mark.parametrize("text, flaws", [
+    ("iPhone 12 64GB\nNo charger and the hinge is a bit stiff", ["No charger and the hinge is a bit stiff"]),
+    ("iPhone 12 64GB\nComes with box and has a small dent", ["Comes with box and has a small dent"]),
+    ("Galaxy S23 128GB\nBack cover cracked", ["Back cover cracked"]),  # a phone's back, not a case
+    ("AirPods Pro 2\nCharging case has a few scratches", ["Charging case has a few scratches"]),  # theirs
+    # a case that made the marks: they're the phone's
+    ("iPhone 12 64GB\nFaint marks from being in a case", ["Faint marks from being in a case"]),
+    ("iPhone 12 64GB\nJust a couple of small marks from cases", ["a couple of small marks from cases"]),
+])
+def test_what_comes_with_it_is_set_aside_but_the_items_own_flaws_stay(text, flaws):
+    line = text.split("\n")[1]
+    assert flaws_in(line, text) == flaws
+
+
+def test_a_part_that_only_points_back_at_a_flaw_is_no_flaw_of_its_own():
+    text = ("iPhone 13 Pro 128GB\nCrack on the camera lens.\nCamera still works and the crack does not affect photos.\n"
+            "Lens can be replaced if desired.\nPrice reflects the lens damage and battery health.\nBattery health 84%")
+    assert code_reading(text)["flaws"] == ["Crack on the camera lens", "Battery health 84%"]
+    for quote in ("the crack does not affect photos", "Price reflects the lens damage and battery health"):
+        assert flaws_in(quote, text) == []
+    # a flaw said only there is still the listing's
+    alone = "iPhone 13 Pro 128GB\nPrice reflects the cracked back"
+    assert flaws_in("Price reflects the cracked back", alone) == ["Price reflects the cracked back"]
+

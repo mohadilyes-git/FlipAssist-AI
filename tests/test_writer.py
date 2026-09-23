@@ -83,6 +83,22 @@ def test_the_reason_sentence_says_each_flaw_the_way_it_reads():
         "Hi, would you take £90 for it? I'm offering that because it's not charging."
     # the seller's own story has no sentence here: the AI writes instead
     assert write_offer({}, "lower", 9000, {"about": "flaw", "says": ["I dropped it and cracked the back"]}) is None
+    # the flaws the user's labels added (23 Sep), each said one way; with another flaw in the same words, the AI words it
+    said = {"Battery changed 4 months ago": "the battery has been replaced",
+            "eSIM only": "it's eSIM only", "Sold untested": "it's untested",
+            "Runs up to iOS 15": "it only runs up to iOS 15", "Only charges wireless": "it only charges wirelessly",
+            "Front camera blank": "the front camera is blank", "Camera unknown": "the camera shows as an unknown part",
+            "Unable to verify this iPhone has a genuine Apple battery": "the iPhone can't verify the battery is genuine",
+            "Can't confirm it charges": "you can't confirm it charges",
+            "It would no longer turn on": "it would no longer turn on"}
+    for flaw, reason in said.items():
+        assert write_offer({}, "lower", 9000, {"about": "flaw", "says": [flaw]}) == \
+            f"Hi, would you take £90 for it? I'm offering that because {reason}."
+    assert write_offer({}, "lower", 9000, {"about": "flaw", "says": ["Battery replaced and back cracked"]}) is None
+    # a low battery among the flaws (23 Sep): as AlertFlip says it, whatever the seller's words
+    assert write_offer({}, "lower", 9000, {"about": "flaw", "says": ["Cracked back", "Battery Health: 79%"]}) == \
+        "Hi, would you take £90 for it? I'm offering that because of the cracked back and because the battery " \
+        "health is 79%."
 
 
 def test_the_pickup_place_goes_in_only_where_you_say_youll_collect():

@@ -332,3 +332,16 @@ def test_a_long_part_is_cut_to_the_flaw_without_the_word_that_joins_it():
         ["cracked the back glass"]
     assert read_listing("Selling as upgraded, has a small crack on the back camera lens")["flaws"] == \
         ["small crack on the back camera lens"]
+
+
+def test_a_low_battery_is_a_flaw_like_the_others():
+    """The user's line (23 Sep): 85% or under is a flaw. With another flaw both are the reason, the title's figure
+    and the description's are one flaw, and the battery alone is said as AlertFlip says it."""
+    text = "iPhone 12 64GB 79% BH. Cracked back. Battery health 79%."
+    assert read_listing(text)["flaws"] == ["79% BH", "Cracked back", "Battery health 79%"]
+    assert point_for("lower", text) == {"about": "flaw", "says": ["Battery health 79%", "Cracked back"]}
+    assert point_for("lower", "iPhone 12 64GB. Battery health 79%.") == \
+        {"about": "battery", "says": ["battery health 79%"], "battery": "79"}
+    # "81% BH" is said by the same figure in a message's own words
+    assert says_point("Would you take £150 as the battery health is 81%?", {"about": "flaw", "says": ["81% BH"]})
+    assert not says_point("Would you take £150 as the battery health is 91%?", {"about": "flaw", "says": ["81% BH"]})

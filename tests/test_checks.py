@@ -1019,3 +1019,9 @@ def test_good_condition_given_as_the_reason_to_pay_more_is_no_compliment():
     assert check_message_manner("Hi, I can pay £265, as it's in great condition.") == [
         'the message compliments the item: "great condition"']
     assert check_message_manner("Hi, I can pay £265, as it's in great condition.", praise=True) == []
+
+
+def test_a_phone_that_no_longer_turns_on_has_a_fault():
+    assert has_fault("Woke up one day and it no longer turns on")
+    assert has_fault("no longer holds a charge")
+    assert not has_fault("I no longer play it, so it's up for sale")  # not every job: this one's yours
