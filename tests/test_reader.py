@@ -160,11 +160,15 @@ def test_gemmas_reading_is_used_when_it_passes():
 
 
 def test_a_reading_that_fails_gets_one_try_on_haiku():
-    wrong = {**GOOD_READ, "no_offers": "Cracked back"}  # in the listing, but not saying "no offers"
+    wrong = {**GOOD_READ, "flaws": ["Cracked screen"]}  # the listing says a cracked back: made up
     reading = read_listing_with_ai(LISTING, FakeModel("gemma3:4b", wrong),
                                    FakeModel("claude-haiku-5-5", GOOD_READ))
     assert reading["read_by"] == "claude-haiku-5-5"
-    assert reading["attempts"][0]["problems"] == ["\"Cracked back\" doesn't say the seller won't take offers"]
+    assert reading["attempts"][0]["problems"] == ["the reading quotes words that aren't in the listing: 'Cracked screen'"]
+    # a "no offers" in the listing that doesn't say it is only dropped (23 Sep): the reading stays Gemma's
+    unsaid = {**GOOD_READ, "no_offers": "Cracked back"}
+    reading = read_listing_with_ai(LISTING, FakeModel("gemma3:4b", unsaid), FakeModel("claude-haiku-5-5"))
+    assert (reading["read_by"], reading["no_offers"]) == ("gemma3:4b", "Price is firm")
 
 
 def test_with_no_reading_that_passes_code_reads_it_alone():
@@ -485,3 +489,42 @@ def test_a_part_that_only_points_back_at_a_flaw_is_no_flaw_of_its_own():
     alone = "iPhone 13 Pro 128GB\nPrice reflects the cracked back"
     assert flaws_in("Price reflects the cracked back", alone) == ["Price reflects the cracked back"]
 
+
+# ── the 82 labelled listings through the whole reading (23 Sep): what failed Gemma's reading for nothing ────────
+
+@pytest.mark.parametrize("offers", ["Open to reasonable offers", "£550 or nearest offer", "Asking £350 ono", "No swaps",
+                                    "Send offers, price is negotiable", "Serious buyers only, no silly offers"])
+def test_a_no_offers_that_doesnt_say_it_is_dropped_and_gemmas_flaws_stay(offers):
+    listing = {"title": "iPhone 13 128GB", "description": f"Cracked back.\n{offers}"}
+    gemma = {"flaws": ["Cracked back"], "pickup": "", "no_offers": offers}
+    api = FakeModel("claude-haiku-5-5")  # it has no answers: asking it would fail the test
+    reading = read_listing_with_ai(listing, FakeModel("gemma3:4b", gemma), api)
+    assert (reading["read_by"], reading["flaws"], reading["no_offers"], api.asked) == \
+        ("gemma3:4b", ["Cracked back"], "", [])
+
+
+@pytest.mark.parametrize("offers", ["No offers", "Price is firm", "Price is firm, no offers"])
+def test_a_real_no_offers_is_still_read(offers):
+    listing = {"title": "iPhone 13 128GB", "description": f"Cracked back.\n{offers}"}
+    gemma = {"flaws": ["Cracked back"], "pickup": "", "no_offers": offers}
+    reading = read_listing_with_ai(listing, FakeModel("gemma3:4b", gemma), FakeModel("claude-haiku-5-5"))
+    assert (reading["read_by"], reading["no_offers"]) == ("gemma3:4b", offers)
+
+
+def test_a_quote_with_the_sellers_typos_put_right_is_the_sellers_words():
+    listing = {"title": "iPhone 12 64GB", "description": "Small scratich on the top corner as shown in the photos. "
+               "Light stcratches to the back."}
+    gemma = {"flaws": ["Small scratch on the top corner as shown in the photos", "Light scratches to the back"],
+             "pickup": "", "no_offers": ""}
+    api = FakeModel("claude-haiku-5-5")  # it has no answers: asking it would fail the test
+    reading = read_listing_with_ai(listing, FakeModel("gemma3:4b", gemma), api)
+    assert reading["read_by"] == "gemma3:4b" and api.asked == []
+    assert reading["flaws"] == ["Small scratich on the top corner as shown in the photos", "Light stcratches to the back"]
+
+
+def test_a_word_the_listing_doesnt_have_isnt_a_typo():
+    listing = {"title": "iPhone 12 64GB", "description": "Small scratich on the top corner."}
+    gemma = {"flaws": ["Small crack on the top corner"], "pickup": "", "no_offers": ""}  # "crack" is made up
+    haiku = {"flaws": ["Small scratich on the top corner"], "pickup": "", "no_offers": ""}
+    reading = read_listing_with_ai(listing, FakeModel("gemma3:4b", gemma), FakeModel("claude-haiku-5-5", haiku))
+    assert reading["read_by"] == "claude-haiku-5-5"

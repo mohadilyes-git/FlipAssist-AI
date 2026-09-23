@@ -8,7 +8,9 @@ can make things up, so code checks everything it reads:
 
 1. Word for word: every quote must be in the listing, capitals, punctuation,
    apostrophes and hyphens aside ("doesnt" is "doesn't", "Joy-Con" is
-   "Joy Con"). A flaw it can't quote is a flaw it made up.
+   "Joy Con"). A flaw it can't quote is a flaw it made up. A quote whose
+   only difference is the seller's typos put right ("Small scratch" for
+   "Small scratich") is put back to the seller's words.
 2. A flaw says something is wrong in so many words (flip.checks.PROBLEM:
    "crack", "dot", "stiff", "drifts", "not working"...), and the seller
    doesn't deny it in the same clause ("no black spots", "there aren't any
@@ -38,7 +40,8 @@ import re
 
 from flip.attempts import try_models
 from flip.catalogue import contains, find_phrase, words
-from flip.checks import CONDITION_PROMISES, ESIM, MARKS, NEGATIONS, NOT_A_FLAW, PROBLEM, answered, denied_by, slipped
+from flip.checks import (CONDITION_PROMISES, ESIM, MARKS, NEGATIONS, NOT_A_FLAW, PROBLEM, answered, denied_by,
+                         most_slips, slipped, slips)
 from flip.offers import (FLAWS, PARTS, backed, battery_apart, condition_said, esim_everywhere, figures_joined,
                          low_battery, read_listing, sentence_parts, this_items_parts)
 from flip.prompts import READING_SCHEMA, READING_SYSTEM, reading_prompt
@@ -180,6 +183,31 @@ def in_listing(quote, text):
         if quoted and contains(split(text), quoted):
             return True
     return False
+
+
+def as_written(quote, text):
+    """A quote put back to the listing's own words when the model put the
+    seller's typos right: "Small scratch on the corner" for the listing's
+    "Small scratich on the corner" is the listing's. The same words in the
+    same order, each the seller's or a slip of it (flip.checks.slips, the
+    first letter right). Any other quote stays as it is, and fails rule 1
+    if it isn't in the listing: a word the listing doesn't have isn't a typo."""
+    if not isinstance(quote, str) or not quote.strip() or in_listing(quote, text):
+        return quote
+    said = plain_words(quote)
+    tokens = [(word, m.start(), m.end()) for m in re.finditer(r"\S+", text) for word in plain_words(m.group())]
+    for i in range(len(tokens) - len(said) + 1):
+        if all(typed_as(meant, tokens[i + k][0]) for k, meant in enumerate(said)):
+            return text[tokens[i][1]:tokens[i + len(said) - 1][2]].strip(" .,;:!?()*•-–—")
+    return quote
+
+
+def typed_as(meant, typed):
+    """Whether the seller's word is the model's, or a slip of it: "stcratches" for "scratches"."""
+    if meant == typed:
+        return True
+    most = most_slips(meant)
+    return bool(most) and typed[:1] == meant[:1] and slips(typed[1:], meant[1:], most) <= most
 
 
 def parts_of(text):
@@ -515,17 +543,27 @@ def tidied(reply, text):
        flaw, the example "Leeds LS6" as the pickup place;
     2. a flaw the seller says isn't so: "no scratches" (a small model lists
        every condition word it sees).
+    3. a "no offers" that's the seller's words but doesn't say it: "Open to
+       reasonable offers", "£550 or nearest offer" (code reads no offers
+       for itself instead, as with none).
     Each is dropped and the rest is checked as usual: failing the whole
     reading for it paid the API to read the listing again. A quote that's in
-    the listing too stays; anything else wrong still fails the reading."""
+    the listing too stays; anything else wrong still fails the reading.
+    First, a quote with the seller's typos put right goes back to the
+    seller's words (as_written)."""
     answer = reply.answer
     echo = lambda quote: isinstance(quote, str) and bool(quote.strip()) and in_listing(quote, READING_SYSTEM) \
         and not in_listing(quote, text)
     if isinstance(answer, dict):
         if isinstance(answer.get("flaws"), list):
+            answer = {**answer, "flaws": [as_written(f, text) for f in answer["flaws"]]}
             answer = {**answer, "flaws": [f for f in answer["flaws"]
                                           if not echo(f) and not (isinstance(f, str) and denied(f, text))]}
+        answer = {**answer, **{key: as_written(answer[key], text) for key in ("pickup", "no_offers") if key in answer}}
         answer = {**answer, **{key: "" for key in ("pickup", "no_offers") if echo(answer.get(key))}}
+        said = answer.get("no_offers")
+        if isinstance(said, str) and said.strip() and in_listing(said, text) and not no_offers_ok(said, text):
+            answer = {**answer, "no_offers": ""}
         reply.answer = answer
     return reply
 
