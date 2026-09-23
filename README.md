@@ -65,15 +65,15 @@ Drafts eBay listings and offer messages for a reseller. Plain code does everythi
     - The asking price.
     - More: asking plus 5%, rounded up to a tidy number and at least one step over.
   - **The listing is read by AI, held to the seller's own words by code.** Gemma reads the flaws, where to collect and whether the seller takes offers; Haiku gets one try when Gemma's reading fails a check. Code then:
-    - keeps only quotes that are in the listing word for word (capitals, punctuation, apostrophes and hyphens aside), so a flaw can't be made up;
-    - counts a quote as a flaw only if it says what's wrong in so many words ("crack", "dot", "stiff", "drifts", "not working"...) and the seller doesn't deny it in the same clause. "Black spots" from "*No* black spots on the screen", "there aren't any dots" and "screen burn: none" fail the reading. A "no" before a list that ends in "or" denies every item: "no scratches, scuffs or visible damage" has no flaw, while "No charger, cracked screen" still has a cracked screen. Facts ("battery health 90%"), praise ("screen is perfect") and asides ("see pics") aren't flaws, and a seller's own story is cut to the flaw ("I dropped it and cracked the back" becomes "cracked the back");
+    - keeps only quotes that are in the listing word for word (capitals, punctuation, apostrophes and hyphens aside), so a flaw can't be made up. A quote whose only difference is the seller's typos put right ("Small scratch" for the listing's "Small scratich") goes back to the seller's words; a word the listing doesn't have still fails;
+    - counts a quote as a flaw only if it says what's wrong in so many words ("crack", "dot", "stiff", "drifts", "not working"...) and the seller doesn't deny it in the same clause. "Black spots" from "*No* black spots on the screen", "there aren't any dots" and "screen burn: none" fail the reading. A "no" before a list that ends in "or" denies every item: "no scratches, scuffs or visible damage" has no flaw, while "No charger, cracked screen" still has a cracked screen. Facts ("battery health 90%"), praise ("screen is perfect") and asides ("see pics") aren't flaws, and nor are marks on what comes with the phone (a screen protector, a case, the box), or a part that only points back at a flaw said elsewhere ("the crack does not affect photos", "price reflects the lens damage"). A battery health of 85% or less is a flaw (the reseller's line), and so is a battery that's been replaced, by Apple or anyone (the reseller's rule). So are "eSIM only" (except on the iPhone Air, which only comes that way), "untested", a part the iPhone can't verify and "runs up to iOS 15", each a kind of its own, so a message can't call an untested phone faulty. A seller's own story is cut to the flaw ("I dropped it and cracked the back" becomes "cracked the back");
     - keeps every flaw code finds by itself, judged the same way: AI can add a flaw, never take one away. The more precise words win ("cracked back" over "Good condition apart from cracked back");
-    - takes "no offers" only in words that say it ("price is firm"), and never from a listing that takes offers ("open to offers", "offers over £400") or only limits them ("no offers under £250").
+    - takes "no offers" only in words that say it ("price is firm"), and never from a listing that takes offers ("open to offers", "offers over £400") or only limits them ("no offers under £250"). A "no offers" Gemma gets wrong ("open to reasonable offers") is dropped and code reads it instead: Gemma's flaws still count.
 
     With no model, or none that passes, code reads the listing alone. Sellers' words code has no list for ("black dot on the screen", "hinge is stiff") are then missed.
   - **"No offers" never changes the offer.** The reseller still picks lower, asking or more; the draft carries a note with the seller's words to show under the message.
   - What's worth saying with each offer, in the seller's own words:
-    - a flaw ("broken back") is the reason for a lower offer, unless the seller says it's already priced in. With no flaw, a phone's battery health of 85% or less is ("I'm offering that because the battery health is 80%"), read by the same number reader as the reseller's notes;
+    - a flaw ("broken back") is the reason for a lower offer, unless the seller says it's already priced in. A battery health of 85% or less is one of the flaws, read by the same number reader as the reseller's notes. On its own it's said the way AlertFlip says it ("I'm offering that because the battery health is 80%"); with another flaw, both are given ("because of the cracked back and because the battery health is 79%");
     - at the asking price, the message says the reseller doesn't mind it;
     - good condition with no flaw is the reason for paying more.
   - If the reseller's past messages usually mention condition, that point goes in by itself. Otherwise the draft leaves it out and asks: *The listing says "Broken back". Mention it as the reason for your offer?* With no past messages it's AlertFlip's way: a lower offer gives its reason, and the others ask.
@@ -133,6 +133,26 @@ So code writes unless the reseller's messages vary. All three judges agreed on t
 | "No offers" | the usual words only | 1 of 1, never wrong |
 
 Without the checks, Gemma claimed flaws on 2 clean listings and said "no offers" on 21 that never did. The reader needed Haiku once in 24 tries, for 0.005p in total.
+
+**Reading flaws on real listings, labelled by the reseller (23 Sep).** The reseller marked each of 652 sentences from 82 real Facebook listings as a flaw or not; with their rule that a replaced battery is a flaw, 102 were flaws. Each sentence was then read as if the AI had quoted it whole, together with code's own reading of its listing:
+
+| | Flaws found (of 102) | Wrong flaws (of 550) |
+|---|---|---|
+| Code on 14 Sep | 58 | 6 |
+| Code now | 99 | 0 |
+
+A MiniLM checker trained on the same labels found 74 of 99 (before the battery-replacement rule) with 25 wrong. It can't compare numbers: a 79% battery and a 93% one look alike to it. So it isn't built. What made the difference:
+- a battery health of 85% or less is a flaw. That's the reseller's line, read from the labels: every figure of 85 or under was a flaw, and every one of 86 and up wasn't. Only the battery's health now counts, not a charge level ("battery level 60%"), the past ("was 84%"), a bound ("over 85%"), a rating ("10/10"), a price or a model's number;
+- a replaced battery is a flaw, whoever replaced it;
+- words the list was missing ("no longer turns on", "untested", "only charges wirelessly", "camera unknown", "eSIM only", "runs up to iOS 15", "dust inside the camera", "light signs of use"...);
+- a sentence about one flaw can run to 15 words, not 12;
+- no flaw from a denial ("no parts have ever been replaced"), a spec ("2556x1179-pixel display"), a choice ("can be replaced if desired"), what comes with the phone ("the protector itself is scratched") or a part that points back at a flaw said elsewhere.
+
+The three left: a screen protector's cracks the reseller labelled a flaw (they later decided a protector's marks aren't), iOS's own doubt about a battery reading, and a figure on its own line that code does read, as "Battery health 79%", but sentence by sentence can't credit. The 85% line comes from the same labels, the listings were picked for being interesting, and one person labelled them all. The labelled listings stay on this Mac.
+
+Through the whole reading, Gemma's reading failed the checks on 18 of the 82 listings, and each would have paid Haiku to read it again. 16 were a "no offers" Gemma got wrong and 2 a seller's typo it put right. With both fixed, 17 of the 18 pass on this Mac; the last is two quotes Gemma reworded, still refused.
+
+**Breaking the 23 Sep changes.** Four test agents wrote 2,417 cases against the battery rule, the new flaw words, the guards against wrong flaws and how it all fits together, and a second agent re-ran every failure: 63 confirmed. They included a model's number read as the battery ("iPhone 13 battery is good" gave "the battery health is 13%"), a rating, a date or a charge level read the same way ("battery 10/10", "Battery level 60% in photos"), "I no longer work from home" read as a fault in the reseller's own notes, and a scratch under the screen protector dropped as the protector's. All 63 are fixed and kept as tests (`tests/test_flaw_cases.py`).
 
 **The AI's messages before the reseller has a style (14 Sep).** 42 messages (14 made-up listings, each kind of offer), Gemma 3 4B on this Mac: 10 passed the checks first time before these changes, 39 after, and 3 would go to Haiku (32 before). Asking about iCloud went from 4 to 0. The changes were first tried outside the app by the explainer session, then measured again in the app as built.
 
