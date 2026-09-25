@@ -468,7 +468,7 @@ IOS_LIMIT = (r"(?:runs?|running|goes|go|works?|only(?: (?:runs?|goes|works?))?) 
              r"does not) (?:be )?(?:update[ds]?|upgrade[ds]?|go) (?:past|beyond|above|higher than|further than) i ?os ?\d+|"
              r"(?:can )?only (?:be )?(?:update[ds]?|upgrade[ds]?|go) (?:up )?to i ?os ?\d+|(?:the )?last (?:i ?os |software )?"
              r"(?:version|update) (?:for|available for|supported on|on) (?:this|the|that|it)|no longer (?:gets?|getting|"
-             r"receives?|receiving) (?:i ?os |software )?updates|no longer (?:supported|updated)|i ?os ?(?:[1-9]|1[0-5])(?:\.\d+)*")
+             r"receives?|receiving) (?:i ?os |software )?updates|no longer (?:supported|updated)|i ?os ?(?:[1-9]|1[0-5])(?:\.\d+)*(?![.\d])(?!\s*(?:in\b|inch|\x22|\u201d))")
 # dust inside, where no cloth can reach: "the front camera needs cleaning, as dust has gotten inside"
 DUST = (r"dust (?:has |have |had |is |s )?(?:(?:got|gotten|gone|come|crept|trapped|stuck) )?(?:inside|into|"
         r"in (?:the |its )?(?:camera|lens|screen|phone)|under (?:the )?(?:screen|glass|lens)|"

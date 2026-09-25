@@ -299,7 +299,8 @@ def battery_now(part):
             continue
         rough = ROUGHLY_BEFORE.search(before)
         start = [cue.start() for cue in cues if cue.end() <= at.start()]
-        end = [cue.end() for cue in cues if cue.start() >= at.end() and not lower[at.end():cue.start()].strip(" %")]
+        end = [cue.end() for cue in cues if cue.start() >= at.end()  # "79% Maximum Battery Capacity", "87% original battery"
+               and lower[at.end():cue.start()].strip(" %") in ("", "max", "maximum", "original", "genuine", "apple", "oem")]
         if not start and not end:
             continue  # its battery word is somewhere else
         found.append((value, start[-1] if start else at.start(), at.end() if start else end[0],

@@ -310,3 +310,13 @@ def test_gemmas_own_instruction_copied_into_a_flaw_is_taken_off():
                           ["the back glass is cracked across the logo"])]:
         reply = Reply("gemma3:4b", answer={"flaws": [copied], "pickup": "", "no_offers": ""})
         assert tidied(reply, text).answer["flaws"] == kept
+
+
+@pytest.mark.parametrize("line, flaws", [
+    ("Iphone 12 White | 64Gb | 79% Maximum Battery Capacity", ["79% Maximum Battery Capacity"]),  # "Maximum" between
+    ("92% Maximum Battery Capacity", []),
+    ("Apple iPhone SE 64GB Unlocked iOS 4.7in 8MP", []),  # a 4.7in screen, not iOS 4
+    ("On iOS 15.8, the last it gets", ["On iOS 15.8"]),
+])
+def test_a_figure_read_whole(line, flaws):
+    assert code_reading(f"{TITLE}\n{line}")["flaws"] == flaws
