@@ -213,3 +213,100 @@ def test_on_an_air_a_flaw_next_to_esim_only_keeps_the_sellers_words():
 
 def test_a_label_answered_on_its_own_line_denies_it():
     assert read("Unlocked to all networks\nFaults: none\nDamage: none")[0] == []
+
+
+# ── the second round (23 Sep): what comes with the phone, more ways to say it (made up) ────────────────────────
+
+PHONE, BUDS, PS5 = "iPhone 13 128GB", "AirPods Pro 2nd Gen", "PS5 Disc Edition 825GB"
+
+
+@pytest.mark.parametrize("title, line", [
+    (PHONE, "Comes with box and charger, has a small crack"), (PHONE, "Boxed + charger, it has a small crack"),
+    (PHONE, "comes with a case and charger it has a small crack"), (PS5, "Comes with box and cables, has a small scratch on the top"),
+    (PHONE, "Couple of small marks from a rugged case"), (PHONE, "Kept in a pink case, has a few light scratches"),
+    (PHONE, "Small crack under the Zagg screen protector"), (PHONE, "Comes with 20W charger, it has a small crack"),
+    (PHONE, "Screen protector is hiding a small crack"), (PHONE, "Screen protector put on to cover a small crack"),
+    (PHONE, "Light scratch visible through the screen protector"), (PHONE, "Screen protector cracked with a small scratch underneath"),
+    (PHONE, "The case has left a few marks on the corners"), (PHONE, "Cheap case scratched the edges a bit"),
+    (PHONE, "Edges are a bit marked where the case rubbed"), (PHONE, "Small chip on the edge a case would cover it"),
+    (PHONE, "Small crack on the corner box not included"), (PHONE, "Box has a small dent and cracked back glass"),
+    (PHONE, "Doesn't charge via cable"), (PHONE, "Wont charge with a lightning cable"),
+    (PHONE, "If you want, the cracked screen can be replaced for £40"), (PHONE, "If u want the cracked back can be repaired for £30"),
+    (PHONE, "No scratches, dents and screen cracked"), (PS5, "Top cover has a small crack near the vent"),
+    (BUDS, "Case has a few scratches"), ("Galaxy S23 128GB", "Back cover cracked"),
+])
+def test_the_items_own_mark_stays_whatever_comes_with_it(title, line):
+    assert flaws_in(line, f"{title}\n{line}")
+
+
+@pytest.mark.parametrize("title, line", [
+    (PHONE, "Comes with a case that has a crack"), (PHONE, "Comes with the original box that's slightly damaged"),
+    (PHONE, "The screen protector on the phone is cracked"), (PHONE, "With case (cracked)"),
+    (PHONE, "Includes original box – slightly damaged"), (PHONE, "Box included but it's a bit damaged"),
+    (PHONE, "Comes with the lens protectors, they're both cracked"), (PHONE, "Comes with 2 cases, one is cracked"),
+    (PHONE, "Screen protector has a crack at the top of the screen"), (PHONE, "Camera protector cracked over the lens"),
+    (PHONE, "Swaps for AirPods considered. Case has a few scratches"), (BUDS, "Comes with a Spigen cover, cover has a few scratches"),
+    (BUDS, "Comes with a keyring case which is scratched"), (PHONE, "Crack on the screen (protector only)"),
+    (PHONE, "If you would like the battery replaced I can do it for £20"), (PHONE, "If wanted I can get the back glass replaced"),
+    (PHONE, "The box has got a bit of damage"),
+])
+def test_a_mark_said_of_what_comes_with_it_is_none(title, line):
+    text = f"{title}\n{line}"
+    assert flaws_in(line, text) == [] and code_reading(text)["flaws"] == []
+
+
+@pytest.mark.parametrize("description, flaws", [
+    ("Light scratches on the screen. Price reflects the damage to the back.",
+     ["Light scratches on the screen", "Price reflects the damage to the back"]),
+    ("Case is scratched. Price reflects the scratched screen.", ["Price reflects the scratched screen"]),
+    ("- Price reflects the cracked back", ["Price reflects the cracked back"]),
+    ("Crack on the back. The crack is not affecting use.", ["Crack on the back"]),
+    ("Crack on the back. Priced low because of the crack.", ["Crack on the back"]),
+])
+def test_a_part_that_points_back_is_a_flaw_only_where_nothing_else_says_it(description, flaws):
+    assert code_reading(f"{PHONE}\n{description}")["flaws"] == flaws
+
+
+# ── the Vinted test (23 Sep): the words it found missing, each with its look-alike (made up) ────────────────────
+
+@pytest.mark.parametrize("line", [
+    "Battery low", "Struggles to hold charge", "At first will take a long time to charge", "Battery may need a replacement",
+    "Battery could do with servicing", "Battery probably won't last as long", "Face ID is disabled", "Loud speaker very low",
+    "The speaker could do with a clean", "A new screen may be required", "Camera lens needing replacement", "Needs to get fixed",
+    "Needs new front screen and back screen", "Water affected the screen display", "Back glass camera cover came off",
+    "A really small bump in one of the top corners", "Screen has been changed with soft OLED", "Brand new display installed",
+    "Well used", "Slight paint gone", "For spare parts or repair", "Ideal for someone looking to repair it",
+    "Don't know whether they work", "Not sure if working anymore", "Running ios 9",
+])
+def test_the_vinted_words_are_flaws(line):
+    text = f"{TITLE}\n{line}"
+    assert flaws_in(line, text) and code_reading(text)["flaws"]
+
+
+@pytest.mark.parametrize("line", [
+    "Battery lasts all day", "Face ID works perfectly", "Screen protector can easily be removed or replaced if preferred",
+    "Never had a screen replaced", "All original parts", "Original screen", "No visible signs of use", "iOS 18.4",
+    "The blacked out mark in the photo is photo edited", "No charging cable", "Big camera bump", "Low price for a quick sale",
+])
+def test_the_vinted_look_alikes_are_none(line):
+    assert read(line) == ([], [])
+
+
+def test_gemmas_quote_with_the_sellers_words_left_out_is_the_sellers_whole_phrase():
+    from flip.reader import as_written
+    text = f"{TITLE}. Needs new front screen and back screen. Screen is not cracked."
+    assert as_written("needs new back screen", text) == "Needs new front screen and back screen"
+    assert as_written("Screen is cracked", text) == "Screen is not cracked"  # what's kept is the seller's: a denial
+    assert as_written("Display has a small scratch", text) == "Display has a small scratch"  # made up: still fails
+
+
+def test_gemmas_own_instruction_copied_into_a_flaw_is_taken_off():
+    from flip.ai import Reply
+    from flip.reader import tidied
+    text = f"{TITLE}. The back glass is cracked across the logo."
+    for copied, kept in [("each fault, damage, mark or sign of wear the listing mentions, copied word for word.", []),
+                         ("each fault, damage, mark or sign of wear the phone has", []),
+                         ("each fault, damage, mark or sign of wear the back glass is cracked across the logo",
+                          ["the back glass is cracked across the logo"])]:
+        reply = Reply("gemma3:4b", answer={"flaws": [copied], "pickup": "", "no_offers": ""})
+        assert tidied(reply, text).answer["flaws"] == kept

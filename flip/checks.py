@@ -201,10 +201,16 @@ NOT_A_FLAW = re.compile(
     # a part you could have changed if you liked ("lens can be replaced if desired", "if u want"): no flaw. "Can
     # easily be replaced with a new battery" still is: no "if" makes it a choice
     r"(?:(?:can|could|may|might) (?:easily |always |also |just )?be |(?:can|could|happy to|willing to|able to) "
-    r"(?:have|get) (?:the |it |them )?(?:\w+ ){0,2}?)(?:replaced|repaired|fixed|swapped|changed)(?: [\w£$€]+){0,5}? "
+    r"(?:have|get) (?:the |it |them )?(?:(?!crack|scratch|dent|chip|scuff|broken|smash|damage|faulty)\w+ ){0,2}?)(?:replaced|"
+    r"repaired|fixed|swapped|changed|removed)(?: or (?:replaced|repaired|fixed|swapped|changed|removed))?(?: [\w£$€]+){0,5}? "
     r"if (?:desired|wanted|needed|preferred|required|necessary|(?:you|u|ur)(?: d| would| so)?\b|you['’]?d)|"
-    r"if (?:you|u) (?:want|like|prefer|wish|would like)\b,? (?:the |it )?(?:\w+ ){0,2}(?:can|could) (?:easily )?be "
+    r"if (?:you|u) (?:want|like|prefer|wish|would like)\b,? (?:the |it )?(?:(?!crack|scratch|dent|chip|scuff|broken|smash|"
+    r"damage|faulty)\w+ ){0,2}(?:can|could) (?:easily )?be "
     r"(?:replaced|repaired|fixed|swapped|changed)|"
+    # a mark that's only in the photos: "the blacked out mark in the photo is photo edited", "the spot in the pic is a reflection"
+    r"(?:blacked|blanked|blurred|scribbled|covered|greyed|grayed) out (?:\w+ )?(?:marks?|bits?|areas?|parts?|sections?|spots?)|"
+    r"(?:marks?|spots?|lines?|dots?) (?:in|on) (?:the |this |my )?(?:photos?|pics?|pictures?|images?) (?:is|are) (?:a |just a |"
+    r"just )?(?:reflections?|glare|light|photo[- ]?edit\w*|edited|dust)|"
     # a repair denied in a sentence of its own: "No parts have ever been replaced", "None of the parts have been
     # replaced", "Nothing's been repaired" ("no scratches has been dented" still has its dent)
     r"(?:no|none(?: of (?:it|them|the))?|not a single|not one|no original|no other)(?: [\w-]+){0,4}? (?:has|have|had) "
@@ -296,6 +302,8 @@ NO_LONGER = (r"no longer (?:turns? on|turning on|comes? on|coming on|switch(?:es
              r"(?<!\bi )(?<!\bi m )(?<!\bi['’]m )(?<!\bim )(?<!\bwe )(?<!\bwill )no longer (?:works?|working|charges?|"
              r"charging|responds?|functions?)(?! (?:for|from|in|at|away|as|with|to|after|on|since|because|there|here)\b)")
 FAULTS = re.compile(r"\b(?:not working|broken|drift|drifts|drifting|faulty|fault|faults|glitch\w*|for parts|spares|"
+                    r"spare parts|(?:parts|spares) or repairs?|for repairs?|(?:ideal|perfect|good|great) for (?:someone|anyone|a) "
+                    r"(?:looking to |wanting to |who can |who wants to )?(?:repair|fix)|"
                     r"dead pixels?|(?:is|totally|completely|went|now) dead|dead (?:battery|phone|console|unit|on arrival)|"
                     r"battery (?:is )?dead|"
                     r"won t (?:turn on|switch on|charge|connect|pair|boot)|doesn t (?:turn on|charge|connect|pair)|"
@@ -440,7 +448,9 @@ PART_NOT_APPLES = (r"unable to verify (?:this iphone has a genuine apple (?:batt
                    r"parts|displays?|now))* (?:an? )?unknown(?! colou?r)|(?:non[- ]?(?:apple|genuine|original|oem)|aftermarket|after-market|"
                    r"third[- ]party|not (?:an? )?(?:genuine|original))(?: apple)? (?:battery|screen|display|lcd|oled|camera|"
                    r"back glass|glass|housing|parts?)|(?:battery|screen|display|camera|back glass|parts?) (?:is |are )?"
-                   r"(?:non[- ]?(?:genuine|original|apple)|not (?:genuine|original)|aftermarket|third[- ]party)")
+                   r"(?:non[- ]?(?:genuine|original|apple)|not (?:genuine|original)|aftermarket|third[- ]party)|soft[- ]?oled|"
+                   r"in-?cell|(?:screen|display) (?:has |have )?(?:been |was |were )?(?:changed|replaced|swapped)(?: (?:with|to|"
+                   r"for) [\w-]+)?|(?:brand )?new (?:screen|display|lcd|oled) (?:installed|fitted|put in)")
 # untested, in so many ways: "Not fully tested", "Unable to test as I don't have a charger", "Can't confirm it charges"
 # (not "can't confirm collection times": what can't be confirmed is the phone working)
 UNTESTED = (r"un[- ]?tested|not (?:been |fully |properly )?tested|(?:haven|hasn)['’ ]?t (?:been |fully |properly )?tested|"
@@ -448,7 +458,9 @@ UNTESTED = (r"un[- ]?tested|not (?:been |fully |properly )?tested|(?:haven|hasn)
             r"could not) (?:fully |properly )?test|haven['’ ]?t had (?:a |the )?chance to test|(?:can['’ ]?t|cannot|can not|"
             r"couldn['’ ]?t|could not|unable to|not able to) (?:be )?confirm(?:ed)?(?: (?:if|whether|that))?(?: (?:it|the "
             r"phone|this|the \w+))? (?:\w+ )?(?:works?|working|charges?|charging|turns? on|powers? on|boots?|functions?|"
-            r"holds? (?:a )?charge)")
+            r"holds? (?:a )?charge)|(?:don['’ ]?t|do not|dont) know (?:if|whether|weather) (?:it|they|this|the \w+) (?:still )?"
+            r"(?:works?|is working|are working|turns? on|charges?)|not sure if (?:it['’ ]?s |it is |its )?(?:still )?(?:working|"
+            r"works|it works)(?: anymore| any more)?")
 # no more updates: "Runs up to iOS 15", "can't update past iOS 16", "(the last version for this model)". Not
 # "updated it up to iOS 26" or "supports up to iOS 26": those are the latest
 IOS_LIMIT = (r"(?:runs?|running|goes|go|works?|only(?: (?:runs?|goes|works?))?) up ?to i ?os ?\d+|up ?to i ?os ?\d+ "
@@ -456,19 +468,31 @@ IOS_LIMIT = (r"(?:runs?|running|goes|go|works?|only(?: (?:runs?|goes|works?))?) 
              r"does not) (?:be )?(?:update[ds]?|upgrade[ds]?|go) (?:past|beyond|above|higher than|further than) i ?os ?\d+|"
              r"(?:can )?only (?:be )?(?:update[ds]?|upgrade[ds]?|go) (?:up )?to i ?os ?\d+|(?:the )?last (?:i ?os |software )?"
              r"(?:version|update) (?:for|available for|supported on|on) (?:this|the|that|it)|no longer (?:gets?|getting|"
-             r"receives?|receiving) (?:i ?os |software )?updates|no longer (?:supported|updated)")
+             r"receives?|receiving) (?:i ?os |software )?updates|no longer (?:supported|updated)|i ?os ?(?:[1-9]|1[0-5])(?:\.\d+)*")
 # dust inside, where no cloth can reach: "the front camera needs cleaning, as dust has gotten inside"
 DUST = (r"dust (?:has |have |had |is |s )?(?:(?:got|gotten|gone|come|crept|trapped|stuck) )?(?:inside|into|"
         r"in (?:the |its )?(?:camera|lens|screen|phone)|under (?:the )?(?:screen|glass|lens)|"
         r"behind (?:the )?(?:lens|glass|screen|camera))|(?:camera|cameras|lens|lenses) needs? (?:a )?clean\w*")
+# a battery that's weak, said without a figure: "battery low", "struggles to hold charge", "may need a replacement",
+# "probably won't last as long" (not "battery lasts all day")
+BATTERY_WEAK = (r"(?:battery|batt) (?:is |s )?(?:very |quite |a bit |really |pretty )?low\b(?! (?:in|on) (?:the )?(?:photos?|"
+                r"pics?|pictures?))|struggl\w* (?:to )?(?:hold|keep)(?:ing)? (?:a |its |the )?charge|takes? (?:a )?(?:long|while)"
+                r"(?: time)? to charge|slow to charge|charges? (?:very |really |quite )?slow(?:ly)?|(?:may|might|will|would) need "
+                r"(?:a )?(?:new battery|battery replacement|replac\w*)|could do with (?:a )?(?:servic\w*|replac\w*|new battery|"
+                r"repair\w*)|(?:won['’ ]?t|doesn['’ ]?t|does not|will not|wouldn['’ ]?t) last (?:as long|long|all day|a full day)|"
+                r"battery (?:isn['’ ]?t|is not|s not) (?:as )?(?:great|good)")
 # each a kind of flaw of its own (flip.offers.condition_said: "issue: esim"...), so a message names only the listing's
-ISSUE_KINDS = {"esim": ESIM_ONLY, "battery replaced": BATTERY_REPLACED, "part": PART_NOT_APPLES, "untested": UNTESTED,
-               "ios": IOS_LIMIT, "dust": DUST}
+ISSUE_KINDS = {"esim": ESIM_ONLY, "battery replaced": BATTERY_REPLACED, "battery weak": BATTERY_WEAK,
+               "part": PART_NOT_APPLES, "untested": UNTESTED, "ios": IOS_LIMIT, "dust": DUST}
 ISSUE_WORDS = "|".join(ISSUE_KINDS.values())
 ISSUES = re.compile(rf"\b(?:{ISSUE_WORDS})\b", re.IGNORECASE)
 ESIM = re.compile(rf"\b(?:{ESIM_ONLY})\b", re.IGNORECASE)
 # faults a seller writes their way: read in a listing (flip.offers.SELLER_FAULTS), never your notes
-SELLER_FAULT_WORDS = (r"only (?:charges?|charging)(?: (?:via|with|on|using|by))?(?: an?| the)? (?:wireless\w*|magsafe)|"
+SELLER_FAULT_WORDS = (r"(?:face ?id|touch ?id) (?:is |has been |s )?(?:disabled|unavailable|not available|deactivated)|"
+                      r"(?:loud ?speaker|speakers?|earpiece|mic|microphone) (?:is |are |sounds? )?(?:very |quite |a bit |really |"
+                      r"pretty )?(?:low|quiet|muffled|crackly|distorted|faint)\b|(?:speaker|port|mic|microphone|camera|lens)(?: \w+){0,3} "
+                      r"(?:could do with|needs?) (?:a )?(?:good )?clean|"
+                      r"only (?:charges?|charging)(?: (?:via|with|on|using|by))?(?: an?| the)? (?:wireless\w*|magsafe)|"
                       r"(?:charges?|charging) (?:wireless(?:ly)?|(?:via|with|on|using) (?:an? |the )?(?:wireless|magsafe)\w*) "
                       r"only|wireless charging only|(?:will|can|would) only charge (?:on|with|via|using|by) (?:an? |the )?"
                       r"(?:wireless|magsafe)\w*|"
@@ -489,6 +513,18 @@ SELLER_FAULT_WORDS = (r"only (?:charges?|charging)(?: (?:via|with|on|using|by))?
 NICK = (r"(?:a|an|one|1|small|tiny|minor|slight|little|light|faint|deep|wee|odd|another|single|few|some|couple of|two|2|"
         r"three|3) nick|(?:a few|few|some|several|two|three|2|3|minor|small|tiny|light|little|couple of|odd|faint) nicks|"
         r"nicks (?:on|in|to|around|and|&|here)\b")  # never "my son Nicks old iPhone"
+# damage said as what it needs: "A new screen may be required", "needs new front screen", "Needs to get fixed", "water
+# affected the screen", "the camera cover came off" (a kind of damage)
+NEEDS_REPAIR = (r"new (?:front |back |rear )?(?:screen|back glass|glass|battery|camera|lens|charging port|port|display) (?:may be |"
+                r"is |will be |might be |would be )?(?:required|needed)|needs? new (?:front |back |rear )?(?:screen|glass|back|battery|"
+                r"camera|lens|display|port)|needing (?:a )?(?:replacement|replacing|repair\w*|fixing)|needs? to (?:get |be )"
+                r"(?:fixed|repaired|replaced|sorted)|water (?:affected|got in|got into|ingress|exposure|got inside)|"
+                r"(?:cover|glass|lens|button|back|bezel|trim)s? (?:has |have )?(?:came|come|coming|fell|falling|fallen) (?:off|out)")
+# a small bump is a dent ("a really small bump in one of the top corners"), but never the camera bump
+BUMP = r"(?:a|one|small|tiny|little|slight|minor)\s+(?:(?!camera\b)\w+\s+){0,2}?bumps?\b"
+# wear said other ways: "well used", "slight paint gone"
+WELL_USED = r"well[- ]used|heavily used|(?:paint|coating|finish) (?:has )?(?:gone|missing|chipped|coming off|worn|wearing|" \
+            r"peeling|rubbed off)"
 # wear in other words: "only light signs of use" (a mark of the general kind; "no signs of use" is a denial)
 SIGNS_OF_USE = r"signs? of (?:use|usage|wear|being used)"
 # words that say something is wrong with an item, whatever the words around them: a flaw the AI reads must
@@ -507,10 +543,13 @@ PROBLEM = re.compile(
     r"turns? (?:itself )?(?:on and off|off and on|off by itself|off on its own|off randomly)|"
     r"keeps? (?:turning|switching|shutting) (?:off|down)|no (?:face|touch) id|"
     r"(?:isn'?t|is not|not) (?:perfect|great|good|the best|mint|working properly)|"
-    rf"{NO_LONGER}|{ISSUE_WORDS}|{SELLER_FAULT_WORDS}|{NICK}|{SIGNS_OF_USE}|"
+    rf"{NO_LONGER}|{ISSUE_WORDS}|{SELLER_FAULT_WORDS}|{NICK}|{SIGNS_OF_USE}|{NEEDS_REPAIR}|{BUMP}|{WELL_USED}|"
+    r"spare parts|(?:parts|spares) or repairs?|for repairs?|(?:ideal|perfect|good|great) for (?:someone|anyone|a) (?:looking to |"
+    r"wanting to |who can |who wants to )?(?:repair|fix)|"
     # a pixel that's wrong, not "pixel" alone: "2868x1320-pixel resolution", "Google Pixel 8"
     r"(?:dead|stuck|missing|bad|hot|bright|broken|faulty|lit) pixels?|pixels? (?:are |is )?(?:out|missing|dead|stuck|gone|lit)|"
-    r"no (?:sound|power|picture|signal|display|image|wifi|charge|charging|service|audio|video|bluetooth)|"
+    r"no (?:sound|power|picture|signal|display|image|wifi|charge|charging|service|audio|video|bluetooth)"
+    r"(?! (?:cables?|leads?|plugs?|bricks?|blocks?|adapters?|adaptors?|wires?|cords?|case|dock|pads?|station))|"
     rf"(?:does not|doesn['’]?t|do not|don['’]?t|did not|didn['’]?t|will not|won['’]?t|can ?not|can['’]?t|isn['’]?t|"
     rf"is not|not|never) {NOT_DOING})\b",
     re.IGNORECASE)

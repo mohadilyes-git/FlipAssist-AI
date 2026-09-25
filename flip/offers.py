@@ -20,7 +20,8 @@ import re
 from functools import lru_cache
 
 from flip.catalogue import contains, load_catalogue, model_names, models_named, words
-from flip.checks import (ESIM, FAULTS, ISSUE_KINDS, ISSUES, LEVELS, MARKS, NEGATIONS, NEW_SEALED, NICK, NO_LONGER,
+from flip.checks import (BUMP, ESIM, FAULTS, ISSUE_KINDS, ISSUES, LEVELS, MARKS, NEEDS_REPAIR, NEGATIONS, NEW_SEALED, NICK,
+                         NO_LONGER, WELL_USED,
                          NOT_A_FLAW, OTHER_ITEMS,
                          PROBLEM, SELLER_FAULT_WORDS, SIGNS_OF_USE, THIS_ITEM, answered, clauses, ends_asking, has_fault,
                          prices_in, promises_in, stated_parts)
@@ -49,7 +50,9 @@ FLAWS = MARKS | {"fault", "damage"} | set(ISSUE_PATTERNS)
 # a denial of what's wrong, for the kinds read by pattern: "free from nicks", "zero signs of use"
 DENIALS = NEGATIONS | {"free", "zero", "nothing"}
 NICKS = re.compile(rf"\b(?:{NICK})\b")  # a mark of the chip kind
-USED_SIGNS = re.compile(rf"\b(?:{SIGNS_OF_USE})\b")  # a mark of the general kind
+USED_SIGNS = re.compile(rf"\b(?:{SIGNS_OF_USE}|{WELL_USED})\b")  # a mark of the general kind
+BUMPS = re.compile(rf"\b(?:{BUMP})")  # a dent
+NEEDS_FIXING = re.compile(rf"\b(?:{NEEDS_REPAIR})\b")  # damage
 # faults sellers write that a reseller's notes rarely do: read in a listing for a message, never for a
 # listing's own condition (flip.checks.has_fault, where "battery needs replacing" isn't "for parts")
 SELLER_FAULTS = re.compile(r"\b(?:no (?:picture|signal|service|display|image|face id|touch id)|blacklisted|"
@@ -193,6 +196,10 @@ def condition_said(text, typos=False):
         said.add("chip")
     if unnegated(USED_SIGNS, text, DENIALS):
         said.add("mark")
+    if unnegated(BUMPS, text, DENIALS):
+        said.add("dent")
+    if unnegated(NEEDS_FIXING, text, DENIALS):
+        said.add("damage")
     if unnegated(GOOD, text):
         said.add("good")
     return said
