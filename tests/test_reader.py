@@ -575,6 +575,15 @@ def test_a_t_after_half_a_contraction_still_denies():
     ("No issues besides being AT&T locked.", "No issues besides being AT&T locked"),
     ("No scratches except those on the back corners.", "No scratches except those on the back corners"),
     ("No scratches other then a small one on the corner.", "No scratches other then a small one on the corner"),
+    # 26 Sep: "nothing more than" what follows, and a part beside the "no" said in other words
+    ("Nothing more than light wear on the corners.", "Nothing more than light wear on the corners"),
+    ("No more than a couple of light scratches on the back.", "No more than a couple of light scratches on the back"),
+    ("Nothing more than usual wear and tear.", "Nothing more than usual wear and tear"),
+    ("Not much more than a scuff on the lid.", "Not much more than a scuff on the lid"),
+    ("A bit slow, no cracks no scratches.", "A bit slow, no cracks no scratches"),
+    ("A bit laggy at times, no scratches.", "A bit laggy at times, no scratches"),
+    ("Few scapes around edges, no cracks on screen.", "Few scapes around edges, no cracks on screen"),
+    ("Minor scruffs on the frame, no dents.", "Minor scruffs on the frame, no dents"),
 ])
 def test_what_a_no_makes_an_exception_to_is_still_said(text, quote):
     assert check_reading({"flaws": [quote], "pickup": "", "no_offers": ""}, f"iPhone 13. {text}") == []
@@ -601,6 +610,15 @@ def test_what_a_no_makes_an_exception_to_is_still_said(text, quote):
     ("Selling due to upgrade, apart from that no issues.", "Selling due to upgrade, apart from that no issues"),
     ("No scratches other than fingerprints.", "No scratches other than fingerprints"),
     ("No scratches, nothing else to say.", "No scratches, nothing else to say"),
+    # 26 Sep: what follows "no more than" isn't a flaw, or the other part has a "no" of its own
+    ("No more than two years old, no scratches.", "No more than two years old, no scratches"),
+    ("Nothing more than a few marks on the box, the phone has no scratches.",
+     "Nothing more than a few marks on the box, the phone has no scratches"),
+    ("Not slow at all, no scratches.", "Not slow at all, no scratches"),
+    ("Never laggy, no marks.", "Never laggy, no marks"),
+    ("No lag, no scratches.", "No lag, no scratches"),
+    ("Doesn't get hot, no dents.", "Doesn't get hot, no dents"),
+    ("No scapes or dents.", "No scapes or dents"),
 ])
 def test_a_no_that_excepts_nothing_is_still_denied(text, quote):
     assert check_reading({"flaws": [quote], "pickup": "", "no_offers": ""}, f"iPhone 13. {text}") == \

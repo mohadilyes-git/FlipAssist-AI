@@ -647,8 +647,15 @@ NONE_ELSE = re.compile(r"\b(?:no|not\s+any|without\s+any|nothing)\s+(?:other|els
 # what's wrong in words the flaw words leave out: "a bit SLOW", "a little BLURRY", "speaker is TINNY", "CAN'T USE Face ID"
 SYMPTOMS = re.compile(r"\b(?:blurr?y|blurred|fuzzy|grainy|tinny|muffled|crackly|floppy|dim|dimmer|slow|slower|sluggish|"
                       r"warm|hot|unresponsive|temperamental|patchy|dodgy|iffy|hit and miss|drops? (?:calls|signal|out)|"
+                      r"laggy|lags|lagging|glitchy|freezes|freezing|"
                       r"(?:can'?t|cannot|won'?t|doesn'?t|does not) (?:use|make|receive|hear|read|recogni[sz]e|detect|"
                       r"update|install|download|connect|charge|turn|hold|have true tone))\b", re.IGNORECASE)
+# real words that in a listing are a flaw word typed wrong, the labellers' typo list ("few STARCHES", "small SCAPES",
+# "minor SCRUFFS", "a couple of DINTS", "screen is CREAKED"), or a wear word of their own ("a bit SCRUFFY")
+TYPED_FLAWS = re.compile(r"\b(?:starch(?:es)?|scapes?|scruffs?|scruffy|dints?|dinted|creaked)\b", re.IGNORECASE)
+# "NOTHING MORE THAN light wear on the corners", "NO MORE THAN a couple of light scratches": what follows is all there
+# is, so it is said; the "no" denies only that there is more
+NO_MORE_THAN = re.compile(r"\b(?:no|nothing|not)\s+(?:much\s+)?more\s+than\b", re.IGNORECASE)
 # a "no"'s exception that only says how much or where, so it is more of what the "no" was about: "other than a TINY ONE
 # on the CORNER", "except the CAMERA LENS", "apart from THOSE on the BACK CORNERS"
 REFERS_BACK = {"one", "ones", "few", "couple", "some", "little", "tiny", "teeny", "small", "minor", "light", "slight",
@@ -666,14 +673,17 @@ FILLER = {"that", "this", "these", "those", "it", "them", "the", "a", "an", "and
 def flaw_said(part, text):
     """Whether a part of a quote says something is wrong without a "no" of its
     own: a flaw word the listing doesn't deny, a battery at 85% or under, or a
-    symptom ("a bit slow", "can't use Face ID") with no "not" just before it."""
+    symptom ("a bit slow", "can't use Face ID") or a flaw word typed as another
+    word ("few scapes") with no "not" just before it."""
     if not part.strip():
         return False
     if low_battery(part) or any(judge(piece, text) == "flaw" for piece in parts_of(part)):
         return True
-    found = SYMPTOMS.search(part)
-    before = plain_words(part[:found.start()])[-3:] if found else []
-    return bool(found) and not any(negation_at(before, n, NEGATORS) for n in range(len(before)))
+    for found in (SYMPTOMS.search(part), TYPED_FLAWS.search(part)):
+        before = plain_words(part[:found.start()])[-3:] if found else []
+        if found and not any(negation_at(before, n, NEGATORS) for n in range(len(before))):
+            return True
+    return False
 
 
 def excepted(quote, text):
@@ -685,6 +695,10 @@ def excepted(quote, text):
     2. that is itself a "no" or points back ("apart from that, no issues"),
        or the "no" is about anything else ("but no other issues"), and the
        rest of the quote says it ("Camera is a little blurry").
+    3. what follows "nothing more than" or "no more than" says it ("Nothing
+       more than light wear on the corners");
+    4. another part of it says it in words the flaw words leave out ("A bit
+       slow, no cracks", "Few scapes around the edges, no cracks").
     Only what looks like a flaw counts: not "only one owner", "no other
     issues, battery health is 91%" or "apart from that, no issues"."""
     for found in EXCEPTIONS.finditer(quote):
@@ -700,7 +714,13 @@ def excepted(quote, text):
     for found in NONE_ELSE.finditer(quote):
         if flaw_said(quote[:found.start()], text) or flaw_said(quote[found.end():], text):
             return True  # "Selfie camera is a little blurry, but no other issues"
-    return False
+    for found in NO_MORE_THAN.finditer(quote):
+        after = quote[found.end():]
+        if flaw_said(after, after):
+            return True  # "Nothing more than light wear on the corners": judged on its own, as the "no" isn't about it
+    # a part beside the "no" that says what's wrong in words the flaw words leave out: "A bit slow, no cracks no
+    # scratches", "Few scapes around the edges, no cracks on the screen"
+    return any(judge(piece, text) != "denied" and flaw_said(piece, text) for piece in parts_of(quote))
 
 
 # the reading's own instruction copied into a flaw: "each fault, damage, mark or sign of wear the listing mentions,
