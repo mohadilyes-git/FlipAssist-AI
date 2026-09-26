@@ -21,7 +21,7 @@ from functools import lru_cache
 
 from flip.catalogue import contains, load_catalogue, model_names, models_named, words
 from flip.checks import (BUMP, ESIM, FAULTS, ISSUE_KINDS, ISSUES, LEVELS, MARKS, NEEDS_REPAIR, NEGATIONS, NEW_SEALED, NICK,
-                         NO_LONGER, WELL_USED,
+                         NO_LONGER, WELL_USED, negation_at,
                          NOT_A_FLAW, OTHER_ITEMS,
                          PROBLEM, SELLER_FAULT_WORDS, SIGNS_OF_USE, THIS_ITEM, answered, clauses, ends_asking, has_fault,
                          prices_in, promises_in, stated_parts)
@@ -169,11 +169,14 @@ ASK = {"lower": "Mention it as the reason for your offer?",
 
 def unnegated(pattern, text, negations=NEGATIONS):
     """True if the pattern is in the text without a "no" or "not" just before
-    it, in the same sentence: "No box. Smashed screen." is still smashed."""
+    it, in the same sentence: "No box. Smashed screen." is still smashed, and
+    so is "AT&T locked" (its "t" is no "not": negation_at)."""
     for part in re.split(r"[.!?;\n]", text):
         joined = " ".join(words(part))
-        if any(not negations & set(joined[:m.start()].split()[-3:]) for m in pattern.finditer(joined)):
-            return True
+        for m in pattern.finditer(joined):
+            before = joined[:m.start()].split()
+            if not any(negation_at(before, n, negations) for n in range(max(0, len(before) - 3), len(before))):
+                return True
     return False
 
 

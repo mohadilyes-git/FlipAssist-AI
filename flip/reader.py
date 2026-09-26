@@ -42,7 +42,7 @@ from functools import lru_cache
 from flip.attempts import try_models
 from flip.catalogue import contains, find_phrase, words
 from flip.checks import (CONDITION_PROMISES, ESIM, MARKS, NEGATIONS, NOT_A_FLAW, PROBLEM, answered, denied_by,
-                         most_slips, slipped, slips)
+                         most_slips, negation_at, slipped, slips)
 from flip.offers import (FLAWS, PARTS, backed, battery_apart, condition_said, esim_everywhere, figures_joined,
                          low_battery, read_listing, sentence_parts, this_items_parts)
 from flip.prompts import READING_SCHEMA, READING_SYSTEM, reading_prompt
@@ -481,10 +481,11 @@ def in_denied_list(part, text):
                 continue
             # back over bare items ("no scratches, scuffs, dents or marks") to the first, which has the "no"
             k = i - 1
-            while k > 0 and not set(segments[k]) & NEGATORS and is_item(segments[k]):
+            while k > 0 and not any(negation_at(segments[k], n, NEGATORS) for n in range(len(segments[k]))) \
+                    and is_item(segments[k]):
                 k -= 1
             head = segments[k]
-            denial = [n for n, w in enumerate(head) if w in NEGATORS]
+            denial = [n for n in range(len(head)) if negation_at(head, n, NEGATORS)]
             first = head[denial[-1] + 1:] if denial else []
             while first and first[0] in AFTER_DENIAL:
                 first = first[1:]
@@ -621,9 +622,85 @@ def reading_from(answer, text, read_by):
 
 
 def denied(quote, text):
-    """A flaw the seller says isn't so: "no scratches", "no stick drift"."""
+    """A flaw the seller says isn't so: "no scratches", "no stick drift".
+    Not one the seller makes an exception to ("no scratches other than a
+    tiny one on the corner"): excepted."""
     return bool(quote.strip()) and in_listing(quote, text) and not flaws_in(quote, text) \
-        and any(judge(piece, text) == "denied" for piece in parts_of(quote))
+        and any(judge(piece, text) == "denied" for piece in parts_of(quote)) and not excepted(quote, text)
+
+
+# what a "no" makes an exception to: "No marks OTHER THAN a tiny one on the corner", "Not a single scratch EXCEPT the
+# camera lens", "No problems APART FROM it being a bit slow", "No scratches BUT a small one on the back", also as typed
+# ("excpet", "appart from", "aside form", "other then", "exc."); "bar" and "save" only before an amount ("bar a tiny
+# one", "save the small one"), not "bar none". What follows still has to look like a flaw (excepted)
+EXCEPTIONS = re.compile(r"\b(?:oth(?:er|e)\s+th[ae]n|ap+art\s+f(?:ro|or|r)?m|a\s+part\s+from|asides?\s+f(?:ro|or)m|"
+                        r"exc?e?pt(?:ing|\s+for)?|excpet|expect|besides|excluding|excl?\.|outside\s+of|"
+                        r"with\s+the\s+exception\s+of|the\s+(?:only\s+)?exception\s+(?:is|being)|unless\s+you\s+count|"
+                        r"but(?:\s+for)?|only(?:\s+with)?|just|beyond|save\s+for|"
+                        r"(?:bar|save)(?=\s+(?:an?\s+|the\s+)?(?:one|two|three|\d+|some|few|couple|light|minor|small|tiny|"
+                        r"slight|faint|hairline)\b))(?:\b|(?<=\.))", re.IGNORECASE)
+# ...and a "no" about anything else, which leaves the rest of the quote said: "Selfie camera is a little blurry, but NO
+# OTHER issues", "Small dent on the lid, NOTHING ELSE", "Speaker is tinny, OTHERWISE NO issues", "no issues ELSEWHERE"
+NONE_ELSE = re.compile(r"\b(?:no|not\s+any|without\s+any|nothing)\s+(?:other|else|further|more|additional|extra)\b"
+                       r"|\bnothing\s+else\b|\b(?:no|nothing|not)\s+(?:\w+\s+){0,2}(?:otherwise|elsewhere|anywhere\s+else)\b"
+                       r"|\botherwise\s+(?:no|nothing|not)\b", re.IGNORECASE)
+# what's wrong in words the flaw words leave out: "a bit SLOW", "a little BLURRY", "speaker is TINNY", "CAN'T USE Face ID"
+SYMPTOMS = re.compile(r"\b(?:blurr?y|blurred|fuzzy|grainy|tinny|muffled|crackly|floppy|dim|dimmer|slow|slower|sluggish|"
+                      r"warm|hot|unresponsive|temperamental|patchy|dodgy|iffy|hit and miss|drops? (?:calls|signal|out)|"
+                      r"(?:can'?t|cannot|won'?t|doesn'?t|does not) (?:use|make|receive|hear|read|recogni[sz]e|detect|"
+                      r"update|install|download|connect|charge|turn|hold|have true tone))\b", re.IGNORECASE)
+# a "no"'s exception that only says how much or where, so it is more of what the "no" was about: "other than a TINY ONE
+# on the CORNER", "except the CAMERA LENS", "apart from THOSE on the BACK CORNERS"
+REFERS_BACK = {"one", "ones", "few", "couple", "some", "little", "tiny", "teeny", "small", "minor", "light", "slight",
+               "faint", "hairline", "single", "two", "three", "2", "3", "very", "really", "bit", "barely", "micro"}
+ITEM_PLACES = {"camera", "cameras", "lens", "lenses", "screen", "display", "back", "front", "corner", "corners", "edge",
+               "edges", "frame", "side", "sides", "bezel", "bezels", "lid", "hinge", "port", "ports", "button", "buttons",
+               "keyboard", "key", "keys", "trackpad", "touchpad", "bottom", "top", "left", "right", "rear", "glass",
+               "casing", "body", "base", "palm", "rest", "near", "around", "by", "under", "underneath", "upper", "lower",
+               "middle", "centre", "center", "speaker", "speakers", "grille", "logo", "notch", "rim", "surface"}
+# filler between them: "a", "the", "those", "on"
+FILLER = {"that", "this", "these", "those", "it", "them", "the", "a", "an", "and", "or", "of", "on", "in", "at", "to",
+          "for", "is", "are", "was", "were", "s", "there", "which", "just", "only"}
+
+
+def flaw_said(part, text):
+    """Whether a part of a quote says something is wrong without a "no" of its
+    own: a flaw word the listing doesn't deny, a battery at 85% or under, or a
+    symptom ("a bit slow", "can't use Face ID") with no "not" just before it."""
+    if not part.strip():
+        return False
+    if low_battery(part) or any(judge(piece, text) == "flaw" for piece in parts_of(part)):
+        return True
+    found = SYMPTOMS.search(part)
+    before = plain_words(part[:found.start()])[-3:] if found else []
+    return bool(found) and not any(negation_at(before, n, NEGATORS) for n in range(len(before)))
+
+
+def excepted(quote, text):
+    """Whether a quote with a "no" in it still says something is wrong:
+    1. what follows "except", "other than", "apart from"... says it ("apart
+       from it being a bit slow"), or only says how much or where, so it is
+       more of the flaw the "no" was about ("No marks other than a tiny one
+       on the corner");
+    2. that is itself a "no" or points back ("apart from that, no issues"),
+       or the "no" is about anything else ("but no other issues"), and the
+       rest of the quote says it ("Camera is a little blurry").
+    Only what looks like a flaw counts: not "only one owner", "no other
+    issues, battery health is 91%" or "apart from that, no issues"."""
+    for found in EXCEPTIONS.finditer(quote):
+        before, after = quote[:found.start()], quote[found.end():]
+        if flaw_said(after, text):
+            return True  # "...apart from it being a bit slow"
+        said = [w for w in plain_words(after) if w not in FILLER]
+        if said and all(w in REFERS_BACK or w in ITEM_PLACES for w in said) and \
+                any(judge(piece, text) == "denied" for piece in parts_of(before)):
+            return True  # "No marks other than a tiny one on the corner"
+        if flaw_said(before, text):
+            return True  # "Camera is a bit blurry, apart from that no issues"
+    for found in NONE_ELSE.finditer(quote):
+        if flaw_said(quote[:found.start()], text) or flaw_said(quote[found.end():], text):
+            return True  # "Selfie camera is a little blurry, but no other issues"
+    return False
 
 
 # the reading's own instruction copied into a flaw: "each fault, damage, mark or sign of wear the listing mentions,

@@ -1,10 +1,13 @@
 """Reading the listing with AI, held to the seller's own words by code: with
 pretend models, so nothing runs and nothing costs anything."""
 
+import re
+
 import pytest
 
 from flip.ai import Reply
 from flip.reader import check_reading, code_reading, flaws_in, in_listing, place, read_listing_with_ai, reading_from
+from flip.offers import unnegated
 from tests.fakes import FakeModel
 
 LISTING = {"id": "l1", "title": "iPhone 13 128GB Blue",
@@ -528,3 +531,77 @@ def test_a_word_the_listing_doesnt_have_isnt_a_typo():
     haiku = {"flaws": ["Small scratich on the top corner"], "pickup": "", "no_offers": ""}
     reading = read_listing_with_ai(listing, FakeModel("gemma3:4b", gemma), FakeModel("claude-haiku-5-5", haiku))
     assert reading["read_by"] == "claude-haiku-5-5"
+
+
+# ── after the round 4 test, 26 Sep: what the denial check dropped wrongly ─────
+
+@pytest.mark.parametrize("text, quote", [
+    ("AT&T Locked.", "AT&T Locked"),
+    ("T Mobile locked, works fine otherwise.", "T Mobile locked"),
+    ("Used on T Mobile with a small dent on the frame.", "Used on T Mobile with a small dent on the frame"),
+    ("AT&T locked with a cracked back glass.", "AT&T locked with a cracked back glass"),
+])
+def test_the_t_of_att_or_t_mobile_is_not_a_not(text, quote):
+    assert check_reading({"flaws": [quote], "pickup": "", "no_offers": ""}, f"iPhone 13. {text}") == []
+
+
+def test_a_t_after_half_a_contraction_still_denies():
+    assert unnegated(re.compile(r"\blocked\b"), "AT&T locked.")
+    assert not unnegated(re.compile(r"\bscratches\b"), "Don't have any scratches.")
+    assert not unnegated(re.compile(r"\bscratches\b"), "Doesn t have any scratches.")
+
+
+@pytest.mark.parametrize("text, quote", [
+    ("No scratches other than a tiny one on the corner.", "No scratches other than a tiny one on the corner"),
+    ("Has no scratches apart from one on the back.", "Has no scratches apart from one on the back"),
+    ("Not a single scratch except the camera lens.", "Not a single scratch except the camera lens"),
+    ("No marks aside from a small one near the port.", "No marks aside from a small one near the port"),
+    ("No issues apart from the battery which is at 80%.", "No issues apart from the battery which is at 80%"),
+    ("Selfie camera is a little blurry, but there are no other issues.",
+     "Selfie camera is a little blurry, but there are no other issues"),
+    ("Speaker sounds tinny, apart from that no issues.", "Speaker sounds tinny, apart from that no issues"),
+    ("Hinge is a bit floppy, no other problems.", "Hinge is a bit floppy, no other problems"),
+    ("No cracks or physical damage beyond minor normal wear.", "No cracks or physical damage beyond minor normal wear"),
+    ("Found no issues with it only with the audio being muffled.",
+     "Found no issues with it only with the audio being muffled"),
+    ("Never refurb or repaired there's a scratch on screen.", "Never refurb or repaired there's a scratch on screen"),
+    # found by the red team, 26 Sep
+    ("No marks besides a small dent on the back.", "No marks besides a small dent on the back"),
+    ("No damage excluding a small crack on the back glass.", "No damage excluding a small crack on the back glass"),
+    ("No problems apart from it being a bit slow.", "No problems apart from it being a bit slow"),
+    ("No issues except it can't use Face ID.", "No issues except it can't use Face ID"),
+    ("Camera is a bit blurry and no other issues.", "Camera is a bit blurry and no other issues"),
+    ("Camera is a bit blurry, otherwise no issues.", "Camera is a bit blurry, otherwise no issues"),
+    ("No issues besides being AT&T locked.", "No issues besides being AT&T locked"),
+    ("No scratches except those on the back corners.", "No scratches except those on the back corners"),
+    ("No scratches other then a small one on the corner.", "No scratches other then a small one on the corner"),
+])
+def test_what_a_no_makes_an_exception_to_is_still_said(text, quote):
+    assert check_reading({"flaws": [quote], "pickup": "", "no_offers": ""}, f"iPhone 13. {text}") == []
+
+
+@pytest.mark.parametrize("text, quote", [
+    ("No scratches apart from that.", "No scratches apart from that"),
+    ("Apart from that, no issues.", "Apart from that, no issues"),
+    ("No scratches, no dents, no other issues.", "No scratches, no dents, no other issues"),
+    ("No issues with the menu bar or keyboard.", "No issues with the menu bar or keyboard"),
+    ("Doesn't have any scratches.", "Doesn't have any scratches"),
+    ("Other than that, it is clean and has no other issues.", "Other than that, it is clean and has no other issues"),
+    ("Perfect condition otherwise, no other marks or damage.", "Perfect condition otherwise, no other marks or damage"),
+    ("No other issues, battery health is 91%.", "No other issues, battery health is 91%"),
+    ("Apart from these points, the device performs normally with no other problems.",
+     "Apart from these points, the device performs normally with no other problems"),
+    ("No scratches other than the box being a bit tatty.", "No scratches other than the box being a bit tatty"),
+    ("Aside from that, the phone is in excellent condition, no other screen issues, cracks, or functional problems.",
+     "Aside from that, the phone is in excellent condition, no other screen issues, cracks, or functional problems"),
+    # found by the red team, 26 Sep: nothing in these looks like a flaw
+    ("No scratches, only one owner.", "No scratches, only one owner"),
+    ("No dents, just a few days old.", "No dents, just a few days old"),
+    ("Face ID works perfectly, no other issues.", "Face ID works perfectly, no other issues"),
+    ("Selling due to upgrade, apart from that no issues.", "Selling due to upgrade, apart from that no issues"),
+    ("No scratches other than fingerprints.", "No scratches other than fingerprints"),
+    ("No scratches, nothing else to say.", "No scratches, nothing else to say"),
+])
+def test_a_no_that_excepts_nothing_is_still_denied(text, quote):
+    assert check_reading({"flaws": [quote], "pickup": "", "no_offers": ""}, f"iPhone 13. {text}") == \
+        [f"the reading gives as flaws what the seller says isn't so: {quote!r}"]

@@ -171,12 +171,25 @@ NEGATIONS = {"no", "not", "without", "missing", "never", "none", "nor", "isn", "
              # typed without the apostrophe: "doesnt come with charger", "dont have the box"
              "isnt", "doesnt", "dont", "hasnt", "wasnt", "arent", "werent", "havent", "hadnt", "didnt", "cant", "wont",
              "aint"}
+# a lone "t" is a "not" ("don t", "can t", and "doesn't" typed or mangled any way), but not in a carrier's name:
+# "at t locked" (AT&T) or "t mobile locked" (T Mobile) deny nothing
+
+
+def negation_at(words, n, negations=NEGATIONS):
+    """Whether words[n] is a "no": one of the negations, but not the "t" of
+    "at t" (AT&T) or "t mobile" (T Mobile)."""
+    word = words[n]
+    carrier = word == "t" and ((n > 0 and words[n - 1] == "at") or words[n + 1:n + 2] == ["mobile"])
+    return word in negations and not carrier
+
+
 # ...unless it ends first (denied_by): an exception ("no marks APART from a scratch", "no cracks ONLY light
-# scratches"), a thing of its own the "no" was about ("no OFFERS small crack", "no BOX just a scratch"), or a
-# new statement ("no box, screen HAS a crack", though not "doesn't HAVE any scratches")
+# scratches", "no marks BESIDES a small dent"), a thing of its own the "no" was about ("no OFFERS small crack", "no BOX just a scratch"), or a
+# new statement ("no box, screen HAS a crack", "never repaired THERE'S a scratch", though not "doesn't HAVE any
+# scratches")
 NEGATION_ENDS = {"only", "just", "apart", "except", "bar", "other", "but", "though", "although", "however", "selling",
-                 "sold"}
-NEW_STATEMENT = {"has", "have", "got", "is", "are", "was"}
+                 "sold", "aside", "besides", "excluding", "excepting", "beyond", "save"}
+NEW_STATEMENT = {"has", "have", "got", "is", "are", "was", "theres"}
 NEGATED_THINGS = {"offers", "offer", "swaps", "swap", "returns", "refunds", "timewasters", "time", "box", "charger",
                   "cable", "plug", "case", "lowballers", "messers", "scams", "pets", "smoke", "smoking"}
 # a label and its answer, as sellers list them: "Faults: none", "Scratches – no", "Any damage? Nope",
@@ -225,13 +238,14 @@ def denied_by(lead, negations=NEGATIONS):
     """Whether the words leading up to a claim word deny it: a negation word
     among them that nothing ends first (NEGATION_ENDS, NEGATED_THINGS, or a
     verb with a word of its own before it: NEW_STATEMENT). "doesn t have any"
-    denies; "no box screen has small" and "no cracks only light" don't."""
-    for n, word in enumerate(lead):
-        if word not in negations:
+    denies; "no box screen has small" and "no cracks only light" don't, and
+    nor does the "t" of "at t locked" (negation_at)."""
+    for n in range(len(lead)):
+        if not negation_at(lead, n, negations):
             continue
         rest = lead[n + 1:]
         ends = set(rest) & (NEGATION_ENDS | NEGATED_THINGS)
-        if "other" in ends and not any(w == "other" and after == "than" for w, after in zip(rest, rest[1:])):
+        if "other" in ends and not any(w == "other" and after in ("than", "then") for w, after in zip(rest, rest[1:])):
             ends.discard("other")  # "no OTHER marks" denies more of them; "no marks OTHER THAN a scratch" excepts one
         ended = ends or any(verb in NEW_STATEMENT and set(rest[:k]) - {"t"} for k, verb in enumerate(rest))
         if not ended:
