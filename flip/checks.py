@@ -171,16 +171,23 @@ NEGATIONS = {"no", "not", "without", "missing", "never", "none", "nor", "isn", "
              # typed without the apostrophe: "doesnt come with charger", "dont have the box"
              "isnt", "doesnt", "dont", "hasnt", "wasnt", "arent", "werent", "havent", "hadnt", "didnt", "cant", "wont",
              "aint"}
-# a lone "t" is a "not" ("don t", "can t", and "doesn't" typed or mangled any way), but not in a carrier's name:
-# "at t locked" (AT&T) or "t mobile locked" (T Mobile) deny nothing
+# a lone "t" is a "not" ("don t", "can t", and "doesn't" typed or mangled any way), but not in a carrier's name or a
+# key's: "at t locked" (AT&T), "t mobile locked" (T Mobile) and "the t key sticks" deny nothing
 
 
 def negation_at(words, n, negations=NEGATIONS):
     """Whether words[n] is a "no": one of the negations, but not the "t" of
-    "at t" (AT&T) or "t mobile" (T Mobile)."""
+    "at t" (AT&T), "t mobile" (T Mobile) or "the t key"."""
     word = words[n]
-    carrier = word == "t" and ((n > 0 and words[n - 1] == "at") or words[n + 1:n + 2] == ["mobile"])
-    return word in negations and not carrier
+    before = words[n - 1] if n > 0 else ""
+    named = word == "t" and (before == "at" or words[n + 1:n + 2] == ["mobile"] or
+                             (words[n + 1:n + 2] in (["key"], ["keys"]) and before not in CONTRACTED))
+    return word in negations and not named
+
+
+# the first half of a "n't" whose apostrophe went missing: "aren t keys sticking" denies, "the t key sticks" doesn't
+CONTRACTED = {"aren", "isn", "don", "doesn", "didn", "can", "won", "wasn", "weren", "hasn", "haven", "hadn", "couldn",
+              "wouldn", "shouldn", "ain", "mustn", "needn"}
 
 
 # ...unless it ends first (denied_by): an exception ("no marks APART from a scratch", "no cracks ONLY light
@@ -188,7 +195,7 @@ def negation_at(words, n, negations=NEGATIONS):
 # new statement ("no box, screen HAS a crack", "never repaired THERE'S a scratch", though not "doesn't HAVE any
 # scratches")
 NEGATION_ENDS = {"only", "just", "apart", "except", "bar", "other", "but", "though", "although", "however", "selling",
-                 "sold", "aside", "besides", "excluding", "excepting", "beyond", "save"}
+                 "sold", "aside", "besides", "excluding", "excepting", "beyond", "save", "barring", "minus"}
 NEW_STATEMENT = {"has", "have", "got", "is", "are", "was", "theres"}
 NEGATED_THINGS = {"offers", "offer", "swaps", "swap", "returns", "refunds", "timewasters", "time", "box", "charger",
                   "cable", "plug", "case", "lowballers", "messers", "scams", "pets", "smoke", "smoking"}

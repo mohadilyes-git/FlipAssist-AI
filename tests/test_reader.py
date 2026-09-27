@@ -535,6 +535,11 @@ def test_a_word_the_listing_doesnt_have_isnt_a_typo():
 
 # ── after the round 4 test, 26 Sep: what the denial check dropped wrongly ─────
 
+def test_the_t_key_is_not_a_not():
+    assert check_reading({"flaws": ["The T key sticks now and then"], "pickup": "", "no_offers": ""},
+                         "MacBook Air. The T key sticks now and then.") == []
+
+
 @pytest.mark.parametrize("text, quote", [
     ("AT&T Locked.", "AT&T Locked"),
     ("T Mobile locked, works fine otherwise.", "T Mobile locked"),
@@ -584,6 +589,27 @@ def test_a_t_after_half_a_contraction_still_denies():
     ("A bit laggy at times, no scratches.", "A bit laggy at times, no scratches"),
     ("Few scapes around edges, no cracks on screen.", "Few scapes around edges, no cracks on screen"),
     ("Minor scruffs on the frame, no dents.", "Minor scruffs on the frame, no dents"),
+    # 26 Sep, from round 5's second practice set: faults said in other words, typed exception words, more places
+    ("Not a scratch on the screen except a faint one up by the earpiece.",
+     "Not a scratch on the screen except a faint one up by the earpiece"),
+    ("no problems with it excpet face id quit working last month", "no problems with it excpet face id quit working last month"),
+    ("No issues aside form the ultra wide camera, it shows a black screen.",
+     "No issues aside form the ultra wide camera, it shows a black screen"),
+    ("No damage appart from a small chip on the corner of the screen.",
+     "No damage appart from a small chip on the corner of the screen"),
+    ("No scuffs on the frame apart from a small ding on the corner.", "No scuffs on the frame apart from a small ding on the corner"),
+    ("No problems except the charger port is a bit temperamental.", "No problems except the charger port is a bit temperamental"),
+    ("No marks barring a small scratch on the back.", "No marks barring a small scratch on the back"),
+    ("No scratches minus a small chip on the corner.", "No scratches minus a small chip on the corner"),
+    ("Nothing worse than a few hairline scratches on the screen.", "Nothing worse than a few hairline scratches on the screen"),
+    ("No issues apart from the hinge creaking a bit.", "No issues apart from the hinge creaking a bit"),
+    ("No problems other than the battery saying Service Recommended.",
+     "No problems other than the battery saying Service Recommended"),
+    # the red team's (26 Sep): a symptom beside a "no" with the accessory after it is still the item's
+    ("No scratches, the speaker sounds tinny even with the case off.", "No scratches, the speaker sounds tinny even with the case off"),
+    ("No marks, gets hot when charging with a 20W charger.", "No marks, gets hot when charging with a 20W charger"),
+    ("No cracks, the cover screen is unresponsive at the bottom.", "No cracks, the cover screen is unresponsive at the bottom"),
+    ("No scratches or dents, runs a bit hot and slow.", "No scratches or dents, runs a bit hot and slow"),
 ])
 def test_what_a_no_makes_an_exception_to_is_still_said(text, quote):
     assert check_reading({"flaws": [quote], "pickup": "", "no_offers": ""}, f"iPhone 13. {text}") == []
@@ -619,6 +645,34 @@ def test_what_a_no_makes_an_exception_to_is_still_said(text, quote):
     ("No lag, no scratches.", "No lag, no scratches"),
     ("Doesn't get hot, no dents.", "Doesn't get hot, no dents"),
     ("No scapes or dents.", "No scapes or dents"),
+    # 26 Sep: the new fault words with a "no" of their own, in a denied list, or said of what comes with it
+    ("No scratches, scuffs, or dings.", "No scratches, scuffs, or dings"),
+    ("No creaks or rattles.", "No creaks or rattles"),
+    ("Hinge doesn't creak, no scratches.", "Hinge doesn't creak, no scratches"),
+    ("Never got wet, no scratches.", "Never got wet, no scratches"),
+    ("No water damage, no cracks.", "No water damage, no cracks"),
+    ("No marks on the phone, the case is wearing off.", "No marks on the phone, the case is wearing off"),
+    ("No scratches, the charger gets warm though.", "No scratches, the charger gets warm though"),
+    ("No dents, the box got wet.", "No dents, the box got wet"),
+    ("Speaker isn't quiet, no marks.", "Speaker isn't quiet, no marks"),
+    ("No black screen issues, no scratches.", "No black screen issues, no scratches"),
+    ("Battery shows 81% in the photo, no scratches.", "Battery shows 81% in the photo, no scratches"),
+    ("We accept returns, no scratches.", "We accept returns, no scratches"),
+    # the red team's (26 Sep): the fault words that count only after an exception, said beside a "no"; the "no" far back;
+    # another phone; "expect" and "accept" in their own sense; "only" going on; a mangled "aren't"
+    ("No scratches, never once in three years had a black screen.", "No scratches, never once in three years had a black screen"),
+    ("Battery health 92%, nowhere near Service Recommended, no scratches.",
+     "Battery health 92%, nowhere near Service Recommended, no scratches"),
+    ("No marks on this one, unlike my old phone that got wet.", "No marks on this one, unlike my old phone that got wet"),
+    ("No scratches, the charger only works half the time.", "No scratches, the charger only works half the time"),
+    ("No scratches, only selling as I'm coming off contract.", "No scratches, only selling as I'm coming off contract"),
+    ("Don't expect to find a single scratch on it.", "Don't expect to find a single scratch on it"),
+    ("No scratches, will accept a bit under.", "No scratches, will accept a bit under"),
+    ("No scratches, the screen protector is only lifting at one corner.",
+     "No scratches, the screen protector is only lifting at one corner"),
+    ("There aren t key marks on the screen.", "There aren t key marks on the screen"),
+    ("No issues apart from my old phone getting wet.", "No issues apart from my old phone getting wet"),
+    ("No marks other than on the lead, which is wearing off.", "No marks other than on the lead, which is wearing off"),
 ])
 def test_a_no_that_excepts_nothing_is_still_denied(text, quote):
     assert check_reading({"flaws": [quote], "pickup": "", "no_offers": ""}, f"iPhone 13. {text}") == \

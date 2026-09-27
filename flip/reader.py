@@ -634,7 +634,7 @@ def denied(quote, text):
 # ("excpet", "appart from", "aside form", "other then", "exc."); "bar" and "save" only before an amount ("bar a tiny
 # one", "save the small one"), not "bar none". What follows still has to look like a flaw (excepted)
 EXCEPTIONS = re.compile(r"\b(?:oth(?:er|e)\s+th[ae]n|ap+art\s+f(?:ro|or|r)?m|a\s+part\s+from|asides?\s+f(?:ro|or)m|"
-                        r"exc?e?pt(?:ing|\s+for)?|excpet|expect|besides|excluding|excl?\.|outside\s+of|"
+                        r"exc?e?pt(?:ing|\s+for)?|excpet|expect|barring|minus|besides|excluding|excl?\.|outside\s+of|"
                         r"with\s+the\s+exception\s+of|the\s+(?:only\s+)?exception\s+(?:is|being)|unless\s+you\s+count|"
                         r"but(?:\s+for)?|only(?:\s+with)?|just|beyond|save\s+for|"
                         r"(?:bar|save)(?=\s+(?:an?\s+|the\s+)?(?:one|two|three|\d+|some|few|couple|light|minor|small|tiny|"
@@ -650,12 +650,44 @@ SYMPTOMS = re.compile(r"\b(?:blurr?y|blurred|fuzzy|grainy|tinny|muffled|crackly|
                       r"laggy|lags|lagging|glitchy|freezes|freezing|"
                       r"(?:can'?t|cannot|won'?t|doesn'?t|does not) (?:use|make|receive|hear|read|recogni[sz]e|detect|"
                       r"update|install|download|connect|charge|turn|hold|have true tone))\b", re.IGNORECASE)
+# ...and, only straight after a plain exception ("No marks apart from a small DING", "no problems excpet face id QUIT
+# WORKING", "No issues aside form the ultra wide camera, it shows a BLACK SCREEN"), more ways a fault is said: words a
+# "no" anywhere else in the sentence can't be trusted with (the 26 Sep red team: "never once in three years had a black
+# screen", "nowhere near Service Recommended", "only selling as I'm coming off contract")
+MORE_SYMPTOMS = re.compile(r"\b(?:creak\w*|dings?|dinged|quit working|playing up|acting up|black screen|wearing off|"
+                           r"worn off|rubbed off|works? (?:about |only )?half the time|works? (?:only )?sometimes|"
+                           r"only lasts (?:about |around |roughly )?(?:an? |one |two |\d+ )?(?:hour|hr)s?|"
+                           r"lasts? (?:about |around |roughly |maybe )?(?:an?|one|1) (?:hour|hr)|service recommended|"
+                           r"replace (?:soon|now)|service battery|got wet|(?:water|liquid) damaged?|(?:fell|dropped|went) "
+                           r"(?:it )?(?:in|into) (?:the |a |some )?(?:\w+ )?(?:water|sink|toilet|pool|bath|puddle|lake|sea|"
+                           r"river)|(?:speakers?|earpiece|mic|microphone)(?:'s| is| are| sounds?| gets?| seems?| has gone| went)"
+                           r"(?: (?:a bit|very|really|real|quite|pretty|too|so|super|kinda|a little))? (?:quiet|faint)|"
+                           r"(?:doesn'?t|does not|don'?t|won'?t|isn'?t) always (?:work|connect|charge|read|recogni[sz]e|"
+                           r"unlock|respond|register|detect|pair))\b", re.IGNORECASE)
+# the exceptions that name a flaw for sure; "but", "only" and "just" often only go on ("No scratches, only selling as
+# I'm coming off contract")
+WEAK_EXCEPTIONS = re.compile(r"^(?:but|only|just|expect)\b", re.IGNORECASE)  # "Don't EXPECT to find a scratch"
+# an exception typed so the listing's parts don't end there ("APPART FROM a small chip"): what follows is judged on its own
+TYPED_EXCEPTIONS = re.compile(r"^(?:oth(?:er|e)\s+then|othe\s+than|ap+art\s+f(?:or|r)m|app+art\s+from|a\s+part\s+from|"
+                              r"asides?\s+form|excpet|exept|excep\b)", re.IGNORECASE)
+# a symptom said of what comes with the item, before it: "the charger gets warm", "the box got wet", "the case is
+# wearing off"; not "gets hot when charging with a 20W charger" or "tinny even with the case off"
+USED_WITH = re.compile(r"\b(?:off|on|from|with|without|via|using|by|to) (?:the |a |an |its |my )?(?:charger|charging cable|"
+                       r"cable|plug|adapter|adaptor|mains)\b|\b(?:charger|charging|charge|cable) (?:port|socket|connector|"
+                       r"pins?)\b|\bcover (?:screen|display)\b", re.IGNORECASE)  # the item's own: "the charger port", a Flip's "cover screen"
+WITH_ITS_THINGS = re.compile(rf"\b(?:{WITH_IT['item']}|sleeves?|skins?|stands?|docks?|straps?|pouch(?:es)?|bags?|"
+                             rf"earphones|headphones|ear ?buds|air ?pods|stylus|sim (?:card|tool|pin)|leads?|cords?|"
+                             rf"wallets?|folios?|dongles?|stickers?|mounts?|power ?banks?|battery packs?|hubs?|"
+                             rf"pop ?sockets?|films?)\b", re.IGNORECASE)
+# ...or of another phone: "unlike my old phone that got wet", "my last 12 quit working"
+OTHER_ITEM = re.compile(r"\b(?:my|his|her|their|your|our) (?:old|last|previous|other|partner'?s|mate'?s|friend'?s)\b|"
+                        r"\bunlike\b|\bmost (?:phones|laptops|macbooks|\d+s)\b", re.IGNORECASE)
 # real words that in a listing are a flaw word typed wrong, the labellers' typo list ("few STARCHES", "small SCAPES",
 # "minor SCRUFFS", "a couple of DINTS", "screen is CREAKED"), or a wear word of their own ("a bit SCRUFFY")
 TYPED_FLAWS = re.compile(r"\b(?:starch(?:es)?|scapes?|scruffs?|scruffy|dints?|dinted|creaked)\b", re.IGNORECASE)
-# "NOTHING MORE THAN light wear on the corners", "NO MORE THAN a couple of light scratches": what follows is all there
-# is, so it is said; the "no" denies only that there is more
-NO_MORE_THAN = re.compile(r"\b(?:no|nothing|not)\s+(?:much\s+)?more\s+than\b", re.IGNORECASE)
+# "NOTHING MORE THAN light wear on the corners", "NO MORE THAN a couple of light scratches", "nothing worse than a few
+# hairline scratches": what follows is all there is, so it is said; the "no" denies only that there is more
+NO_MORE_THAN = re.compile(r"\b(?:no|nothing|not)\s+(?:much\s+)?(?:more|worse)(?:\s+serious)?\s+than\b", re.IGNORECASE)
 # a "no"'s exception that only says how much or where, so it is more of what the "no" was about: "other than a TINY ONE
 # on the CORNER", "except the CAMERA LENS", "apart from THOSE on the BACK CORNERS"
 REFERS_BACK = {"one", "ones", "few", "couple", "some", "little", "tiny", "teeny", "small", "minor", "light", "slight",
@@ -664,25 +696,34 @@ ITEM_PLACES = {"camera", "cameras", "lens", "lenses", "screen", "display", "back
                "edges", "frame", "side", "sides", "bezel", "bezels", "lid", "hinge", "port", "ports", "button", "buttons",
                "keyboard", "key", "keys", "trackpad", "touchpad", "bottom", "top", "left", "right", "rear", "glass",
                "casing", "body", "base", "palm", "rest", "near", "around", "by", "under", "underneath", "upper", "lower",
-               "middle", "centre", "center", "speaker", "speakers", "grille", "logo", "notch", "rim", "surface"}
+               "middle", "centre", "center", "speaker", "speakers", "grille", "logo", "notch", "rim", "surface",
+               "earpiece", "up", "across", "along", "dynamic", "island", "inner", "outer", "chin", "crease", "sensor",
+               "flash", "volume", "power", "mute", "tray", "titanium", "aluminium", "aluminum", "ring", "bump", "selfie",
+               "touch", "bar", "beside", "sim"}
 # filler between them: "a", "the", "those", "on"
 FILLER = {"that", "this", "these", "those", "it", "them", "the", "a", "an", "and", "or", "of", "on", "in", "at", "to",
           "for", "is", "are", "was", "were", "s", "there", "which", "just", "only"}
 
 
-def flaw_said(part, text):
+def flaw_said(part, text, more=False):
     """Whether a part of a quote says something is wrong without a "no" of its
     own: a flaw word the listing doesn't deny, a battery at 85% or under, or a
     symptom ("a bit slow", "can't use Face ID") or a flaw word typed as another
-    word ("few scapes") with no "not" just before it."""
+    word ("few scapes") with no "not" just before it, and not said of what
+    comes with the item or of another phone. more: also MORE_SYMPTOMS, for
+    what follows a plain exception."""
     if not part.strip():
         return False
     if low_battery(part) or any(judge(piece, text) == "flaw" for piece in parts_of(part)):
         return True
-    for found in (SYMPTOMS.search(part), TYPED_FLAWS.search(part)):
-        before = plain_words(part[:found.start()])[-3:] if found else []
-        if found and not any(negation_at(before, n, NEGATORS) for n in range(len(before))):
-            return True
+    for words in (SYMPTOMS, TYPED_FLAWS) + ((MORE_SYMPTOMS,) if more else ()):
+        for found in words.finditer(part):
+            lead = part[:found.start()]
+            if WITH_ITS_THINGS.search(USED_WITH.sub(" ", lead)) or OTHER_ITEM.search(lead):
+                continue  # "the charger gets warm", "unlike my old phone that got wet"
+            before = plain_words(lead)[-3:]
+            if not any(negation_at(before, n, NEGATORS) for n in range(len(before))):
+                return True
     return False
 
 
@@ -703,8 +744,9 @@ def excepted(quote, text):
     issues, battery health is 91%" or "apart from that, no issues"."""
     for found in EXCEPTIONS.finditer(quote):
         before, after = quote[:found.start()], quote[found.end():]
-        if flaw_said(after, text):
-            return True  # "...apart from it being a bit slow"
+        more = not WEAK_EXCEPTIONS.match(found.group(0))
+        if flaw_said(after, text, more) or (TYPED_EXCEPTIONS.match(found.group(0)) and flaw_said(after, after, more)):
+            return True  # "...apart from it being a bit slow"; on its own when it's typed ("appart from a small chip")
         said = [w for w in plain_words(after) if w not in FILLER]
         if said and all(w in REFERS_BACK or w in ITEM_PLACES for w in said) and \
                 any(judge(piece, text) == "denied" for piece in parts_of(before)):
@@ -716,7 +758,7 @@ def excepted(quote, text):
             return True  # "Selfie camera is a little blurry, but no other issues"
     for found in NO_MORE_THAN.finditer(quote):
         after = quote[found.end():]
-        if flaw_said(after, after):
+        if flaw_said(after, after, more=True):
             return True  # "Nothing more than light wear on the corners": judged on its own, as the "no" isn't about it
     # a part beside the "no" that says what's wrong in words the flaw words leave out: "A bit slow, no cracks no
     # scratches", "Few scapes around the edges, no cracks on the screen"
