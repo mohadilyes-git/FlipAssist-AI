@@ -432,3 +432,11 @@ def test_half_a_character_from_a_caller_is_made_whole_not_a_crash(client):
     added = client.post("/style/messages", content='[{"title": "Pixel \\udfff", "text": "Hi, would you take \\u00a3220?"}]',
                         headers={"Content-Type": "application/json"})
     assert added.status_code == 201 and added.json()[0]["title"] == "Pixel �"
+
+
+def test_the_listing_is_read_by_the_reader_when_one_is_set():
+    local, other = FakeModel("gemma3:4b"), FakeModel("flip-reader-5")
+    assert api.Setup(local, None, None).reading_model() is local
+    assert api.Setup(local, None, None, reader=lambda: other).reading_model() is other
+    assert api.Setup(local, None, None, reader=lambda: None).reading_model() is local
+    assert api.Setup(local, None, None, reader=other).reading_model() is other

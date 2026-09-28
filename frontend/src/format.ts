@@ -3,6 +3,7 @@
 const WRITERS: Record<string, string> = {
   template: "Your own sentences (no AI)",
   "gemma3:4b": "Gemma, on this Mac",
+  "flip-reader-5": "Fine-tuned Gemma, on this Mac",
   "claude-haiku-5-5": "Claude Haiku (paid backup)",
   code: "Code only",
 };

@@ -34,11 +34,25 @@ cut to a place's name ("Collection only, Leeds LS6" -> "Leeds LS6"), never a
 day, a time or a way of buying. Gemma reads first and Haiku gets one try when
 Gemma's reading fails a check, as for drafts (flip.attempts). With no model,
 or none that passes, the reading is code's alone.
+
+FlipAssist's own reader reads in Gemma's place when Ollama has it
+(reader_for): flip-reader-5, Gemma 3 4B fine-tuned on 33,160 labelled
+listings to quote exactly the sentences that state a flaw. Its reading gets
+the safety checks only (reading_checked: rule 1, the denial check, a seller's
+story cut to the flaw, the pickup and "no offers" checks), not rules 2 and 3.
+On 5,032 listings no model had seen (26 Sep 2026) rules 2 and 3 took the
+flaws it found from 96.5% to 89.4% on UK iPhones and from 94.3% to 68.3% on
+US and Canadian listings, and it was as good as round 4's reader (95.3% of
+3,162 double-checked flaws each, 18 false alarms each).
 """
 
+import json
+import os
 import re
+import urllib.request
 from functools import lru_cache
 
+from flip.ai import LocalModel
 from flip.attempts import try_models
 from flip.catalogue import contains, find_phrase, words
 from flip.checks import (CONDITION_PROMISES, ESIM, MARKS, NEGATIONS, NOT_A_FLAW, PROBLEM, answered, denied_by,
@@ -54,6 +68,8 @@ CLAUSE_WORDS = {"and", "but", "plus", "as", "because", "since", "though", "altho
                 "which"}
 MAX_FLAW = 15  # words: a flaw, not a paragraph (a sentence about one flaw can run to 15)
 MAX_BEFORE = 6  # words back a "no" can still deny a flaw
+# FlipAssist's own fine-tuned reader (round 5), when Ollama has it; FLIP_READER_MODEL= (empty) reads with Gemma
+READER = os.environ.get("FLIP_READER_MODEL", "flip-reader-5").strip()
 # a denial, its apostrophe gone the way plain_words takes it out: "arent", "doesnt", "free (of)"
 NEGATORS = NEGATIONS | {"zero", "free", "arent", "isnt", "doesnt", "hasnt", "havent", "dont", "wont", "cant", "wasnt",
                         "werent", "didnt", "never", "none", "nothing", "nor"}
@@ -815,6 +831,46 @@ def tidied(reply, text):
     return reply
 
 
+def installed(model, url):
+    """Whether the Ollama at url has the model, by its name ("flip-reader-5"
+    or "flip-reader-5:latest"); not when Ollama doesn't answer."""
+    try:
+        with urllib.request.urlopen(f"{url}/api/tags", timeout=2) as answer:
+            names = {m.get("name") for m in json.load(answer).get("models") or [] if isinstance(m, dict)}
+    except (OSError, ValueError, AttributeError):
+        return False
+    return model in names or f"{model}:latest" in names
+
+
+def reader_for(local):
+    """The model that reads a listing: FlipAssist's own reader (READER) when
+    Ollama has it, else the local model given (Gemma, which also writes the
+    drafts). Anything that isn't a LocalModel (none, a test's stand-in) stays."""
+    if not READER or not isinstance(local, LocalModel) or local.name == READER or not installed(READER, local.url):
+        return local
+    return LocalModel(name=READER, url=local.url, timeout=local.timeout)
+
+
+def fine_tuned(model):
+    """Whether a model is one of FlipAssist's own fine-tuned readers ("flip-reader-5")."""
+    return isinstance(model, str) and model.split(":")[0].startswith("flip-reader")
+
+
+def reading_checked(answer, text, read_by):
+    """A fine-tuned reader's reading that passed check_reading, with the
+    safety checks only: each quote is the listing's (rule 1, checked already),
+    a seller's story is cut to the flaw, the same words count once, and the
+    pickup and "no offers" are checked as for any reading. Not rules 2 and 3:
+    it was trained to quote exactly the sentences that state a flaw, and
+    cutting its quotes into code's pieces lost flaws it had found."""
+    flaws = [trimmed(quote) for quote in answer["flaws"] if isinstance(quote, str) and quote.strip()]
+    pickup = place(answer["pickup"])
+    said = answer["no_offers"].strip()
+    return {"flaws": list({f.lower(): f for f in flaws}.values()),  # the same words once
+            "pickup": pickup if pickup and in_listing(pickup, text) else "",
+            "no_offers": said if said and no_offers_ok(said, text) else code_no_offers(text), "read_by": read_by}
+
+
 def read_listing_with_ai(listing, local=None, api=None, mode="auto", log=None):
     """The listing (title and description) read by AI and checked by code, or
     by code alone when no model's reading passes. Returns the reading
@@ -826,5 +882,7 @@ def read_listing_with_ai(listing, local=None, api=None, mode="auto", log=None):
     answer = try_models(mode, {"local": local, "api": api},
                         ask=lambda ai: tidied(ai.ask(system, user, [], READING_SCHEMA), text),
                         check=lambda found: check_reading(found, text), result=result, log=log)
-    reading = code_reading(text) if answer is None else reading_from(answer, text, result["attempts"][-1]["model"])
+    model = result["attempts"][-1]["model"] if answer is not None else None
+    reading = code_reading(text) if answer is None else \
+        (reading_checked if fine_tuned(model) else reading_from)(answer, text, model)
     return {**reading, "attempts": result["attempts"], "reasons": result["reasons"]}

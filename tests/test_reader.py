@@ -6,7 +6,14 @@ import re
 import pytest
 
 from flip.ai import Reply
-from flip.reader import check_reading, code_reading, flaws_in, in_listing, place, read_listing_with_ai, reading_from
+import io
+import json
+import urllib.error
+
+import flip.reader as reader
+from flip.ai import LocalModel
+from flip.reader import (check_reading, code_reading, fine_tuned, flaws_in, in_listing, installed, place,
+                         read_listing_with_ai, reader_for, reading_checked, reading_from)
 from flip.offers import unnegated
 from tests.fakes import FakeModel
 
@@ -677,3 +684,75 @@ def test_what_a_no_makes_an_exception_to_is_still_said(text, quote):
 def test_a_no_that_excepts_nothing_is_still_denied(text, quote):
     assert check_reading({"flaws": [quote], "pickup": "", "no_offers": ""}, f"iPhone 13. {text}") == \
         [f"the reading gives as flaws what the seller says isn't so: {quote!r}"]
+
+
+# ── FlipAssist's own reader (round 5): the safety checks only ───────────────
+
+def test_a_fine_tuned_readers_quotes_are_kept_whole():
+    # Gemma's reading is cut to code's pieces (rule 2): "Black dot on the screen"
+    assert read_listing_with_ai(LISTING, FakeModel("gemma3:4b", GOOD_READ))["flaws"] == \
+        ["Black dot on the screen", "Cracked back"]
+    reading = read_listing_with_ai(LISTING, FakeModel("flip-reader-5", GOOD_READ))
+    assert (reading["read_by"], reading["flaws"]) == \
+        ("flip-reader-5", ["Black dot on the screen, doesn't affect use", "Cracked back"])
+    assert (reading["pickup"], reading["no_offers"]) == ("Leeds LS6", "Price is firm, no offers")
+
+
+def test_code_adds_no_flaw_to_a_fine_tuned_reading():
+    one = {**GOOD_READ, "flaws": ["Black dot on the screen, doesn't affect use"]}
+    assert "Cracked back" in read_listing_with_ai(LISTING, FakeModel("gemma3:4b", one))["flaws"]  # rule 3: code's own
+    assert read_listing_with_ai(LISTING, FakeModel("flip-reader-5", one))["flaws"] == \
+        ["Black dot on the screen, doesn't affect use"]
+
+
+def test_a_fine_tuned_reading_still_gets_the_safety_checks():
+    said = {"flaws": ["80% battery health", "no scratches"], "pickup": "", "no_offers": ""}
+    reading = read_listing_with_ai(LIKE_NEW, FakeModel("flip-reader-5", said))
+    assert (reading["read_by"], reading["flaws"]) == ("flip-reader-5", ["80% battery health"])  # the denial is dropped
+    made_up = {"flaws": ["Cracked screen"], "pickup": "", "no_offers": ""}
+    assert read_listing_with_ai(LIKE_NEW, FakeModel("flip-reader-5", made_up))["read_by"] == "code"
+    story = {"id": "l3", "title": "iPhone 12", "description": "I dropped it and cracked the back. Works fine."}
+    told = {"flaws": ["I dropped it and cracked the back", "I dropped it and cracked the back"], "pickup": "",
+            "no_offers": ""}
+    assert read_listing_with_ai(story, FakeModel("flip-reader-5", told))["flaws"] == ["cracked the back"]
+
+
+def test_reading_checked_checks_the_pickup_and_no_offers():
+    answer = {"flaws": [], "pickup": "Text me before you come", "no_offers": "Collection only from Leeds LS6"}
+    assert reading_checked(answer, TEXT, "flip-reader-5") == \
+        {"flaws": [], "pickup": "", "no_offers": "Price is firm", "read_by": "flip-reader-5"}  # code reads it instead
+
+
+@pytest.mark.parametrize("model, ours", [("flip-reader-5", True), ("flip-reader-5:latest", True), ("flip-reader-4", True),
+                                         ("gemma3:4b", False), ("claude-haiku-5-5", False), ("code", False),
+                                         (None, False)])
+def test_which_models_are_flipassists_own_readers(model, ours):
+    assert fine_tuned(model) is ours
+
+
+def test_the_reader_is_flipassists_own_when_ollama_has_it(monkeypatch):
+    gemma = LocalModel(max_tokens=300, timeout=60)
+    monkeypatch.setattr(reader, "installed", lambda model, url: model == "flip-reader-5")
+    found = reader_for(gemma)
+    assert (found.name, found.url, found.timeout, found.max_tokens) == ("flip-reader-5", gemma.url, 60, 1000)
+    stand_in = FakeModel("gemma3:4b")
+    assert reader_for(stand_in) is stand_in and reader_for(None) is None
+    monkeypatch.setattr(reader, "installed", lambda model, url: False)
+    assert reader_for(gemma) is gemma  # not downloaded: Gemma reads, with every rule
+    monkeypatch.setattr(reader, "installed", lambda model, url: True)
+    monkeypatch.setattr(reader, "READER", "")
+    assert reader_for(gemma) is gemma  # FLIP_READER_MODEL= turns it off
+
+
+def test_installed_reads_ollamas_list(monkeypatch):
+    def tags(*names):
+        return lambda url, timeout: io.BytesIO(json.dumps({"models": [{"name": n} for n in names]}).encode())
+    monkeypatch.setattr(reader.urllib.request, "urlopen", tags("gemma3:4b", "flip-reader-5:latest"))
+    assert installed("flip-reader-5", "http://127.0.0.1:11434")
+    monkeypatch.setattr(reader.urllib.request, "urlopen", tags("gemma3:4b"))
+    assert not installed("flip-reader-5", "http://127.0.0.1:11434")
+
+    def down(url, timeout):
+        raise urllib.error.URLError("connection refused")
+    monkeypatch.setattr(reader.urllib.request, "urlopen", down)
+    assert not installed("flip-reader-5", "http://127.0.0.1:11434")

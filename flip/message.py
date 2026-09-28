@@ -22,7 +22,7 @@ from flip.attempts import MODES
 from flip.audit import AuditLog
 from flip.draft import load_env
 from flip.message_drafter import MESSAGE_TOKENS, WRITERS, draft_message
-from flip.reader import read_listing_with_ai
+from flip.reader import read_listing_with_ai, reader_for
 from flip.money import OFFER_KINDS
 from flip.retrieval import MessageIndex
 from flip.style import StyleBook, describe, load_messages
@@ -69,7 +69,7 @@ def main():
                "marketplace": args.marketplace}
     api = ApiModel() if os.environ.get("ANTHROPIC_API_KEY") else None
     local, log = LocalModel(max_tokens=MESSAGE_TOKENS), AuditLog()
-    reading = read_listing_with_ai(listing, local, api, args.mode, log)
+    reading = read_listing_with_ai(listing, reader_for(local), api, args.mode, log)
     mention = {"yes": True, "no": False}.get(args.mention)
     longer = args.longer or bool(args.previous)
     result = draft_message(listing, book.card(), book.index, local, api, args.mode, log, args.discount,

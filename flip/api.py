@@ -46,7 +46,7 @@ from flip.message_drafter import MESSAGE_TOKENS, Refused, draft_message, offer_t
 from flip.money import to_pence
 from flip.photos import NotAPhoto, photo_base64, photo_kind
 from flip.prompts import offer_words
-from flip.reader import read_listing_with_ai
+from flip.reader import read_listing_with_ai, reader_for
 from flip.retrieval import MessageIndex
 from flip.style import StyleBook, phrase_rows, traits
 
@@ -257,10 +257,18 @@ class Health(BaseModel):
 class Setup:
     """The models, the audit log and the catalogue: made once, on the first call that needs them."""
 
-    def __init__(self, local, api, log, local_listing=None):
+    def __init__(self, local, api, log, local_listing=None, reader=None):
         self.local, self.api, self.log = local, api, log
         self.local_listing = local_listing or local  # listings get the bigger answer budget
+        self.reader = reader  # what reads the seller's listing: a model, or a function that gives one when asked
         self.catalogue, self.conditions = load_catalogue(), load_conditions()
+
+    def reading_model(self):
+        """The model that reads the seller's listing: FlipAssist's own reader
+        when Ollama has it (looked up at each reading, so one installed or
+        started later is used), else the local model that writes."""
+        found = self.reader() if callable(self.reader) else self.reader
+        return found or self.local
 
 
 @lru_cache
@@ -271,7 +279,8 @@ def audit():
 @lru_cache
 def setup():
     api = ApiModel() if os.environ.get("ANTHROPIC_API_KEY") else None
-    return Setup(LocalModel(max_tokens=MESSAGE_TOKENS), api, audit(), LocalModel())
+    local = LocalModel(max_tokens=MESSAGE_TOKENS)
+    return Setup(local, api, audit(), LocalModel(), reader=lambda: reader_for(local))
 
 
 @lru_cache
@@ -417,7 +426,7 @@ def draft_a_message(request: MessageRequest, s: Setup = Depends(setup), book: St
     except Refused as e:
         raise HTTPException(422, str(e))
     listing = {**request.listing.model_dump(), "id": request.listing.id or new_id()}
-    reading = read_listing_with_ai(listing, s.local, s.api, request.mode, s.log)
+    reading = read_listing_with_ai(listing, s.reading_model(), s.api, request.mode, s.log)
     try:
         result = draft_message(listing, book.card(), book.index, s.local, s.api, request.mode, s.log, kind=request.kind,
                                mention=request.mention, length=request.length, previous=request.previous,
