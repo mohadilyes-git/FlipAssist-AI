@@ -383,11 +383,99 @@ def judge(piece, text):
         lead = head[-MAX_BEFORE:] + piece_words[:n]
         lead = lead[max((k + 1 for k, w in enumerate(lead) if w in CLAUSE_WORDS), default=0):]
         following = (piece_words[n + 1:] + after)[:1]  # "scratch free", "scratch-free screen": free of it
-        listed = not lead and denied_last and (piece_words[n - 1:n] or head[-1:]) in (["and"], ["or"], ["nor"])
-        if not listed and not denied_by(lead, NEGATORS) and following != ["free"]:
+        amount = piece_words[n:n + 1] if piece_words[n] in NEW_AMOUNT else []  # "never dropped SOME wears"
+        word = piece_words[n + 1] if amount and n + 1 < len(piece_words) else piece_words[n]
+        joined = piece_words[n - 1:n] or head[-1:]
+        # "no scratches AND MINOR wears": an amount after "and" is something new ("or minor scuffs" still denies)
+        listed = not lead and denied_last and joined in (["and"], ["or"], ["nor"]) and not (amount and joined == ["and"])
+        # "never used" denies nothing in "never used verizon LOCKED", "never been used SLIGHT scuff"
+        unused_fine = (word in LOCK_WORDS and piece_words[n + 1:n + 2] != ["away"]) or bool(amount)  # not "locked away"
+        # a run-on is a mark of this item's: not "few scratches on my old macbook", "couple of marks on the charger"
+        rest = OWN_CASE.sub(" ", " ".join(piece_words[n + 1:] + part_words[at + len(piece_words):]))
+        # ...and none of the new readings ("not very obvious", "never used", a run-on) for what's about another
+        # phone, a thing that comes with it or money: "not very noticeable scuffs ON THE CASE", "a dent IN MY WALLET"
+        others = OTHER_ITEM.search(rest[:60]) or WITH_ITS_THINGS.search(rest[:60]) or MONEY.match(rest)
+        run = is_mark(word) and not others and run_on(lead + amount)
+        if not listed and (not denied_by(lead if others else without_neutral_nots(lead, unused_fine), NEGATORS) or run) and \
+                following != ["free"]:
             return "flaw"
         denied_last = True
     return "denied"
+
+
+# a "not" that only says how bad a flaw is: "NOT VERY OBVIOUS minor scratches", "one tiny NOT SUPER VISIBLE scratch"
+# (with a word for how much; "not visible" alone may be a denial)
+HOW_MUCH = {"very", "super", "really", "that", "too", "so", "overly", "particularly", "especially", "terribly", "hugely",
+            "massively"}
+HOW_BAD = {"visible", "noticeable", "noticable", "obvious", "bad", "deep", "big", "major", "serious", "severe", "huge",
+           "large", "prominent", "apparent", "distracting"}
+
+
+def without_neutral_nots(lead, unused_fine=True):
+    """The words leading to a flaw word without what doesn't deny it: a "not"
+    that only says how bad ("not very obvious", "not super visible") and,
+    when unused_fine (before a lock or an amount), "never used" or "never
+    opened" ("open box never used verizon locked")."""
+    out, k = [], 0
+    while k < len(lead):
+        if lead[k] == "not" and lead[k + 1:k + 2] and lead[k + 1] in HOW_MUCH and lead[k + 2:k + 3] and lead[k + 2] in HOW_BAD:
+            k += 3
+        elif unused_fine and lead[k] == "never" and lead[k + 1:k + 2] in (["used"], ["opened"]) and \
+                lead[k + 2:k + 3] not in LIST_ON:
+            k += 2
+        elif unused_fine and lead[k] == "never" and lead[k + 1:k + 3] in (["been", "used"], ["been", "opened"]) and \
+                lead[k + 3:k + 4] not in LIST_ON:
+            k += 3
+        else:
+            out.append(lead[k])
+            k += 1
+    return out
+
+
+# "never used OR had any issues": the "never" goes on to what the list adds
+LIST_ON = (["or"], ["nor"], ["and"])
+# what "never used" doesn't deny: a lock ("never used verizon LOCKED", "never opened imei BLACKLISTED")
+LOCK_WORDS = {"locked", "lock", "blacklisted", "blocked", "barred", "icloud", "activation", "financed"}
+# the marks a run-on can name: "a couple SCRATCHES", "bit of a CRACK", "few small BLEMISHES" (typos too: "scrathes")
+RUN_ON_MARK = re.compile(r"(?:scratch|scrach|scrath|scuff|crack|chip|dent|ding|nick|mark|blemish|wear|scrape|scuf|sign)\w*$")
+# a saying about money: "a dent IN MY WALLET", "bit of a dent IN MY BANK ACCOUNT"
+MONEY = re.compile(r"\s*in (?:my|your|ur|the) (?:wallet|bank|pocket|budget|finances|savings)\b")
+# a laptop's own case, not one that comes with it: "on the BOTTOM CASE"
+OWN_CASE = re.compile(r"\b(?:bottom|top|lower|upper|back|rear|battery|camera|charging) cases?\b")
+
+
+def is_mark(word):
+    """Whether a word names a mark on the item: "scratches", "nicks", "scrathes"."""
+    return bool(RUN_ON_MARK.match(word)) or slipped(word) in MARK_WORDS
+# an amount that starts something new after a denied flaw: "No cracks or dents A COUPLE scratches", "nothing wrong
+# with the phone SLIGHT scratch", "no issues with this phone BIT of a crack", "not had one problem with this phone 2-3
+# scratches" (not "a" alone: "No scratches a cracking little phone")
+NEW_AMOUNT = {"some", "couple", "few", "bit", "slight", "slightly", "minor", "small", "light", "lightly", "tiny", "little",
+              "several"}
+# ...with only this between the denied flaw and the amount: "with this phone", "anywhere", "on the screen"
+ABOUT_IT = {"a", "an", "the", "this", "that", "with", "on", "in", "it", "its", "phone", "laptop", "macbook", "mac",
+            "device", "item", "handset", "unit", "screen", "display", "body", "back", "front", "casing", "frame", "glass",
+            "lid", "anywhere", "at", "all", "whatsoever"}
+# ...and only this between the amount and the flaw word: "bit OF A crack", "a few VERY light scratches"
+OF_A = {"of", "a", "an", "the", "very", "really"} | NEW_AMOUNT
+
+
+def run_on(lead):
+    """Whether the words leading to a flaw word hold a denied flaw word of
+    their own and then a new amount, with only "with this phone"-like words
+    before it and "of a"-like words after: the "no" before the first doesn't
+    reach the second ("No cracks or dents a couple scratches", "no issues with
+    this phone bit of a crack"). Never across "or", "and" or another "no"
+    ("No dents not a single scratch"), and not "1 owner spot on condition"."""
+    anchors = problems_at(" ".join(lead)) + [k for k, w in enumerate(lead) if w in ("wrong", "dropped", "repaired")]
+    if not anchors:
+        return False
+    between = lead[max(anchors) + 1:]
+    amounts = [k for k, w in enumerate(between) if w in NEW_AMOUNT or w.isdigit()]
+    if not amounts or set(between) & {"or", "nor", "and"} or any(negation_at(between, k, NEGATORS) for k in range(len(between))):
+        return False
+    first = amounts[0]
+    return all(w in ABOUT_IT for w in between[:first]) and all(w in OF_A or w.isdigit() for w in between[first:])
 
 
 def about_other_items(part, text):
@@ -663,7 +751,13 @@ NONE_ELSE = re.compile(r"\b(?:no|not\s+any|without\s+any|nothing)\s+(?:other|els
 # what's wrong in words the flaw words leave out: "a bit SLOW", "a little BLURRY", "speaker is TINNY", "CAN'T USE Face ID"
 SYMPTOMS = re.compile(r"\b(?:blurr?y|blurred|fuzzy|grainy|tinny|muffled|crackly|floppy|dim|dimmer|slow|slower|sluggish|"
                       r"warm|hot|unresponsive|temperamental|patchy|dodgy|iffy|hit and miss|drops? (?:calls|signal|out)|"
-                      r"laggy|lags|lagging|glitchy|freezes|freezing|"
+                      r"laggy|lags|lagging|glitchy|freezes|freezing|slowed(?: down)?|"
+                      r"(?:battery|batt) (?:goes|go|going|runs|run|running|dies|die|dying) (?:down|out|flat) (?:very |"
+                      r"really |pretty |quite |a bit |a little |super )?(?:quick|quickly|fast|faster|quicker)|"
+                      r"(?:not|n'?t) allowed (?:to )?(?:be )?(?:download|install|update)\w*"
+                      r"(?![^.!?\n]{0,30}\b(?:until|unless|till|before|without)\b)|"
+                      r"(?:unable|not able) to (?:download|install|update) (?:any |some |the |new |most |certain |all )?"
+                      r"(?:apps?|software|updates?|programs?|games?)(?![^.!?\n]{0,30}\b(?:until|unless|till|before|without)\b)|"
                       r"(?:can'?t|cannot|won'?t|doesn'?t|does not) (?:use|make|receive|hear|read|recogni[sz]e|detect|"
                       r"update|install|download|connect|charge|turn|hold|have true tone))\b", re.IGNORECASE)
 # ...and, only straight after a plain exception ("No marks apart from a small DING", "no problems excpet face id QUIT
@@ -719,6 +813,12 @@ ITEM_PLACES = {"camera", "cameras", "lens", "lenses", "screen", "display", "back
 # filler between them: "a", "the", "those", "on"
 FILLER = {"that", "this", "these", "those", "it", "them", "the", "a", "an", "and", "or", "of", "on", "in", "at", "to",
           "for", "is", "are", "was", "were", "s", "there", "which", "just", "only"}
+# ...a pointer to the photos: "just one small one SHOWN IN PICTURE"
+PHOTO_WORDS = {"shown", "pictured", "picture", "pictures", "pic", "pics", "photo", "photos", "see", "seen", "as", "show",
+               "shows"}
+# ...and where it isn't, or how little it shows: "only some on camera edge NOT ON LENS", "BUT NOT NOTICEABLE"
+NOT_HERE = re.compile(r"\b(?:but\s+)?(?:not|barely|hardly)\s+(?:very\s+|really\s+|that\s+|too\s+)?"
+                      r"(?:noticeable|noticable|visible|obvious)\b|\bnot\s+(?:on|in|at)\s+(?:the\s+)?\w+", re.IGNORECASE)
 
 
 def flaw_said(part, text, more=False):
@@ -738,6 +838,8 @@ def flaw_said(part, text, more=False):
             if WITH_ITS_THINGS.search(USED_WITH.sub(" ", lead)) or OTHER_ITEM.search(lead):
                 continue  # "the charger gets warm", "unlike my old phone that got wet"
             before = plain_words(lead)[-3:]
+            if set(before) & {"i", "ive", "im", "we", "weve"}:
+                continue  # "I've just slowed down on the gaming": the seller, not the item
             if not any(negation_at(before, n, NEGATORS) for n in range(len(before))):
                 return True
     return False
@@ -761,9 +863,11 @@ def excepted(quote, text):
     for found in EXCEPTIONS.finditer(quote):
         before, after = quote[:found.start()], quote[found.end():]
         more = not WEAK_EXCEPTIONS.match(found.group(0))
+        if not more and set(plain_words(before)[-2:]) & {"i", "ive", "im", "we", "weve"}:
+            continue  # "I've JUST slowed down on the gaming": the seller's "just", not an exception
         if flaw_said(after, text, more) or (TYPED_EXCEPTIONS.match(found.group(0)) and flaw_said(after, after, more)):
             return True  # "...apart from it being a bit slow"; on its own when it's typed ("appart from a small chip")
-        said = [w for w in plain_words(after) if w not in FILLER]
+        said = [w for w in plain_words(NOT_HERE.sub(" ", after)) if w not in FILLER and w not in PHOTO_WORDS]
         if said and all(w in REFERS_BACK or w in ITEM_PLACES for w in said) and \
                 any(judge(piece, text) == "denied" for piece in parts_of(before)):
             return True  # "No marks other than a tiny one on the corner"

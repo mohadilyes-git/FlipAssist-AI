@@ -756,3 +756,62 @@ def test_installed_reads_ollamas_list(monkeypatch):
         raise urllib.error.URLError("connection refused")
     monkeypatch.setattr(reader.urllib.request, "urlopen", down)
     assert not installed("flip-reader-5", "http://127.0.0.1:11434")
+
+
+# ── the denial check, 29 Sep: a "no" doesn't reach a flaw said after it ──────
+# (sentences from two red-team rounds, none from a test listing)
+
+@pytest.mark.parametrize("line", [
+    "No cracks and some light scratches on the back",  # an amount after "and" is something new
+    "no chips few scrathes on back from keys in my pocket",  # a run-on: an amount after the denied flaw
+    "nothing wrong with it a few marks on the back",
+    "never dropped some wears around the edges",  # "some wears": wear
+    "Not too bad dent on the corner of the lid",  # a "not" that only says how bad
+    "Not very noticable dent on the bottom corner of the lid",
+    "not particularly noticeable green line down the left side of the screen",
+    "never been opened network locked to EE",  # "never opened" denies nothing after it
+    "No damage at all apart from the battery goes flat really quick",  # symptoms after an exception
+    "No faults other than the battery runs out really quick",
+    "No problems other than not allowed to install apps because of the work profile",
+    "No marks just one or two on the lid see pics",  # an exception that points at the photos
+    "no scuffs only some around the corners but barely noticeable",
+    "No scratches minor signs of usage on the bottom case",  # a MacBook's own bottom case
+    "Nothing wrong with it at all couple of light scuffs on the lid",
+    "never repaired small chip in the back glass by the camera",
+    "Sealed in box never opened AT&T locked",
+    "No problems apart from the batt runs out super fast",
+    "Not super deep scratches on the screen, never dropped",
+    "Never dropped shows signs of general ware",
+    "no dents few wears on the back",
+])
+def test_a_flaw_said_after_a_no_is_kept(line):
+    assert not reader.denied(line, line)
+
+
+@pytest.mark.parametrize("line", [
+    "No scratches or minor scuffs",  # "or" goes on with the "no"
+    "No scratches a cracking little phone for the money",  # "a" alone is no amount; "cracking" is praise
+    "No marks 1 owner spot on condition",
+    "No dents not a single scratch on it",  # another "no" in between
+    "No cracks or chips not even hairline cracks",
+    "No damage not even super minor scratches",
+    "No screen burn ran a couple of burn in tests all clear",
+    "No scratches the faint line in photo 2 is just a reflection",
+    "Never been used or had any issues",  # "never used OR": the "never" goes on
+    "No faults but price goes down quick if not gone by friday",  # the price, not the battery
+    "No faults but unable to update the photos as its already boxed up",
+    "Always wears a hard shell case so not a single scratch on the lid",  # "wears" a case
+    "Shows no signs of normal use",
+    "No cracks or scratches.",
+    "Never used, no scratches, still sealed.",
+    "No issues with this phone few issues with my old samsung tho",  # another phone
+    "No scratches 2 scratch proof screen protectors included",  # what comes with it
+    "Nothing wrong at all 10/10 spot on condition",  # "spot on" is no mark
+    "Never used kept locked away in a drawer since xmas",  # "locked away" is no lock
+    "No dents bit of a dent in my bank account tho lol",  # money
+    "S22 no issues i've just slowed down on the gaming lately so selling",  # the seller, not the phone
+    "no faults just be quick it goes out fast at this price £300",
+    "No issues, just unable to download apps until you sign in with your own Apple ID",
+])
+def test_a_denial_is_still_dropped(line):
+    assert reader.denied(line, line)

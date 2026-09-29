@@ -196,7 +196,7 @@ CONTRACTED = {"aren", "isn", "don", "doesn", "didn", "can", "won", "wasn", "were
 # scratches")
 NEGATION_ENDS = {"only", "just", "apart", "except", "bar", "other", "but", "though", "although", "however", "selling",
                  "sold", "aside", "besides", "excluding", "excepting", "beyond", "save", "barring", "minus"}
-NEW_STATEMENT = {"has", "have", "got", "is", "are", "was", "theres"}
+NEW_STATEMENT = {"has", "have", "got", "is", "are", "was", "theres", "shows"}  # "never dropped, SHOWS signs of wear"
 NEGATED_THINGS = {"offers", "offer", "swaps", "swap", "returns", "refunds", "timewasters", "time", "box", "charger",
                   "cable", "plug", "case", "lowballers", "messers", "scams", "pets", "smoke", "smoking"}
 # a label and its answer, as sellers list them: "Faults: none", "Scratches – no", "Any damage? Nope",
@@ -211,7 +211,7 @@ ANSWERS = [
 ]
 # what has a claim word but isn't a flaw or a claim: a guard against one, a part's name, a cover
 NOT_A_FLAW = re.compile(
-    r"\b(?:scratch[- ]?resist\w*|anti[- ]?scratch|(?:to )?prevent(?:s|ing)? (?:any )?(?:scratch\w*|damage)|"
+    r"\b(?:scratch[- ]?resist\w*|scratch[- ]?proof|anti[- ]?scratch|(?:to )?prevent(?:s|ing)? (?:any )?(?:scratch\w*|damage)|"
     r"protect\w* (?:it )?(?:from|against) (?:any )?(?:scratch\w*|damage|drops?)|water damage indicators?(?: \w+)?|"
     r"accidental damage(?: cover| protection| insurance)?|damage (?:cover|protection|insurance)|"
     r"(?:intel|apple|amd|m[1-4](?: pro| max)?|a\d{1,2}(?: bionic| pro)?|bionic|snapdragon|exynos|tensor|kirin|"
@@ -547,7 +547,11 @@ BUMP = r"(?:a|one|small|tiny|little|slight|minor)\s+(?:(?!camera\b)\w+\s+){0,2}?
 WELL_USED = r"well[- ]used|heavily used|(?:paint|coating|finish) (?:has )?(?:gone|missing|chipped|coming off|worn|wearing|" \
             r"peeling|rubbed off)"
 # wear in other words: "only light signs of use" (a mark of the general kind; "no signs of use" is a denial)
-SIGNS_OF_USE = r"signs? of (?:use|usage|wear|being used)"
+# "wears" only after a word for how much: "minor WEARS on the surfaces", not "always WEARS a case"
+WEARS = r"(?:minor|light|slight|small|some|few|little|general|normal|heavy|visible) wears"
+# ...also with a word or two for how much ("signs of NORMAL use", "signs of LIGHT, GENTLE use") and typed "ware"
+SIGNS_OF_USE = r"signs? of (?:(?:normal|general|light|minor|slight|some|everyday|daily|regular|previous|gentle|small|" \
+               r"little|heavy|moderate|obvious|visible|cosmetic|age),?\s+){0,2}(?:use|usage|wear|ware|being used)"
 # words that say something is wrong with an item, whatever the words around them: a flaw the AI reads must
 # have one (flip.reader), and a message may use one only if the listing does (flip.offers.check_reasons)
 PROBLEM = re.compile(
@@ -564,7 +568,7 @@ PROBLEM = re.compile(
     r"turns? (?:itself )?(?:on and off|off and on|off by itself|off on its own|off randomly)|"
     r"keeps? (?:turning|switching|shutting) (?:off|down)|no (?:face|touch) id|"
     r"(?:isn'?t|is not|not) (?:perfect|great|good|the best|mint|working properly)|"
-    rf"{NO_LONGER}|{ISSUE_WORDS}|{SELLER_FAULT_WORDS}|{NICK}|{SIGNS_OF_USE}|{NEEDS_REPAIR}|{BUMP}|{WELL_USED}|"
+    rf"{NO_LONGER}|{ISSUE_WORDS}|{SELLER_FAULT_WORDS}|{NICK}|{SIGNS_OF_USE}|{WEARS}|{NEEDS_REPAIR}|{BUMP}|{WELL_USED}|"
     r"spare parts|(?:parts|spares) or repairs?|for repairs?|(?:ideal|perfect|good|great) for (?:someone|anyone|a) (?:looking to |"
     r"wanting to |who can |who wants to )?(?:repair|fix)|"
     # a pixel that's wrong, not "pixel" alone: "2868x1320-pixel resolution", "Google Pixel 8"
