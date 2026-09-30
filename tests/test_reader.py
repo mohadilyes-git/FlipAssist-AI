@@ -872,3 +872,16 @@ def test_a_flaw_said_after_a_no_is_kept(line):
 ])
 def test_a_denial_is_still_dropped(line):
     assert reader.denied(line, line)
+
+
+
+@pytest.mark.parametrize("line, said", [
+    ("Good condition, no cracks a couple scratches on the back.", "a couple scratches on the back"),
+    ("nothing wrong with the phone slight scratch at the back", "slight scratch at the back"),
+    ("Not very obvious minor scratches on the lid", "minor scratches on the lid"),
+    ("This is open box never used verizon locked to prepaid only.", "verizon locked to prepaid only"),
+    ("Cracked back", "Cracked back"),
+    ("2 small scratches no cracks 1 small dent", "2 small scratches no cracks 1 small dent"),  # a flaw before the "no"
+])
+def test_a_messages_reason_leaves_out_the_no_before_the_flaw(line, said):
+    assert reader.short_flaws([line.rstrip(".")], line, 12) == [said]

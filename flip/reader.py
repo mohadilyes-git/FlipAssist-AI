@@ -1007,9 +1007,34 @@ def short_flaws(flaws, text, longest):
     sentences)."""
     out = []
     for flaw in flaws:
-        pieces = flaws_in(flaw, text)
+        pieces = [said_alone(piece, text) for piece in flaws_in(flaw, text)]
         out += pieces or ([flaw] if len(flaw.split()) <= longest else [])
     return out
+
+
+# what a reason says when the seller's words have a "no" the flaw is outside of: "no cracks A COUPLE SCRATCHES ON THE
+# BACK", "Not very obvious MINOR SCRATCHES", "nothing wrong with the phone SLIGHT SCRATCH AT THE BACK", "open box never
+# used VERIZON LOCKED TO PREPAID ONLY"
+NO_WORD = re.compile(r"\b(?:no|not|nothing|never|zero)\b", re.IGNORECASE)
+UNUSED_ON = re.compile(r"\bnever (?:been )?(?:used|opened)\b[,.]?\s*(.+)$", re.IGNORECASE)
+AMOUNT_ON = re.compile(r"\b((?:a |an )?(?:some|couple|few|bit|slight|slightly|minor|small|light|lightly|tiny|little|several|"
+                       r"\d+(?:-\d+)?)\b.*)$", re.IGNORECASE)
+
+
+def said_alone(piece, text):
+    """A flaw piece for a message's reason without the "no" before the flaw
+    ("no cracks a couple scratches on the back" -> "a couple scratches on the
+    back"), when what's left still says the flaw and nothing before the "no"
+    is a flaw of its own ("2 small scratches no cracks 1 small dent" stays
+    whole); else the piece as it is."""
+    no = NO_WORD.search(piece)
+    if not no or PROBLEM.search(piece[:no.start()]) or low_battery(piece[:no.start()]):
+        return piece
+    for pattern in (UNUSED_ON, AMOUNT_ON):
+        found = pattern.search(piece, no.start())
+        if found and judge(found.group(1), text) == "flaw":
+            return found.group(1)
+    return piece
 
 
 def fine_tuned(model):
