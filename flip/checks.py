@@ -197,6 +197,9 @@ CONTRACTED = {"aren", "isn", "don", "doesn", "didn", "can", "won", "wasn", "were
 NEGATION_ENDS = {"only", "just", "apart", "except", "bar", "other", "but", "though", "although", "however", "selling",
                  "sold", "aside", "besides", "excluding", "excepting", "beyond", "save", "barring", "minus"}
 NEW_STATEMENT = {"has", "have", "got", "is", "are", "was", "theres", "shows"}  # "never dropped, SHOWS signs of wear"
+# ...but not after only a "think" or an "it": "I don't THINK there's any scratches", "Don't think IT shows any wear"
+NOT_THEIR_OWN = {"think", "believe", "reckon", "sure", "guess", "feel", "see", "notice", "noticed", "know", "remember",
+                 "seem", "seems", "appear", "appears", "it", "there", "this", "that", "honestly", "really", "even"}
 NEGATED_THINGS = {"offers", "offer", "swaps", "swap", "returns", "refunds", "timewasters", "time", "box", "charger",
                   "cable", "plug", "case", "lowballers", "messers", "scams", "pets", "smoke", "smoking"}
 # a label and its answer, as sellers list them: "Faults: none", "Scratches – no", "Any damage? Nope",
@@ -254,7 +257,7 @@ def denied_by(lead, negations=NEGATIONS):
         ends = set(rest) & (NEGATION_ENDS | NEGATED_THINGS)
         if "other" in ends and not any(w == "other" and after in ("than", "then") for w, after in zip(rest, rest[1:])):
             ends.discard("other")  # "no OTHER marks" denies more of them; "no marks OTHER THAN a scratch" excepts one
-        ended = ends or any(verb in NEW_STATEMENT and set(rest[:k]) - {"t"} for k, verb in enumerate(rest))
+        ended = ends or any(verb in NEW_STATEMENT and set(rest[:k]) - {"t"} - NOT_THEIR_OWN for k, verb in enumerate(rest))
         if not ended:
             return True
     return False

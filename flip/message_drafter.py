@@ -42,11 +42,11 @@ from flip.money import offer_for, to_pence
 from flip.offers import battery_now, check_condition_talk, copied_question, point_for, question_for, says_point
 from flip.prompts import MESSAGE_SCHEMA, RETRY, buying_line, message_prompt, offer_words
 from flip.questions import check_no_answered_questions, load_questions, open_questions
-from flip.reader import code_reading, in_listing
+from flip.reader import code_reading, in_listing, short_flaws
 from flip.retrieval import listing_text
 from flip.style import (IN_THE_OFFER, OLD_PRICE, OFFER_SLOTS, SENTENCES, check_not_removed, describe, question_words,
                         scrubbed, without_prices)
-from flip.writer import make_longer, reason_sentence, repeats, write_offer
+from flip.writer import MAX_FLAW, make_longer, reason_sentence, repeats, write_offer
 
 USUAL_WORDS = 15  # how long a message is before you have past messages to go by
 LONGER_AT_LEAST = 30
@@ -222,7 +222,8 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     no_cash = bool(NO_CASH.search(sources))  # the listing says no cash: no message offers it, yours included
     if no_cash and card:
         card = without_cash(card)
-    point = point_for(kind, sources, reading["flaws"], battery_in(sources, model))
+    # a reason in a few words: a fine-tuned reader's whole sentence cut to code's words for the flaw
+    point = point_for(kind, sources, short_flaws(reading["flaws"], sources, MAX_FLAW), battery_in(sources, model))
     style_decides = mention is None
     if style_decides:  # your style decides; before you have one, AlertFlip's: a lower offer gives its reason
         mention = says_point(previous, point) if previous and point else \

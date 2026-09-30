@@ -46,6 +46,7 @@ US and Canadian listings, and it was as good as round 4's reader (95.3% of
 3,162 double-checked flaws each, 18 false alarms each).
 """
 
+import http.client
 import json
 import os
 import re
@@ -68,8 +69,8 @@ CLAUSE_WORDS = {"and", "but", "plus", "as", "because", "since", "though", "altho
                 "which"}
 MAX_FLAW = 15  # words: a flaw, not a paragraph (a sentence about one flaw can run to 15)
 MAX_BEFORE = 6  # words back a "no" can still deny a flaw
-# FlipAssist's own fine-tuned reader (round 5), when Ollama has it; FLIP_READER_MODEL= (empty) reads with Gemma
-READER = os.environ.get("FLIP_READER_MODEL", "flip-reader-5").strip()
+# FlipAssist's own fine-tuned reader (round 5), when Ollama has it; FLIP_READER_MODEL= (empty) in .env reads with Gemma
+READER = "flip-reader-5"
 # a denial, its apostrophe gone the way plain_words takes it out: "arent", "doesnt", "free (of)"
 NEGATORS = NEGATIONS | {"zero", "free", "arent", "isnt", "doesnt", "hasnt", "havent", "dont", "wont", "cant", "wasnt",
                         "werent", "didnt", "never", "none", "nothing", "nor"}
@@ -383,8 +384,9 @@ def judge(piece, text):
         lead = head[-MAX_BEFORE:] + piece_words[:n]
         lead = lead[max((k + 1 for k, w in enumerate(lead) if w in CLAUSE_WORDS), default=0):]
         following = (piece_words[n + 1:] + after)[:1]  # "scratch free", "scratch-free screen": free of it
-        amount = piece_words[n:n + 1] if piece_words[n] in NEW_AMOUNT else []  # "never dropped SOME wears"
-        word = piece_words[n + 1] if amount and n + 1 < len(piece_words) else piece_words[n]
+        amount = [w for w in piece_words[n:n + 1] if w in NEW_AMOUNT]  # "never dropped SOME wears"
+        word = "".join(piece_words[n + 1:n + 2] if amount else piece_words[n:n + 1])  # slices: problems_at can count
+        # one word more than plain_words ("micro-scratches")
         joined = piece_words[n - 1:n] or head[-1:]
         # "no scratches AND MINOR wears": an amount after "and" is something new ("or minor scuffs" still denies)
         listed = not lead and denied_last and joined in (["and"], ["or"], ["nor"]) and not (amount and joined == ["and"])
@@ -446,7 +448,7 @@ OWN_CASE = re.compile(r"\b(?:bottom|top|lower|upper|back|rear|battery|camera|cha
 
 def is_mark(word):
     """Whether a word names a mark on the item: "scratches", "nicks", "scrathes"."""
-    return bool(RUN_ON_MARK.match(word)) or slipped(word) in MARK_WORDS
+    return bool(word) and (bool(RUN_ON_MARK.match(word)) or slipped(word) in MARK_WORDS)
 # an amount that starts something new after a denied flaw: "No cracks or dents A COUPLE scratches", "nothing wrong
 # with the phone SLIGHT scratch", "no issues with this phone BIT of a crack", "not had one problem with this phone 2-3
 # scratches" (not "a" alone: "No scratches a cracking little phone")
@@ -749,8 +751,13 @@ NONE_ELSE = re.compile(r"\b(?:no|not\s+any|without\s+any|nothing)\s+(?:other|els
                        r"|\bnothing\s+else\b|\b(?:no|nothing|not)\s+(?:\w+\s+){0,2}(?:otherwise|elsewhere|anywhere\s+else)\b"
                        r"|\botherwise\s+(?:no|nothing|not)\b", re.IGNORECASE)
 # what's wrong in words the flaw words leave out: "a bit SLOW", "a little BLURRY", "speaker is TINNY", "CAN'T USE Face ID"
-SYMPTOMS = re.compile(r"\b(?:blurr?y|blurred|fuzzy|grainy|tinny|muffled|crackly|floppy|dim|dimmer|slow|slower|sluggish|"
-                      r"warm|hot|unresponsive|temperamental|patchy|dodgy|iffy|hit and miss|drops? (?:calls|signal|out)|"
+SYMPTOMS = re.compile(r"\b(?:blurr?y|blurred|fuzzy|grainy|tinny|muffled|crackly|floppy|slow|slower|sluggish|"
+                      r"unresponsive|temperamental|patchy|hit and miss|drops? (?:calls|signal|out)|"
+                      # these only with a verb or a "bit" before them ("gets HOT", "a bit DIM", "port is DODGY"), not
+                      # "hot deal", "warm regards", "hot pink", "dodgy offers" (29 Sep review)
+                      r"(?:gets?|getting|got|runs?|running|is|was|be|goes|going|went|becomes?|feels?|turns?|seems?|"
+                      r"a bit|abit|bit|slightly|quite|very|really|pretty|little|too|so|kinda) (?:a bit |abit |very |really |"
+                      r"quite |slightly |too |so |pretty |little |kinda )?(?:dim|dimmer|warm|hot|dodgy|iffy)|"
                       r"laggy|lags|lagging|glitchy|freezes|freezing|slowed(?: down)?|"
                       r"(?:battery|batt) (?:goes|go|going|runs|run|running|dies|die|dying) (?:down|out|flat) (?:very |"
                       r"really |pretty |quite |a bit |a little |super )?(?:quick|quickly|fast|faster|quicker)|"
@@ -941,18 +948,68 @@ def installed(model, url):
     try:
         with urllib.request.urlopen(f"{url}/api/tags", timeout=2) as answer:
             names = {m.get("name") for m in json.load(answer).get("models") or [] if isinstance(m, dict)}
-    except (OSError, ValueError, AttributeError):
-        return False
+    except (OSError, ValueError, AttributeError, TypeError, RecursionError, http.client.HTTPException):
+        return False  # something else on Ollama's port, or an answer cut short: Gemma reads
     return model in names or f"{model}:latest" in names
+
+
+def reader_name():
+    """FlipAssist's own reader's name: FLIP_READER_MODEL from the environment
+    or .env, read when a listing is read (after .env is loaded), READER when
+    it's unset; set empty, Gemma reads."""
+    return os.environ.get("FLIP_READER_MODEL", READER).strip()
+
+
+class ReaderOrGemma:
+    """FlipAssist's own reader, with Gemma asked in its place when the reader
+    doesn't answer (listed by Ollama but not loadable, crashed, too slow): a
+    listing is never left to code alone because the reader failed."""
+
+    def __init__(self, reader, gemma):
+        self.reader, self.gemma = reader, gemma
+        self.name, self.url, self.timeout = reader.name, getattr(reader, "url", None), getattr(reader, "timeout", None)
+
+    def ask(self, *args, **kwargs):
+        reply = self.reader.ask(*args, **kwargs)
+        return reply if reply.reachable else self.gemma.ask(*args, **kwargs)
 
 
 def reader_for(local):
     """The model that reads a listing: FlipAssist's own reader (READER) when
     Ollama has it, else the local model given (Gemma, which also writes the
     drafts). Anything that isn't a LocalModel (none, a test's stand-in) stays."""
-    if not READER or not isinstance(local, LocalModel) or local.name == READER or not installed(READER, local.url):
+    name = reader_name()
+    if not name or not isinstance(local, LocalModel) or local.name == name or not installed(name, local.url):
         return local
-    return LocalModel(name=READER, url=local.url, timeout=local.timeout)
+    return ReaderOrGemma(LocalModel(name=name, url=local.url, timeout=local.timeout), local)
+
+
+def story_cut(quote):
+    """A seller's story told before the flaw cut off ("I dropped it and
+    cracked the back" -> "cracked the back"); a quote whose "I" or "my" comes
+    after the flaw stays whole ("Screen is cracked, I can send more pics")."""
+    story, problem = FIRST_PERSON.search(quote), PROBLEM.search(quote)
+    starts = [problem.start()] if problem else []
+    battery = low_battery(quote)  # "Battery health is 79% so I'd say it needs a new battery": the figure is the flaw
+    if battery and battery in quote:
+        starts.append(quote.find(battery))
+    return quote[problem.start():].strip() if story and problem and story.start() < min(starts) else quote
+
+
+def short_flaws(flaws, text, longest):
+    """The reading's flaws for a message's reason, as a reason can say them:
+    code's pieces of each quote that say what's wrong, as Gemma's reading
+    gives them ("Sold as seen, so it does have some light scratches on the
+    back however it runs very well" -> "so it does have some light scratches
+    on the back"); a quote code finds no piece in stays whole when it's short
+    enough to say back ("Screen has a pink tint"), else it gives no reason.
+    The reading itself keeps every word (a fine-tuned reader's whole
+    sentences)."""
+    out = []
+    for flaw in flaws:
+        pieces = flaws_in(flaw, text)
+        out += pieces or ([flaw] if len(flaw.split()) <= longest else [])
+    return out
 
 
 def fine_tuned(model):
@@ -967,7 +1024,7 @@ def reading_checked(answer, text, read_by):
     pickup and "no offers" are checked as for any reading. Not rules 2 and 3:
     it was trained to quote exactly the sentences that state a flaw, and
     cutting its quotes into code's pieces lost flaws it had found."""
-    flaws = [trimmed(quote) for quote in answer["flaws"] if isinstance(quote, str) and quote.strip()]
+    flaws = [story_cut(quote) for quote in answer["flaws"] if isinstance(quote, str) and quote.strip()]
     pickup = place(answer["pickup"])
     said = answer["no_offers"].strip()
     return {"flaws": list({f.lower(): f for f in flaws}.values()),  # the same words once

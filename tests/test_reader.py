@@ -731,17 +731,74 @@ def test_which_models_are_flipassists_own_readers(model, ours):
 
 
 def test_the_reader_is_flipassists_own_when_ollama_has_it(monkeypatch):
+    monkeypatch.delenv("FLIP_READER_MODEL", raising=False)
     gemma = LocalModel(max_tokens=300, timeout=60)
     monkeypatch.setattr(reader, "installed", lambda model, url: model == "flip-reader-5")
     found = reader_for(gemma)
-    assert (found.name, found.url, found.timeout, found.max_tokens) == ("flip-reader-5", gemma.url, 60, 1000)
+    assert (found.name, found.url, found.timeout, found.reader.max_tokens, found.gemma) == \
+        ("flip-reader-5", gemma.url, 60, 1000, gemma)
     stand_in = FakeModel("gemma3:4b")
     assert reader_for(stand_in) is stand_in and reader_for(None) is None
     monkeypatch.setattr(reader, "installed", lambda model, url: False)
     assert reader_for(gemma) is gemma  # not downloaded: Gemma reads, with every rule
     monkeypatch.setattr(reader, "installed", lambda model, url: True)
-    monkeypatch.setattr(reader, "READER", "")
-    assert reader_for(gemma) is gemma  # FLIP_READER_MODEL= turns it off
+    monkeypatch.setenv("FLIP_READER_MODEL", "")
+    assert reader_for(gemma) is gemma  # FLIP_READER_MODEL= in .env turns it off (read at each reading)
+
+
+def test_gemma_reads_when_the_reader_doesnt_answer():
+    down = Reply("flip-reader-5", error="the local model refused (500): no", reachable=False)
+    both = reader.ReaderOrGemma(FakeModel("flip-reader-5", down), FakeModel("gemma3:4b", GOOD_READ))
+    reading = read_listing_with_ai(LISTING, both)
+    assert (reading["read_by"], reading["flaws"]) == ("gemma3:4b", ["Black dot on the screen", "Cracked back"])
+
+
+def test_a_bad_answer_on_ollamas_port_is_no_reader(monkeypatch):
+    def answer(body=None, error=None):
+        def opened(url, timeout):
+            if error:
+                raise error
+            return io.BytesIO(body.encode())
+        return opened
+    for opened in (answer('{"models": 3}'), answer('{"models": [{"name": ["x"]}]}'), answer("[" * 100000),
+                   answer(error=reader.http.client.BadStatusLine("x"))):
+        monkeypatch.setattr(reader.urllib.request, "urlopen", opened)
+        assert not installed("flip-reader-5", "http://127.0.0.1:11434")
+
+
+# ── the 29 Sep review of the reader switch ────────────────────────────────────
+
+@pytest.mark.parametrize("description", ["Screen has micro-scratches.", "Back glass is water-damaged.",
+                                         "Small hairline-crack", "Few micro-scratches", "Frame has light-scuffs."])
+def test_a_hyphenated_flaw_at_a_clause_end_is_read(description):
+    listing = {"id": "h1", "title": "iPhone 13 128GB", "description": f"Good condition overall. {description} Battery 88%."}
+    assert read_listing_with_ai(listing)["read_by"] == "code"  # no IndexError
+    said = {"flaws": [description.rstrip(".")], "pickup": "", "no_offers": ""}
+    assert read_listing_with_ai(listing, FakeModel("flip-reader-5", said))["flaws"] == [description.rstrip(".")]
+
+
+@pytest.mark.parametrize("line", ["I don't think there's any scratches on it", "I don't believe there's a scratch on it",
+                                  "Not sure there's any scratches", "Don't think it shows any wear",
+                                  "No dents or scratches, hot deal", "No scratches, warm grey colour",
+                                  "No scratches, no time wasters or dodgy offers"])
+def test_a_hedged_or_padded_denial_is_still_dropped(line):
+    assert reader.denied(line, line)
+
+
+def test_the_story_is_cut_only_when_it_comes_first():
+    assert reader.story_cut("I dropped it and cracked the back") == "cracked the back"
+    for whole in ("Screen is cracked, I can send more pics", "There is a small scratch on the back which my case covers",
+                  "Battery health is 79% so I'd say it needs a new battery"):
+        assert reader.story_cut(whole) == whole
+
+
+def test_a_messages_reason_is_the_flaws_own_words():
+    text = "iPhone 12. Sold as seen, so it does have some light scratches on the back however it runs very well."
+    whole = "Sold as seen, so it does have some light scratches on the back however it runs very well"
+    assert reader.short_flaws([whole, "Cracked back"], text, 12) == \
+        ["so it does have some light scratches on the back", "Cracked back"]
+    assert reader.short_flaws(["Screen has a pink tint"], text, 12) == ["Screen has a pink tint"]  # short: whole
+    assert reader.short_flaws(["the screen has a slight pink tint in one corner when you look closely"], text, 12) == []
 
 
 def test_installed_reads_ollamas_list(monkeypatch):
