@@ -712,6 +712,8 @@ def check_condition_talk(message, listing_text, point, mention, kind="lower", of
     elif stated or said_point:
         problems.append("the message talks about the condition, but this draft leaves that out")
     listed = condition_said(esim_read(listing_text)(listing_text))
+    if point and mention:  # the reason's words are the listing's own (flip.reader checked them): what they say, it says
+        listed = listed | set().union(*map(condition_said, point.get("says") or []))  # "no cracks A COUPLE SCRATCHES"
     unbacked = {claim for claim in stated if not backed(claim, listed)}
     said = WORKS_FOR.sub(" ", ". ".join(statements))
     if "yes" in promises_in(said).get("working", set()) and has_fault(listing_text) \

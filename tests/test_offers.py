@@ -345,3 +345,12 @@ def test_a_low_battery_is_a_flaw_like_the_others():
     # "81% BH" is said by the same figure in a message's own words
     assert says_point("Would you take £150 as the battery health is 81%?", {"about": "flaw", "says": ["81% BH"]})
     assert not says_point("Would you take £150 as the battery health is 91%?", {"about": "flaw", "says": ["81% BH"]})
+
+
+def test_a_reasons_own_words_back_the_message():
+    # "no cracks a couple scratches": the reader keeps the scratches (29 Sep), and the reason says them
+    text = "iPhone 13 128GB. Good condition, no cracks a couple scratches on the back."
+    point = {"about": "flaw", "says": ["a couple scratches on the back"]}
+    message = "Hi, would you take £255 for it? I'm offering that because of a couple scratches on the back."
+    assert check_condition_talk(message, text, point, True) == []
+    assert check_condition_talk("Hi, would you take £255 for it? It has a cracked screen.", text, point, True) != []
