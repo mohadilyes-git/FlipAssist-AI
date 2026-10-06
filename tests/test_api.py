@@ -48,9 +48,9 @@ def client(tmp_path, monkeypatch):
     log = AuditLog(tmp_path / "audit.sqlite3")
     book = StyleBook(tmp_path / "style.sqlite3")  # no search: the examples come from the style card alone
 
-    def use(local=None, api_model=None, messages=()):
+    def use(local=None, api_model=None, messages=(), kinds=None):
         book.add(list(messages), "csv")
-        api.app.dependency_overrides[api.setup] = lambda: api.Setup(local, api_model, log)
+        api.app.dependency_overrides[api.setup] = lambda: api.Setup(local, api_model, log, kinds=kinds)
         api.app.dependency_overrides[api.audit] = lambda: log
         api.app.dependency_overrides[api.style] = lambda: book
 
@@ -94,7 +94,7 @@ def test_a_message_from_your_own_sentences_with_the_reading_and_the_note(client)
     assert (draft["status"], draft["written_by"], draft["offer"], draft["offer_pence"]) == \
         ("ready", "template", "£185", 18500)
     assert draft["message"] == "Hi mate, is this still available? Would you take £185 cash, given the black dot on " \
-                               "the screen? Can collect from Leeds LS6 today."
+                               "the screen? Can collect today."  # your messages never name a place (26 Sep)
     assert draft["note"] == 'The seller says: "Price is firm, no offers"'
     assert draft["reading"]["flaws"] == ["Black dot on the screen"] and draft["reading"]["read_by"] == "gemma3:4b"
     assert draft["kind"] == "lower" and isinstance(draft["draft_id"], int) and draft["cost_pence"] == 0
@@ -105,7 +105,7 @@ def test_a_message_the_ai_writes(client):
     varied = [{"my_message": "Hiya, would £90 do? 😊"}, {"my_message": "Hey! Could you do £120?"}]
     local = FakeModel("gemma3:4b", READ, {"message": "Hiya, would you take £185, given the black dot on the screen? 😊"})
     client.use(local=local, messages=varied)
-    draft = client.post("/messages/draft", json={"listing": LISTING, "mention": True}).json()
+    draft = client.post("/messages/draft", json={"listing": LISTING, "mention": True, "writer": "ai"}).json()
     assert (draft["status"], draft["written_by"]) == ("ready", "gemma3:4b")
     assert [a["model"] for a in draft["attempts"]] == ["gemma3:4b"]
 
@@ -440,3 +440,164 @@ def test_the_listing_is_read_by_the_reader_when_one_is_set():
     assert api.Setup(local, None, None, reader=lambda: other).reading_model() is other
     assert api.Setup(local, None, None, reader=lambda: None).reading_model() is local
     assert api.Setup(local, None, None, reader=other).reading_model() is other
+
+
+# ── the AI UK price estimate tab (4 Oct) ───────────────────────────────────────
+
+@pytest.fixture
+def prices_api(monkeypatch):
+    """A prices API set in .env (nothing is sent to it: estimate is pretend in these tests)."""
+    monkeypatch.setenv("PRICES_URL", "https://example.test/functions/v1/prices")
+    monkeypatch.setenv("PRICES_KEY", "k" * 64)
+
+
+def test_the_price_tab_reads_the_flaws_then_cuts_the_price_for_them(client, monkeypatch, prices_api):
+    asked = []
+
+    def priced(title, flaws=(), description=None, **_):
+        asked.append((title, list(flaws), description))
+        return {"price": 170, "middle": 210, "currency": "GBP", "sales": 38, "kinds": ["fault"], "cuts": ["fault"],
+                "rough": False, "exact": True}
+
+    monkeypatch.setattr(api, "estimate", priced)
+    client.use(local=FakeModel("gemma3:4b", READ))
+    found = client.post("/prices/estimate", json={"title": LISTING["title"], "description": LISTING["description"]})
+    dot = "Black dot on the screen"  # the reading, as a draft gets it
+    assert asked == [("iPhone 13 128GB Blue", [dot], LISTING["description"])]
+    assert (found.json()["price"], found.json()["flaws"], found.json()["read_by"]) == (170, [dot], "gemma3:4b")
+    stats = client.get("/stats").json()
+    assert stats["drafts"] == 0  # a price check is a reading, not a draft...
+    assert [(m["model"], m["job"]) for m in stats["models"]] == [("gemma3:4b", "price")]  # ...kept as its own job
+
+
+def test_a_price_checks_reading_isnt_counted_in_the_cost_per_draft(client, monkeypatch, prices_api):
+    monkeypatch.setattr(api, "estimate", lambda title, flaws=(), **_: {"price": 150, "cuts": []})
+    client.use(local=FakeModel("gemma3:4b", READ, READ), api_model=FakeModel("claude-haiku-5-5"), messages=PAST)
+    client.post("/messages/draft", json={"listing": LISTING, "mention": True})
+    before = client.get("/stats").json()["cost_per_100_drafts_pence"]
+    log = api.app.dependency_overrides[api.audit]()
+    log.attempt("price-1", Reply("claude-haiku-5-5", answer={}), [], "0.05", job="price")  # a paid price reading
+    after = client.get("/stats").json()
+    assert after["cost_per_100_drafts_pence"] == before and after["cost_pence"] >= 0.05
+
+
+def test_flaws_already_read_are_used_as_they_are(client, monkeypatch, prices_api):
+    monkeypatch.setattr(api, "estimate", lambda title, flaws=(), **_: {"price": 150, "cuts": list(flaws)})
+    local = FakeModel("gemma3:4b", READ)
+    client.use(local=local)
+    found = client.post("/prices/estimate", json={"title": "iPhone 13", "description": "x", "flaws": ["battery 71%"]})
+    assert (found.json()["cuts"], found.json()["read_by"], local.asked) == (["battery 71%"], None, [])
+
+
+def test_the_price_tab_sorts_the_flaws_with_flip_kinds_when_ollama_has_it(client, monkeypatch, prices_api):
+    given = []
+
+    def priced(title, flaws=(), description=None, sorter=None, **_):
+        given.append(sorter)
+        return {"price": 150, "cuts": ["fault"], "kinds": ["fault"], "sorted_by": sorter.name if sorter else "code"}
+
+    class Sorter:
+        name = "flip-kinds-1"
+
+    monkeypatch.setattr(api, "estimate", priced)
+    client.use(local=FakeModel("gemma3:4b", READ), kinds=lambda: Sorter())
+    found = client.post("/prices/estimate", json={"title": LISTING["title"], "description": LISTING["description"]})
+    assert isinstance(given[0], Sorter) and found.json()["sorted_by"] == "flip-kinds-1"
+    client.use(local=FakeModel("gemma3:4b", READ), kinds=lambda: None)  # not in Ollama: code sorts
+    found = client.post("/prices/estimate", json={"title": LISTING["title"], "description": LISTING["description"]})
+    assert given[1] is None and found.json()["sorted_by"] == "code"
+
+
+def test_no_flaws_means_flip_kinds_isnt_looked_for(client, monkeypatch, prices_api):
+    looked = []
+    monkeypatch.setattr(api, "estimate", lambda title, flaws=(), sorter=None, **_: {"price": 150, "cuts": []})
+    client.use(local=FakeModel("gemma3:4b", READ), kinds=lambda: looked.append(1))
+    client.post("/prices/estimate", json={"title": "iPhone 13", "description": "x", "flaws": []})
+    assert looked == []
+
+
+def test_the_app_looks_for_flip_kinds_in_the_ollama_that_reads(monkeypatch, tmp_path):
+    seen = []
+    monkeypatch.setattr(api, "kinds_sorter", lambda url: seen.append(url) or "sorter")
+    monkeypatch.setattr(api, "audit", lambda: AuditLog(tmp_path / "audit.sqlite3"))  # never the real log
+    api.setup.cache_clear()
+    try:
+        assert api.setup().flaw_sorter() == "sorter" and seen == ["http://127.0.0.1:11434"]
+    finally:
+        api.setup.cache_clear()
+
+
+def test_the_price_tab_reads_nothing_but_iphones_samsungs_and_macbooks(client, prices_api):
+    local = FakeModel("gemma3:4b", READ)
+    client.use(local=local)
+    for title in ("PS5 Slim 1TB", "iPhone 13 case", "MacBook Pro charger"):
+        found = client.post("/prices/estimate", json={"title": title, "description": "Cracked case"}).json()
+        assert found["skipped"] == "Estimates are for iPhones, Samsung phones and MacBooks only"
+        assert found["flaws"] == []
+    assert local.asked == []
+
+
+def test_with_no_prices_api_set_the_listing_isnt_read(client, monkeypatch):
+    monkeypatch.setenv("PRICES_URL", "")
+    local = FakeModel("gemma3:4b", READ)
+    client.use(local=local)
+    found = client.post("/prices/estimate", json={"title": "iPhone 13 128GB", "description": "Cracked back"}).json()
+    assert found["skipped"].startswith("No prices API set") and local.asked == []
+
+
+def test_the_price_tab_asks_for_the_kinds_and_the_size_the_listing_gives(client, monkeypatch, prices_api):
+    """The tab end to end with the real flip.prices (6 Oct recheck), against a pretend prices API: a fault said as the
+    one thing not working, a title selling it for repairs, a size written "128 gig"."""
+    from flip import prices
+    asked = []
+
+    class Answer:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self):
+            return json.dumps({"price": 150, "middle": 170, "used": []}).encode()
+
+    def urlopen(request, timeout):
+        asked.append(json.loads(request.data))
+        return Answer()
+    monkeypatch.setattr(prices.urllib.request, "urlopen", urlopen)
+    prices._seen.clear()
+    found = client.post("/prices/estimate", json={"title": "iPhone 13 128GB", "flaws": ["Everything works except face id"],
+                                                  "description": "Everything works except face id. Collection Leeds."})
+    assert (asked[-1]["kinds"], found.json()["kinds"]) == (["fault"], ["fault"])
+    client.post("/prices/estimate", json={"title": "iPhone 12 Pro repairs", "description": "Collection only.", "flaws": []})
+    assert (asked[-1]["kinds"], asked[-1]["bucket"]) == (["parts"], "good")
+    found = client.post("/prices/estimate", json={"title": "iPhone 13 Blue", "description": "128 gig, battery 90%",
+                                                  "flaws": []})
+    assert (asked[-1]["storage_gb"], found.json()["asked_storage_gb"]) == (128, 128)
+
+
+def test_the_price_tab_says_the_monthly_cap_and_skips_a_charger(client, monkeypatch, prices_api):
+    """The tab with the real flip.prices (6 Oct second check), against a pretend prices API: its monthly cap, an
+    UNAVAILABLE whose message says "next month", is said as that, not as a moment's wait; a charger with its own cable
+    is never read or asked about."""
+    import io
+    import urllib.error
+
+    from flip import prices
+    asked = []
+
+    def urlopen(request, timeout):
+        asked.append(json.loads(request.data))
+        raise urllib.error.HTTPError(request.full_url, 503, "x", {}, io.BytesIO(json.dumps(
+            {"error": {"code": "UNAVAILABLE", "message": "New price checks are paused until next month."}}).encode()))
+    monkeypatch.setattr(prices.urllib.request, "urlopen", urlopen)
+    prices._seen.clear()
+    found = client.post("/prices/estimate", json={"title": "iPhone 13 mini 512GB", "flaws": [],
+                                                  "description": "Works perfectly."}).json()
+    assert found["error"] == "New price checks are paused until next month: models checked before can still be priced"
+    local = FakeModel("gemma3:4b", READ)
+    client.use(local=local)
+    found = client.post("/prices/estimate", json={"title": "MacBook Pro charger and cable included",
+                                                  "description": "Genuine Apple 61W, works."}).json()
+    assert found["skipped"] == "Estimates are for iPhones, Samsung phones and MacBooks only"
+    assert (len(asked), local.asked) == (1, [])

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fileFor, keyFrom, typeOf } from "./parts";
+import { fileFor, keyFrom, modelsToWarm, settingFrom, typeOf } from "./parts";
 
 test("the key is read the way the API reads .env", () => {
   assert.equal(keyFrom("ANTHROPIC_API_KEY=a\nFLIP_API_KEY=abc123\n"), "abc123");
@@ -26,4 +26,24 @@ test("each file goes with its type", () => {
   assert.equal(typeOf("/x/INDEX-A1.JS"), "text/javascript; charset=utf-8");
   assert.equal(typeOf("/x/font.woff2"), "font/woff2");
   assert.equal(typeOf("/x/unknown.bin"), "application/octet-stream");
+});
+
+test("a setting is read the way the API reads .env: missing is undefined, empty is off", () => {
+  assert.equal(settingFrom("FLIP_WORDING_MODEL=\n", "FLIP_WORDING_MODEL"), "");
+  assert.equal(settingFrom("A=1\n", "FLIP_WORDING_MODEL"), undefined);
+  assert.equal(settingFrom("FLIP_READER_MODEL = 'flip-reader-4'", "FLIP_READER_MODEL"), "flip-reader-4");
+});
+
+test("FlipAssist opens with the models every draft uses loaded, each with the working memory it's asked with", () => {
+  const all = ["gemma3:4b", "flip-reader-5:latest", "flip-wording-3:latest", "flip-wording-2:latest"];
+  // the reader last: when only one fits, Ollama keeps the newest, and every draft reads first
+  assert.deepEqual(modelsToWarm(all, ""), [{ model: "flip-wording-3", numCtx: 2048 }, { model: "flip-reader-5", numCtx: 8192 }]);
+  // no reader: Gemma reads, so it's loaded instead; no flip-wording: code words the reason
+  assert.deepEqual(modelsToWarm(["gemma3:4b"], ""), [{ model: "gemma3:4b", numCtx: 8192 }]);
+  // turned off or renamed in .env, and what's set already wins over .env, as with the API
+  assert.deepEqual(modelsToWarm(all, "FLIP_READER_MODEL=\nFLIP_WORDING_MODEL=flip-wording-2"),
+    [{ model: "flip-wording-2", numCtx: 2048 }, { model: "gemma3:4b", numCtx: 8192 }]);
+  assert.deepEqual(modelsToWarm(all, "FLIP_WORDING_MODEL=flip-wording-2", { FLIP_WORDING_MODEL: "" }),
+    [{ model: "flip-reader-5", numCtx: 8192 }]);
+  assert.deepEqual(modelsToWarm([], ""), []); // nothing downloaded: drafts use code only
 });

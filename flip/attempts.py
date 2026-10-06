@@ -13,7 +13,7 @@ from flip.costs import cost_pence
 MODES = {"local": ["local"], "api": ["api"], "auto": ["local", "api"]}
 
 
-def try_models(mode, models, ask, check, result, log=None, again=None):
+def try_models(mode, models, ask, check, result, log=None, again=None, job="draft"):
     """Ask each model in turn until an answer passes check. ask(model) returns
     a Reply; check(answer) returns its problems. Every attempt is added to
     result["attempts"] (and the audit log); the passing answer is returned, or
@@ -27,7 +27,7 @@ def try_models(mode, models, ask, check, result, log=None, again=None):
         result["attempts"].append({"model": reply.model, "problems": problems, "seconds": reply.seconds,
                                    "tokens_in": reply.tokens_in, "tokens_out": reply.tokens_out, "cost_pence": cost})
         if log:
-            log.attempt(result["item_id"], reply, problems, cost)
+            log.attempt(result["item_id"], reply, problems, cost, job=job)  # "read" for reading the listing
         return problems
 
     for name in MODES[mode]:

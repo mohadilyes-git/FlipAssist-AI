@@ -27,14 +27,6 @@ from flip.checks import (BUMP, ESIM, FAULTS, ISSUE_KINDS, ISSUES, LEVELS, MARKS,
                          prices_in, promises_in, stated_parts)
 from flip.numbers import CUE as BATTERY_CUE, TYPED_BATTERY, battery_worded, figure, read_numbers
 
-# the seller says the price already allows for the flaw: a lower offer mustn't use it again
-PRICED_IN = re.compile(r"\b(?:hence (?:the |why )?(?:the |low |cheap )?price|priced accordingly|priced to reflect|"
-                       r"price reflects|reflected in (?:the )?price|taken into account in (?:the )?price|"
-                       r"why it (?:is |s )?(?:so )?(?:cheap|priced low)|hence (?:so )?cheap|price (?:is )?reduced|"
-                       r"reduced (?:price|to reflect|for)|priced (?:it )?(?:low|lower|cheap|cheaper|to sell)|"
-                       r"(?:selling|sold|going|letting it go) (?:it )?(?:for )?cheap(?:er|ly)?|"
-                       r"cheap(?:er)? (?:than (?:others|usual|most) )?(?:due to|because of|cos|as)|"
-                       r"(?:low|cheap) price (?:due to|because of|cos|as))\b")
 # good condition in so many words: below "excellent" and "flawless", which the checks already read
 GOOD = re.compile(r"\b(?:good|great|nice|lovely|decent|fab|fantastic|brilliant|top) condition\b"
                   r"|\bcondition (?:is )?(?:very |really )?(?:good|great|nice|lovely)\b"
@@ -67,12 +59,14 @@ PARTS = re.compile(r"[,;!?\n()|•►▪→\U0001F300-\U0001F50A\U0001F50C-\U000
                    r"|\b(?:only|just)(?=\s+(?:a|an|one|some|the|few|couple|light|minor|small|tiny|slight|faint|"
                    r"hairline|odd|little)\b)(?!\s+an?\s+e[- ]?sim)"
                    r"|\bbar(?=\s+(?:a|an|one|some|the|small|tiny|minor|light|few)\b)", re.IGNORECASE)
-# "I don't mind the scratch" isn't "no scratch": the "don't" is about you, not the item
-ATTITUDE = re.compile(r"\b(?:don'?t|do not|doesn'?t|does not)\s+(?:mind|bother me|matter)\b"
+# "I don't mind the scratch" isn't "no scratch": the "don't" is about you, not the item ("don't care about the
+# scratch" too, as the writer says it: 26 Sep)
+ATTITUDE = re.compile(r"\b(?:don'?t|do not|doesn'?t|does not)\s+(?:mind|care(?: about)?|bother me|matter)\b"
                       r"|\bnot (?:too |that |really |at all )?(?:bothered|fussed|worried)(?: about| by)?\b"
                       r"|\bno (?:problem|bother|worries|issue) with\b", re.IGNORECASE)
 # an offer at the asking price says you don't mind the flaw, not just names it
-DONT_MIND = re.compile(r"\b(?:don'?t|do not) mind\b|\bnot (?:too |that |really |at all )?(?:bothered|fussed|worried)\b"
+DONT_MIND = re.compile(r"\b(?:don'?t|do not) (?:mind|care)\b"
+                       r"|\bnot (?:too |that |really |at all )?(?:bothered|fussed|worried)\b"
                        r"|\bno (?:problem|bother|issue|worries)\b|\b(?:fine|happy|ok|okay|alright) with\b|\beven with\b"
                        r"|\bdespite\b|\bregardless of\b"
                        # "the scratches don't bother me", "won't put me off", "aren't a problem", "I can live with"
@@ -120,7 +114,7 @@ REASON_FILLER = SMALL_WORDS | {"it", "its", "s", "is", "are", "be", "been", "in"
                                "console", "device", "handset", "unit", "product", "thing", "works", "working", "ok",
                                "okay", "happy", "glad", "good"}
 # battery health at or under this is a reason to offer less, and a flaw of the listing's: resellers price a phone
-# down below 86% (the user's line, read from their labels: every figure of 85 or under a flaw, 86 and up not), and
+# down below 86% (the line read from the labels: every figure of 85 or under a flaw, 86 and up not), and
 # under 80% the iPhone itself says the battery needs a service
 LOW_BATTERY = 85
 # a battery figure apart from its label, put next to it before the listing is cut into parts: on the line under
@@ -374,7 +368,7 @@ def battery_figure(flaw):
 
 def read_listing(text):
     """What the listing says about the item's condition, in the seller's own
-    words: {"flaws": ["Broken back"], "good": [], "priced_in": False}. A part
+    words: {"flaws": ["Broken back"], "good": []}. A part
     with a flaw is a flaw even when it also praises: "good condition apart
     from a scratch". A battery health of LOW_BATTERY or under is a flaw too
     ("Battery health 79%"), and "eSIM only" isn't one where every one of the
@@ -382,7 +376,7 @@ def read_listing(text):
     text = answered(re.sub(r"\bcondition\s*[:\-–—]\s*", "condition ", text, flags=re.IGNORECASE))  # "Condition: good"
     text = figures_joined(text)
     read_as = esim_read(text)
-    found = {"flaws": [], "good": [], "priced_in": bool(PRICED_IN.search(" ".join(words(text))))}
+    found = {"flaws": [], "good": []}
     for part in this_items_parts(text):
         apart = battery_apart(part)  # "Battery health 79% small crack on back": two flaws, each in its own words
         for n, piece in enumerate(apart if apart else (part,)):
@@ -408,18 +402,21 @@ def point_for(kind, text, flaws=None, battery=None):
     read = read_listing(text)
     if flaws is not None:
         read["flaws"] = list(flaws)
-    if read["flaws"] and (kind == "asking" or (kind == "lower" and not read["priced_in"])):
-        figures = {battery_figure(flaw) for flaw in read["flaws"]}
+    # every flaw is a lower offer's reason, even one the seller says the price allows for ("priced accordingly"): the
+    # user chose that on 3 Oct 2026, over leaving such flaws out
+    said = read["flaws"]
+    if said and kind in ("asking", "lower"):
+        figures = {battery_figure(flaw) for flaw in said}
         if kind == "lower" and len(figures) == 1 and None not in figures:  # only the battery: said as AlertFlip says it
             battery = figures.pop()
             return {"about": "battery", "says": [f"battery health {battery}%"], "battery": battery}
-        says = read["flaws"]
+        says = said
         if len(figures - {None}) > 1:  # two figures for one battery are none
             says = [flaw for flaw in says if battery_figure(flaw) is None]
         if not says:
             return None
         about = "flaw"
-    elif kind == "lower" and battery and float(battery) <= LOW_BATTERY and not read["priced_in"]:
+    elif kind == "lower" and battery and float(battery) <= LOW_BATTERY:
         return {"about": "battery", "says": [f"battery health {battery}%"], "battery": battery}
     elif kind == "more" and read["good"] and not read["flaws"]:
         about, says = "condition", read["good"]
@@ -460,6 +457,12 @@ def quoted(point):
     return " and ".join(f'"{s}"' for s in point["says"])
 
 
+def reason_for_ai(point):
+    """What the AI is told to give as the reason: the reason flip.wording worded and checked, to use as it is, or the
+    listing's own words (quoted)."""
+    return f'"{point["worded"]}" (use this reason as it is)' if point.get("worded") else quoted(point)
+
+
 def question_for(kind, point):
     """What the app asks you when a draft leaves the point out."""
     return f"The listing says {quoted(point)}. {ASK[kind]}"
@@ -491,7 +494,10 @@ def says_point(text, point):
     ("black dot on the screen", read by flip.reader) is said when most of its
     words are: "the black dot"; a battery figure ("81% BH") when the text
     gives the same one ("the battery health is 81%")."""
-    point_kinds = condition_said(". ".join(point["says"]))
+    worded = point.get("worded")
+    if worded and re.sub(r"\W+", " ", worded.lower()).strip() in re.sub(r"\W+", " ", text.lower().replace("\u2019", "'")):
+        return True  # the reason flip.wording worded, said as it is
+    point_kinds = condition_said(". ".join([*point["says"], *([worded] if worded else [])]))
     if any(backed(kind, point_kinds) for kind in condition_said(text)):
         return True
     figures = battery_worded(text)
@@ -617,15 +623,22 @@ def check_reasons(message, listing_text, point=None):
     check_condition_talk's, reported there. A message also never copies the
     seller's own story ("I dropped it and cracked the back"), nor says how the
     damage happened when the listing doesn't (CAUSES: "I know you dropped it")."""
-    listed = {w[:5] for w in words(listing_text)}
+    # each word cut to 5 letters, its "s" first ("needs" is the listing's "need": the fourth red team, 26 Sep, "because it
+    # needs a new battery" was refused on "Need a new battery")
+    key = lambda w: (w[:-1] if len(w) > 3 and w.endswith("s") else w)[:5]
+    listed = {key(w) for w in words(listing_text)}
     message = IDIOMS.sub(" ", re.sub(r"[’‘ʼ]", "'", message))  # "pay cash on the spot" names no spot
     said = stated_parts(message) + [m.group("reason") for m in REASON_SAID.finditer(message)]
     unbacked = [m.group() for part in said for m in PROBLEM.finditer(part)
-                if not condition_said(m.group()) and not {w[:5] for w in words(m.group())} <= listed
+                if not condition_said(m.group()) and not {key(w) for w in words(m.group())} <= listed
                 and not NEGATED_BEFORE.search(part[:m.start()])]
     problems = [f"the message says what's wrong with it in words the listing doesn't: "
                 f"{', '.join(dict.fromkeys(w.lower() for w in unbacked))}"] if unbacked else []
-    story = copied_story(message, listing_text, allowed=point["says"] if point else ())
+    # the reason flip.wording worded is the listing's own words too, as says_point and the condition checks take it:
+    # it keeps what the story cut leaves off ("the screen is quite scratched" from "I will say that the screen is
+    # quite scratched", 3 Oct review), and Haiku's check holds it to the rules on stories
+    allowed = ([*point["says"], point["worded"]] if point.get("worded") else point["says"]) if point else ()
+    story = copied_story(message, listing_text, allowed=allowed)
     if story:
         problems.append(f"the message copies the seller's own story: \"{story}\"")
     # how it happened, as said: the sentences that don't ask, and the reason in the offer's own question (a
@@ -725,3 +738,85 @@ def check_condition_talk(message, listing_text, point, mention, kind="lower", of
     if unbacked:
         problems.append(f"the message says things about the condition the listing doesn't: {', '.join(unbacked)}")
     return problems + check_reasons(message, listing_text, point if mention else None)
+
+
+# the battery, as a message gives it for a reason: "As the battery is 91% health I'd need to replace it", "BH 91%"
+BATTERY_TALK = re.compile(r"\b(?:batter(?:y|ies)|batt|bh|b/h|max(?:imum)? cap(?:acity)?)\b|🔋|"
+                          r"\b(?:health|capacity)\b(?=[^.?!]{0,20}?\d{2,3}\s?%)|"  # "the health is 91%"
+                          r"\d{2,3}\s?%\s?(?:health|capacity)\b", re.IGNORECASE)  # "it's only at 91% health"
+# ...a fault of it, which makes a battery flaw one whatever its figure: "Battery changed last year", "Battery faulty"
+BATTERY_FAULT = re.compile(r"\b(?:replac\w*|low|weak|worn|degrad\w*|needs?|dying|drain\w*|poor|bad|struggl\w*|"
+                           r"fault\w*|dead|swollen|bulg\w*|service|changed|fitted|swapped)\b|"
+                           r"\b(?:(?:doesn|won|isn)[’']?t|not) (?:last|hold)\w*", re.IGNORECASE)
+# ...and what makes it a reason, not a word in passing: a figure, or what it needs or does
+BATTERY_REASON = re.compile(rf"\d{{2,3}}\s?%|\b(?:health|capacity)\b|{BATTERY_FAULT.pattern}", re.IGNORECASE)
+BATTERY_DONT_MIND = re.compile(r"\b(?:doesn|don|won)[’']?t (?:bother|matter|mind)\b|\bnot (?:fussed|bothered|worried)\b|"
+                               r"(?<!have to )(?<!need to )(?<!needs to )\b(?:sort|fix|replace) it myself\b|"
+                               r"\bno (?:problem|worries|issue)\b|\b(?:isn[’']?t|not) (?:an? )?(?:issue|problem)\b|"
+                               r"\bcheck(?:ing)? (?:the |its )?batter", re.IGNORECASE)
+# the buyer's own battery, not the listing's: "Need one as my battery keeps dying"
+BATTERY_MINE = re.compile(r"\b(?:my|mine)\b[^.?!]{0,15}\bbatter|\bbatter\w*[^.?!]{0,10}\bmine\b", re.IGNORECASE)
+# a battery praised, not a reason to pay less: "the battery health is 91% which is great"
+BATTERY_GOOD = re.compile(r"(?<!not )(?<!n't )(?<!n’t )(?<!not in )(?<!n't in )\b(?:great|good|fine|excellent|perfect|"
+                          r"healthy|strong|brilliant|amazing|mint)\b", re.IGNORECASE)
+# the label right before a flaw that names it a battery's: "Battery: needs replacing", "Battery health - poor"
+BATTERY_LABEL = re.compile(r"\b(?:batter(?:y|ies)|batt|bh|b/h)(?:\s+(?:health|life|capacity|condition|status))?"
+                           r"\s*[:\-–—(=]?\s*$", re.IGNORECASE)
+# a listing's battery read a clause at a time, as the drafter reads it (battery_in): not a charge level or the past
+BATTERY_CLAUSES = re.compile(r"(?:(?<!\d)\.|\.(?!\d)|[;!?\n()])+|,(?!\d)")
+BATTERY_SENTENCES = re.compile(r"(?:(?<!\d)\.|\.(?!\d)|[!?\n])+")
+GOOD_FOR_MORE = 86  # a battery at or over this is good condition, a reason to pay more
+
+
+def battery_figures_now(text):
+    """Every battery health a listing gives as it is now ("Battery health 92%,
+    phone at 60% battery in the photos" -> {92.0}), from battery_now one
+    clause at a time: not a charge level or the past."""
+    found = set()
+    for sentence in BATTERY_SENTENCES.split(text or ""):
+        for clause in BATTERY_CLAUSES.split(sentence):
+            said = battery_now(clause) if clause.strip() else None
+            if said:
+                found.add(float(said[0]))
+    return found
+
+
+def check_battery_reason(message, point, offer=None, listing_text="", title="", kind="lower"):
+    """A message gives the battery as a reason only when it is one the
+    listing gives (26 Sep: "As the battery is 91% health I'd need to replace
+    it" passed on a listing whose flaw is "Face ID not working"). It is one
+    when the draft's point is the battery or a flaw of it ("Battery changed
+    last year", "Battery: needs replacing" read as "needs replacing"), the
+    listing's battery is low (LOW_BATTERY or under) on a lower offer or at
+    asking, or, paying more, a good one (GOOD_FOR_MORE or over) said with good
+    condition. Talk that isn't a reason is fine: an item that is a battery
+    ("the MagSafe Battery Pack", a title with no battery figure), don't-mind
+    wording ("battery health doesn't bother me"), praise on a lower offer, and
+    questions; the offer's own question counts (offer, in pence). point: the
+    point this draft says (None when it says none)."""
+    if not isinstance(message, str):
+        return []
+    # the title's battery words are the item's name only for an item that is one: not "iPhone 12 Pro - Battery 91%"
+    named = {w for w in words(title)} if title and not battery_worded(title) and not re.search(r"\d\s?%", title) else set()
+    reasons = [part for part in said_in(message, offer)
+               if any(m.group().lower() not in named for m in BATTERY_TALK.finditer(part))
+               and BATTERY_REASON.search(part) and not BATTERY_DONT_MIND.search(part)
+               and not BATTERY_MINE.search(part) and not (kind != "more" and BATTERY_GOOD.search(part))]
+    if not reasons:
+        return []
+    # the point's own battery excuses it when it's a flaw: a fault, or no figure over LOW_BATTERY (not "91%")
+    low_or_fault = lambda part: BATTERY_FAULT.search(part) or all(float(f) <= LOW_BATTERY for f in battery_worded(part))
+    if point and (point["about"] == "battery" or any((BATTERY_TALK.search(part) or battery_worded(part))
+                                                     and low_or_fault(part) for part in point["says"])):
+        return []
+    if point and any(BATTERY_LABEL.search(listing_text[max(0, at - 40):at])  # the flaw's own label names the battery
+                     for part in point["says"] for at in [listing_text.lower().find(part.lower())] if at >= 0):
+        return []
+    figures = battery_figures_now(listing_text) if listing_text else set()
+    said = {float(f) for part in reasons for f in battery_worded(part)}
+    if kind in ("lower", "asking") and any(f <= LOW_BATTERY for f in figures) and (not said or said <= figures):
+        return []  # the listing's own low battery, a third flaw the point left out
+    if kind == "more" and figures and all(f >= GOOD_FOR_MORE for f in figures) and \
+            (said <= figures if said else all(BATTERY_GOOD.search(part) for part in reasons)):
+        return []  # "...as it's mint, 100% battery", "...with great battery health"
+    return ["the message gives the battery as a reason, but it isn't the listing's: its battery isn't one"]

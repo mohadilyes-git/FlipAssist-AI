@@ -13,8 +13,8 @@ LEFT_OUT = "the message talks about the condition, but this draft leaves that ou
 # ── reading the listing ─────────────────────────────────────────────────────
 
 def test_the_listing_is_read_in_the_sellers_own_words():
-    assert read_listing(BROKEN) == {"flaws": ["Broken back"], "good": [], "priced_in": False}
-    assert read_listing(EXCELLENT) == {"flaws": [], "good": ["Excellent condition"], "priced_in": False}
+    assert read_listing(BROKEN) == {"flaws": ["Broken back"], "good": []}
+    assert read_listing(EXCELLENT) == {"flaws": [], "good": ["Excellent condition"]}
     assert read_listing("Minor cosmetic damage on the corner, works perfectly")["flaws"] == \
         ["Minor cosmetic damage on the corner"]
     assert read_listing("Condition: good. Light scratch on the screen")["flaws"] == ["Light scratch on the screen"]
@@ -39,10 +39,12 @@ def test_each_kind_of_offer_gets_its_own_point():
     assert point_for("lower", EXCELLENT) is None and point_for("asking", EXCELLENT) is None
 
 
-def test_a_flaw_the_seller_priced_in_is_no_reason_to_offer_less():
-    for text in ("Cracked screen hence the price.", "The back glass is cracked, which is reflected in the price"):
-        assert read_listing(text)["priced_in"], text
-        assert point_for("lower", text) is None
+def test_a_flaw_the_seller_priced_in_is_still_the_reason():
+    """Decided 3 Oct 2026: every flaw is a lower offer's reason, even one the seller says the price allows for
+    (before, any such words left every flaw out)."""
+    for text in ("Cracked screen hence the price.", "The back glass is cracked, which is reflected in the price",
+                 "Small scratch on the screen. Battery 74%, priced accordingly. Priced to sell!"):
+        assert point_for("lower", text)["about"] in ("flaw", "battery"), text
         assert point_for("asking", text)["about"] == "flaw"  # you can still say you don't mind it
 
 
@@ -323,7 +325,7 @@ def test_a_low_battery_is_the_reason_for_a_lower_offer_when_there_is_no_flaw():
     assert point_for("lower", "iPhone 14 Pro, great condition", [], battery="86") is None  # not a low one
     assert point_for("lower", "Cracked back", battery="80")["about"] == "flaw"  # a flaw comes first
     assert point_for("asking", "iPhone 14 Pro", [], battery="80") is None  # only a lower offer gives it
-    assert point_for("lower", "Battery 80%, priced accordingly", [], battery="80") is None  # the price allows for it
+    assert point_for("lower", "Battery 80%, priced accordingly", [], battery="80")["about"] == "battery"  # said anyway
 
 
 def test_a_long_part_is_cut_to_the_flaw_without_the_word_that_joins_it():
@@ -335,7 +337,7 @@ def test_a_long_part_is_cut_to_the_flaw_without_the_word_that_joins_it():
 
 
 def test_a_low_battery_is_a_flaw_like_the_others():
-    """The user's line (23 Sep): 85% or under is a flaw. With another flaw both are the reason, the title's figure
+    """The line set on 23 Sep: 85% or under is a flaw. With another flaw both are the reason, the title's figure
     and the description's are one flaw, and the battery alone is said as AlertFlip says it."""
     text = "iPhone 12 64GB 79% BH. Cracked back. Battery health 79%."
     assert read_listing(text)["flaws"] == ["79% BH", "Cracked back", "Battery health 79%"]

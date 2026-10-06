@@ -106,7 +106,8 @@ export function Steps({ attempts }: { attempts: Attempt[] }) {
       {attempts.map((a, i) => (
         <li key={i}>
           <span className={a.problems.length ? "failed" : "passed"}>
-            {a.colour_only ? `${modelName(a.model)}, colour only:` : writerName(a.model)}{" "}
+            {a.colour_only ? `${modelName(a.model)}, colour only:` : a.job === "reason" ? `Reason · ${writerName(a.model)}`
+              : writerName(a.model)}{" "}
             {a.problems.length ? `failed: ${a.problems.join("; ")}` : "passed"}
           </span>
           <span className="meta">{a.seconds.toFixed(1)}s · {cost(a.cost_pence)}</span>
@@ -136,6 +137,7 @@ export const SparkleIcon = icon(<>
   <path d="M19 16l.7 1.8 1.8.7-1.8.7L19 21l-.7-1.8-1.8-.7 1.8-.7z" />
 </>);
 export const TagIcon = icon(<><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z" /><circle cx="7.5" cy="7.5" r="1.3" /></>);
+export const PoundIcon = icon(<path d="M16.5 7.2A4 4 0 0 0 9.5 9v5.5c0 2-1 3.5-3 4.5h11M7 13h7" />);
 export const GaugeIcon = icon(<><path d="M3.5 18a9 9 0 1 1 17 0" /><path d="m12 14 4-4" /></>);
 export const PenIcon = icon(<path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4" />);
 export const SunIcon = icon(<path d="M12 4V2M12 22v-2M4 12H2M22 12h-2M5.6 5.6 4.2 4.2M19.8 19.8l-1.4-1.4M5.6 18.4l-1.4 1.4M19.8 4.2l-1.4 1.4M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />);

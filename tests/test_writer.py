@@ -21,12 +21,17 @@ CHATTY = style_card([{"my_message": "Hiya! Is the iPhone still up for grabs? Cou
 
 def test_your_phrasebook_is_the_sentences_you_use_again_and_again():
     # every one of these offered under asking, so that's the only kind with a sentence of its own
+    # (26 Sep red team: the closing is learned for each kind of offer too, so the phrasebook has closing_lower,
+    # closing_asking and closing_more: here your closing for each, as no kind ends another way.
+    # tests/test_fix_g6_learning.py)
     assert PAST["phrases"] == {"opener": "Hi mate, is this still available?", "offer": "Would you take £[OFFER] cash?",
                                "offer_lower": "Would you take £[OFFER] cash?", "offer_asking": None,
-                               "offer_more": None, "closing": "Can collect today.", "emoji": ""}
+                               "offer_more": None, "closing": "Can collect today.", "closing_lower": "Can collect today.",
+                               "closing_asking": "Can collect today.", "closing_more": "Can collect today.", "emoji": "",
+                               "sign_off": None}  # none of these signs off ("Kind regards, Sam" would)
     assert phrasebook([{"my_message": "Hiya, £100?"}, {"my_message": "Hey! Would £90 do?"}]) == \
         {"opener": None, "offer": None, "offer_lower": None, "offer_asking": None, "offer_more": None,
-         "closing": "", "emoji": ""}
+         "closing": "", "closing_lower": "", "closing_asking": "", "closing_more": "", "emoji": "", "sign_off": None}
 
 
 def test_messages_that_repeat_are_written_without_ai_and_ones_that_vary_by_ai():
@@ -61,7 +66,7 @@ def test_with_no_past_messages_it_writes_alertflips_messages():
     assert write_offer(None, "lower", 18500, FLAW, item="iPhone 13") == \
         "Hi, would you take £185 for it? I'm offering that because of the black dot on the screen."
     assert write_offer({}, "asking", 22000, item="iPhone 13") == \
-        "Hi, is this still available? I'm happy to pay the full £220. Could you hold it for me?"
+        "Hi, is this still available? I'm happy to pay the full £220."  # posted: you'd just buy it, so no hold
     assert write_offer({}, "more", 42000, item="iPhone 13") == \
         "Hi, I'll pay £420 if you take the listing down and sell it to me."
 
@@ -83,7 +88,7 @@ def test_the_reason_sentence_says_each_flaw_the_way_it_reads():
         "Hi, would you take £90 for it? I'm offering that because it's not charging."
     # the seller's own story has no sentence here: the AI writes instead
     assert write_offer({}, "lower", 9000, {"about": "flaw", "says": ["I dropped it and cracked the back"]}) is None
-    # the flaws the user's labels added (23 Sep), each said one way; with another flaw in the same words, the AI words it
+    # the flaws the 23 Sep labels added, each said one way; with another flaw in the same words, the AI words it
     said = {"Battery changed 4 months ago": "the battery has been replaced",
             "eSIM only": "it's eSIM only", "Sold untested": "it's untested",
             "Runs up to iOS 15": "it only runs up to iOS 15", "Only charges wireless": "it only charges wirelessly",
@@ -94,7 +99,9 @@ def test_the_reason_sentence_says_each_flaw_the_way_it_reads():
     for flaw, reason in said.items():
         assert write_offer({}, "lower", 9000, {"about": "flaw", "says": [flaw]}) == \
             f"Hi, would you take £90 for it? I'm offering that because {reason}."
-    assert write_offer({}, "lower", 9000, {"about": "flaw", "says": ["Battery replaced and back cracked"]}) is None
+    # ...and two flaws in one quote, each said (26 Sep): not left to the AI
+    assert write_offer({}, "lower", 9000, {"about": "flaw", "says": ["Battery replaced and back cracked"]}) == \
+        "Hi, would you take £90 for it? I'm offering that because the battery has been replaced and the back is cracked."
     # a low battery among the flaws (23 Sep): as AlertFlip says it, whatever the seller's words
     assert write_offer({}, "lower", 9000, {"about": "flaw", "says": ["Cracked back", "Battery Health: 79%"]}) == \
         "Hi, would you take £90 for it? I'm offering that because of the cracked back and because the battery " \
@@ -246,7 +253,9 @@ def test_making_a_draft_longer_never_breaks_the_greeting_or_asks_twice():
     ("iPhone 13 128GB cracked screen", "the cracked screen"),  # a flaw from the title, without the title
     ("Selling for parts", "that it's sold for parts"),
     ("Sold as spares", "that it's sold as spares"),
-    ("cracked the back", None),  # a deed: the AI words it
+    ("cracked the back", "that the back is cracked"),  # said of the part (26 Sep), not "the cracked the back"
+    ("it has bent the frame at the top", "that the frame is bent at the top"),
+    ("Cracked the back glass and the lens is", None),  # more than the one flaw: not this wording
 ])
 def test_more_of_the_sellers_wordings(part, phrase):
     assert flaw_phrase(part) == phrase
@@ -276,7 +285,7 @@ def test_a_sellers_run_on_flaw_reads_as_a_sentence():
         "Hi, would you take £90 for it? I'm offering that because of the issue with the screen – it turns on and off."
     assert write_offer({}, "asking", 11000, point) == \
         "Hi, is this still available? I'm happy to pay the full £110. I don't mind the issue with the screen – it " \
-        "turns on and off. Could you hold it for me?"
+        "turns on and off."
 
 
 def test_a_network_lock_keeps_its_own_words():
@@ -284,3 +293,68 @@ def test_a_network_lock_keeps_its_own_words():
     assert flaw_phrase("locked to EE") == "that it's locked to EE"
     assert flaw_phrase("network locked to Vodafone") == "that it's locked to Vodafone"
     assert flaw_phrase("iPhone 11 64GB back glass cracked") == "that the back glass is cracked"
+
+
+# ── the wording fixes of 26 Sep (the blind review's grammar slips) ───────────
+
+@pytest.mark.parametrize("part, phrase", [
+    ("Few scratches on screen", "a few scratches on the screen"),  # the seller's missing "the"
+    ("Has Scratches on screen", "that it has scratches on the screen"),
+    ("Crack at bottom right corner on back", "the crack at the bottom right corner on the back"),
+    ("Scratch on top of screen", "the scratch on top of the screen"),  # "on top of" stays as it's said
+    ("Dent in front of the camera", "the dent in front of the camera"),
+    ("Mic doesn't work while on speaker", "that the mic doesn't work while on speaker"),  # speakerphone, not a part
+    ("screen burn visible on white backgrounds", "the screen burn visible on white backgrounds"),
+    ("Small scuffs on the charging case from keys", "the small scuffs on the charging case"),  # how it happened: off
+    ("Screen damaged from a drop", "that the screen is damaged"),
+    ("Marks on frame from case", "the marks on the frame"),
+    ("it has bent the frame at the top", "that the frame is bent at the top"),  # said of the part
+    ("Cracked the back glass", "that the back glass is cracked"),
+])
+def test_a_flaw_reads_as_the_buyer_would_say_it(part, phrase):
+    assert flaw_phrase(part) == phrase
+
+
+def test_a_quote_with_two_flaws_is_said_as_two():
+    """FB12: "The back is cracked and it has bent the frame at the top" was too much for one wording, so the AI wrote
+    it and pasted "it has bent the frame" back."""
+    point = {"about": "flaw", "says": ["The back is cracked and it has bent the frame at the top"]}
+    assert write_offer({}, "lower", 29500, point) == "Hi, would you take £295 for it? I'm offering that because the " \
+                                                     "back is cracked and the frame is bent at the top."
+
+
+def test_the_things_go_before_what_is_said_of_it():
+    """E2 and FB34: "given that the battery health is 79% and the light marks on the frame" doesn't read."""
+    says = ["Battery health 79%", "Light marks on the frame"]
+    assert flaw_words(says) == "the light marks on the frame and that the battery health is 79%"
+    point = {"about": "flaw", "says": says}
+    assert with_reason("Would you accept £[OFFER]?", "lower", point) == \
+        "Would you accept £[OFFER], given the light marks on the frame and that the battery health is 79%?"
+    # each lead keeps reading: never "because of that..." nor "with that..."
+    assert with_reason("Would you take £[OFFER] because of the condition?", "lower", point) == \
+        "Would you take £[OFFER] because of the light marks on the frame and because the battery health is 79%?"
+    assert with_reason("Would you take £[OFFER] with the condition?", "lower", point) == \
+        "Would you take £[OFFER] given the light marks on the frame and that the battery health is 79%?"
+    two = {"about": "flaw", "says": ["Back smashed", "Battery health 74%"]}
+    assert with_reason("Would you take £[OFFER] because of the condition?", "lower", two) == \
+        "Would you take £[OFFER] because the back is smashed and the battery health is 74%?"
+
+
+def test_a_hold_that_says_when_isnt_followed_by_the_same_time():
+    """N5: "I'll give you £265 if you hold it till later. Can pick up later. Ta" said "later" twice; their own end at
+    "till later. Ta"."""
+    northern = style_card([{"my_message": text, "asking_price": asking} for text, asking in (
+        ("Hiya love, would you do £160? Can pick up later. Ta", "200"),
+        ("Hiya love, would you do £120? Can pick up later. Ta", "150"),
+        ("Hiya love, I'll give you £130 if you hold it till later. Ta", "120"),
+        ("Hiya love, I'll give you £295 if you hold it till later. Ta", "280"))])
+    assert write_offer(northern, "more", 26500, in_person=True) == "Hiya love, I'll give you £265 if you hold it till " \
+                                                                  "later. Ta"
+    assert write_offer(northern, "lower", 17500, in_person=True) == "Hiya love, would you do £175? Can pick up later. Ta"
+
+
+def test_a_place_is_named_only_by_those_who_name_one():
+    assert not style_card([{"my_message": "Hi mate, would you take £150? Can collect today."},
+                           {"my_message": "Hi mate, would you take £90? Can collect from yours tonight."}])["names_places"]
+    assert style_card([{"my_message": "Hi mate, would you take £150? Can collect from Leeds today."},
+                       {"my_message": "hi wud u take 90? can pick up in rotherham 2nite"}])["names_places"]

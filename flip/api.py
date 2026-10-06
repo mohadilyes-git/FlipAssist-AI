@@ -41,8 +41,12 @@ from flip.ai import ApiModel, LocalModel, whole_text
 from flip.audit import AuditLog
 from flip.catalogue import load_catalogue, load_conditions
 from flip.draft import load_env
+from flip.kinds import sorter as kinds_sorter
+from flip.prices import estimate, kind_of, settings as prices_settings
 from flip.drafter import draft_listing
 from flip.message_drafter import MESSAGE_TOKENS, Refused, draft_message, offer_to_draft
+from flip.offers import check_battery_reason, check_condition_talk
+from flip.wording import check_reason, completed, settings
 from flip.money import to_pence
 from flip.photos import NotAPhoto, photo_base64, photo_kind
 from flip.prompts import offer_words
@@ -74,6 +78,22 @@ class Listing(BaseModel):
     id: str | None = Field(None, max_length=100, description="AlertFlip's own id for it, kept in the audit log")
 
 
+class Reason(BaseModel):
+    clause: str = Field(description="the reason after \"I'm offering that because\", as the message gives it")
+    by: str = Field(description="who worded it: flip-wording-3, or claude-sonnet-5-5 when Sonnet fixed it")
+    checked: str = Field(description='"ok" (Haiku passed it), "fixed" (Sonnet), "flagged, kept", "not checked"')
+
+
+class ReasonOnScreen(BaseModel):
+    """The reason the message on screen gives, sent back with Make it longer and Rewrite: kept as it is, not worded
+    and checked again (it may be Sonnet's fix, which flip-wording would only word again the old way)."""
+    clause: str = Field(min_length=1, max_length=500)
+    by: str = Field(max_length=100)
+    checked: str = Field(max_length=40)
+    quotes: list[str] = Field(default_factory=list, max_length=50, description="reading.quotes of that draft: the "
+                              "reason is kept only when the listing still reads as these same lines")
+
+
 class MessageRequest(BaseModel):
     listing: Listing
     kind: Literal["lower", "asking", "more"] = "lower"
@@ -81,12 +101,33 @@ class MessageRequest(BaseModel):
     length: Literal["usual", "longer"] = "usual"
     previous: str | None = Field(None, max_length=1000, description='the draft on screen, to make longer: only with '
                                                                     '"length": "longer"')
-    writer: Literal["auto", "template", "ai"] = Field("auto", description="auto: your past messages decide")
+    writer: Literal["auto", "template", "ai"] = Field("auto", description="auto: your own sentences first, the AI "
+                                                        "only when they can't say it")
     rewrite_of: str | None = Field(None, max_length=5000, description="the message on screen, for Rewrite: the new "
                                                                       "one says it in other words")
     offer: str | None = Field(None, pattern=MONEY, description="the price you picked, in pounds; leave it out and code "
                                                                 "starts from its own (15% under, or 5% over, asking)")
     mode: Mode = "auto"
+    check_later: bool = Field(False, description="the app's way: the reason flip-wording wrote comes back straight "
+                                                 "away (reason.checked \"pending\"), and /messages/check-reason "
+                                                 "checks it after the draft is on screen")
+    reason: ReasonOnScreen | None = Field(None, description="with previous or rewrite_of: the reason the message on "
+                                                            "screen gives (draft.reason), kept when that message still "
+                                                            "says it")
+
+
+class ReasonCheckRequest(BaseModel):
+    """A drafted message whose reason is "pending": the draft's own listing, flaws, reason and message."""
+    draft_id: int = Field(ge=1, le=10**9)
+    listing: Listing
+    flaws: list[str] = Field(max_length=50, description="reading.flaws from the draft: the code checks' flaws")
+    quotes: list[str] = Field(default_factory=list, max_length=50, description="reading.quotes from the draft: the "
+                              "sentences flip-wording worded the reason from, which Haiku checks it against (the "
+                              "flaws when empty)")
+    clause: str = Field(min_length=1, max_length=500, description="reason.clause from the draft")
+    message: str = Field(min_length=1, max_length=5000, description="the message as drafted")
+    kind: Literal["lower", "asking", "more"] = "lower"
+    offer_pence: int = Field(ge=100, le=10**9)
 
 
 class Attempt(BaseModel):
@@ -95,15 +136,28 @@ class Attempt(BaseModel):
     seconds: float
     cost_pence: float
     colour_only: bool = Field(False, description="a second look at the colour alone, not a draft")
+    job: str = Field("draft", description='"reason" for the steps that word the reason (flip-wording, Haiku, Sonnet)')
 
 
 class Reading(BaseModel):
     """What was read from the listing, in the seller's own words."""
     flaws: list[str]
+    quotes: list[str] = Field(default_factory=list, description="the reader's whole sentences the reason is worded "
+                              "from: FlipAssist's reader's quotes before code cuts a seller's story off (flaws), "
+                              "else the flaws")
     pickup: str
     no_offers: str
     read_by: str
     attempts: list[Attempt]
+
+
+class ReasonCheck(BaseModel):
+    reason: Reason
+    message: str = Field(description="the message with the fixed reason in it, or as it was")
+    changed: bool = Field(description="the message changed: show this one, unless you've already edited yours")
+    problems: list[str] = Field(description="why a fix wasn't put in the message, if one wasn't")
+    attempts: list[Attempt]
+    cost_pence: float
 
 
 class MessageDraft(BaseModel):
@@ -124,6 +178,7 @@ class MessageDraft(BaseModel):
     warnings: list[str] = Field(description="worth knowing before you send: a title and description that name "
                                             "different models, a rewrite that couldn't find other words")
     attempts: list[Attempt]
+    reason: Reason | None = Field(None, description="the reason flip.wording worded and checked, when it did")
     cost_pence: float = Field(description="reading and drafting together")
 
 
@@ -226,6 +281,7 @@ class StyleMessage(BaseModel):
 
 class ModelUse(BaseModel):
     model: str
+    job: str = Field("draft", description='"read", "draft" (writing), "reason" or "colour"')
     attempts: int
     passed: int
     cost_pence: float
@@ -257,8 +313,10 @@ class Health(BaseModel):
 class Setup:
     """The models, the audit log and the catalogue: made once, on the first call that needs them."""
 
-    def __init__(self, local, api, log, local_listing=None, reader=None):
+    def __init__(self, local, api, log, local_listing=None, reader=None, wording=None, kinds=None):
         self.local, self.api, self.log = local, api, log
+        self.kinds = kinds  # what sorts a price's flaws: a sorter, or a function that gives one (None: code sorts)
+        self.wording = wording  # the reason's models (flip.wording): "settings" in the app, None (off) unless given
         self.local_listing = local_listing or local  # listings get the bigger answer budget
         self.reader = reader  # what reads the seller's listing: a model, or a function that gives one when asked
         self.catalogue, self.conditions = load_catalogue(), load_conditions()
@@ -270,6 +328,13 @@ class Setup:
         found = self.reader() if callable(self.reader) else self.reader
         return found or self.local
 
+    def flaw_sorter(self):
+        """What sorts a price's flaws into the API's kinds: flip-kinds when Ollama has it (looked up at each price
+        check), else None, and code's rules sort them (flip.kinds)."""
+        if self.kinds is None or hasattr(self.kinds, "name"):
+            return self.kinds
+        return self.kinds()
+
 
 @lru_cache
 def audit():
@@ -280,13 +345,17 @@ def audit():
 def setup():
     api = ApiModel() if os.environ.get("ANTHROPIC_API_KEY") else None
     local = LocalModel(max_tokens=MESSAGE_TOKENS)
-    return Setup(local, api, audit(), LocalModel(), reader=lambda: reader_for(local))
+    return Setup(local, api, audit(), LocalModel(), reader=lambda: reader_for(local), wording="settings",
+                 kinds=lambda: kinds_sorter(local.url))
 
 
 @lru_cache
 def style():
     """Your messages, your style card from them, and the search for the closest."""
-    return StyleBook(index=MessageIndex())
+    # our AI (Gemma, on this Mac) reads your messages too when they change (flip.style_ai); the drafts use only what
+    # code finds in them. FLIP_STYLE_AI= (empty) in .env leaves your style to code alone
+    name = os.environ.get("FLIP_STYLE_AI", "gemma3:4b").strip()
+    return StyleBook(index=MessageIndex(), ai=LocalModel(name, timeout=180, max_tokens=700) if name else None)
 
 
 def usable_key():
@@ -350,7 +419,8 @@ class Gate:
 
 def attempts(found):
     return [Attempt(model=a["model"], problems=a["problems"], seconds=round(a["seconds"], 2),
-                    cost_pence=float(a["cost_pence"] or 0), colour_only=a.get("colour_only", False)) for a in found]
+                    cost_pence=float(a["cost_pence"] or 0), colour_only=a.get("colour_only", False),
+                    job=a.get("job", "draft")) for a in found]
 
 
 def new_id():
@@ -430,7 +500,10 @@ def draft_a_message(request: MessageRequest, s: Setup = Depends(setup), book: St
     try:
         result = draft_message(listing, book.card(), book.index, s.local, s.api, request.mode, s.log, kind=request.kind,
                                mention=request.mention, length=request.length, previous=request.previous,
-                               reading=reading, writer=request.writer, offer=offer, rewrite_of=request.rewrite_of)
+                               reading=reading, writer=request.writer, offer=offer, rewrite_of=request.rewrite_of,
+                               wording=s.wording,  # flip-wording, Haiku's check, Sonnet's fix (flip.wording)
+                               check_reason_now=not request.check_later,
+                               reason_on_screen=request.reason.model_dump() if request.reason else None)
     except Refused as e:  # anything else is a fault here, not the caller's: a 500
         raise HTTPException(422, str(e))
     answer = result["answer"] or {}
@@ -441,9 +514,11 @@ def draft_a_message(request: MessageRequest, s: Setup = Depends(setup), book: St
         written_by=result["writer"], kind=result["kind"], offer=offer_words(result["offer"]),
         offer_pence=result["offer"], note=result["note"], ask=result["ask"], point=result["point"],
         mentioned=result["mentioned"], questions=result["questions"],
-        reading=Reading(flaws=reading["flaws"], pickup=reading["pickup"], no_offers=reading["no_offers"],
+        reading=Reading(flaws=reading["flaws"], quotes=reading.get("quotes") or reading["flaws"],
+                        pickup=reading["pickup"], no_offers=reading["no_offers"],
                         read_by=reading["read_by"], attempts=read),
         reasons=result["reasons"], warnings=result["warnings"], attempts=tried,
+        reason=Reason(**result["reason"]) if result.get("reason") else None,
         cost_pence=round(sum(a.cost_pence for a in tried + read), 4))
 
 
@@ -493,6 +568,114 @@ def draft_a_listing(title: str = Form(min_length=1, max_length=300), description
         cost_pence=round(sum(a.cost_pence for a in tried), 4))
 
 
+class PriceRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    description: str | None = Field(None, max_length=5000,
+                                    description="the seller's description: read for its flaws (as a draft's reading is) "
+                                                "when flaws aren't sent")
+    flaws: list[str] | None = Field(None, max_length=30, description="the flaws to cut for, if already read")
+
+
+class PriceEstimate(BaseModel):
+    """The listing's UK price from the AlertFlip app's prices API (flip.prices): price is the one with its flaws cut,
+    middle a clean one's, low to high the middle half of clean sales (the cheapest quarter left out); skipped or error
+    when there's none."""
+    price: float | None = None
+    middle: float | None = None
+    low: float | None = None
+    high: float | None = None
+    currency: str = "GBP"
+    sales: int | None = None
+    model: str | None = None  # the API's name for it ("iphone 13"); item instead when it searched by words
+    item: str | None = None
+    storage_gb: int | None = None  # the size it priced...
+    ram_gb: int | None = None  # (a MacBook's memory)
+    asked_storage_gb: int | None = None  # ...and the size the listing gives (None: it gives none)
+    asked_ram_gb: int | None = None
+    kind: str | None = None  # "iphone", "samsung" or "macbook"
+    kinds: list[str] = []  # the kinds of flaw it was cut for ("damage", "fault"...)
+    cuts: list[str] = []
+    parts_price: bool = False  # priced at what for-parts ones sell for (locked, for parts)
+    rough: bool = False
+    exact: bool = False
+    mode: str | None = None
+    skipped: str | None = None
+    error: str | None = None
+    # the flaws it was cut for: the reader's sentences when the description was read here, and who read them
+    flaws: list[str] = []
+    read_by: str | None = None
+    # who sorted the flaws into kinds: "flip-kinds-1", "code" (its rules), "flip-kinds-1 and code"; None: no flaws
+    sorted_by: str | None = None
+
+
+class PriceChecks:
+    """The audit log for a price check's reading: kept as the job "price", so Home counts it as what it is, not as
+    reading for a draft (its cost isn't a draft's)."""
+
+    def __init__(self, log):
+        self.log = log
+
+    def attempt(self, item_id, reply, problems, cost, job="draft"):
+        self.log.attempt(item_id, reply, problems, cost, job="price")
+
+
+@app.post("/prices/estimate", response_model=PriceEstimate, dependencies=[Depends(key)])
+def estimate_price(request: PriceRequest, s: Setup = Depends(setup)):
+    """What this listing sells for in the UK with its flaws: iPhones, Samsung phones and MacBooks (4 Oct), from the same
+    prices API as the AlertFlip app. Send the description and the listing is read for its flaws first, as for a draft
+    (the AI UK price estimate tab); send flaws and they're used as they are."""
+    if kind_of(request.title) is None or not all(prices_settings()):  # before any reading: nothing to price it
+        return PriceEstimate(**estimate(request.title))
+    flaws, read_by = request.flaws or [], None
+    if request.flaws is None and request.description is not None:
+        listing = {"id": new_id(), "title": request.title, "description": request.description}
+        reading = read_listing_with_ai(listing, s.reading_model(), s.api, "auto",
+                                     PriceChecks(s.log) if s.log is not None else None)
+        flaws, read_by = reading.get("quotes") or reading["flaws"], reading["read_by"]
+    found = estimate(request.title, flaws, description=request.description, sorter=s.flaw_sorter() if flaws else None)
+    return PriceEstimate(**found, flaws=flaws, read_by=read_by)
+
+
+@app.post("/messages/check-reason", response_model=ReasonCheck, dependencies=[Depends(key)])
+def check_a_reason(request: ReasonCheckRequest, s: Setup = Depends(setup)):
+    """Steps 4-5 for a draft made with check_later: Haiku checks the reason, and only a flagged one goes to Sonnet.
+    A fixed reason replaces the old one in the message (the writer puts it in word for word), the condition checks
+    run again, and the audit log keeps the new text, so approving it counts as unedited. Anything that can't be done
+    leaves the message as it was."""
+    result = {"item_id": request.listing.id, "attempts": []}
+    flaws = completed(request.quotes or request.flaws, request.listing.description)  # as the draft gave flip-wording
+    if s.wording is None:
+        checked = {"clause": request.clause, "by": "", "checked": "not checked"}
+    else:
+        models = None if s.wording == "settings" else s.wording
+        checked = check_reason(request.listing.title, flaws, request.clause, settings()["wording"] or "flip-wording-3",
+                               models, result, s.log)
+    message, problems = request.message, []
+    worded_by = settings()["wording"] or "flip-wording-3"
+    if checked["checked"] == "fixed":
+        new = checked["clause"]
+        at = request.message.lower().find(request.clause.lower())
+        if new == "none":
+            problems.append("Sonnet says nothing here is a flaw: the message still gives the reason, for you to judge")
+        elif at < 0:
+            problems.append("the message words the reason its own way, so the fix wasn't put in")
+        else:
+            fixed = request.message[:at] + new + request.message[at + len(request.clause):]
+            sources = f"{request.listing.title}. {request.listing.description}\n{new}"
+            point = {"about": "flaw", "says": request.flaws, "worded": new}
+            problems = check_condition_talk(fixed, sources, point, True, request.kind, request.offer_pence) + \
+                check_battery_reason(fixed, point, request.offer_pence, sources, request.listing.title, request.kind)
+            if not problems:
+                message = fixed
+                if s.log:
+                    s.log.redrafted(request.draft_id, message)
+        if message == request.message:  # the fix didn't go in: the message still gives flip-wording's flagged reason
+            checked = {"clause": request.clause, "by": worded_by, "checked": "flagged, kept"}
+    tried = attempts(result["attempts"])
+    return ReasonCheck(reason=Reason(**checked), message=message, changed=message != request.message,
+                       problems=problems, attempts=tried, cost_pence=round(sum(a.cost_pence for a in tried), 4))
+
+
 @app.post("/drafts/{draft_id}/approve", response_model=Approved, dependencies=[Depends(key)])
 def approve(approval: Approval, draft_id: int = PathParam(ge=1, le=MAX_ID), log: AuditLog = Depends(audit),
             book: StyleBook = Depends(style)):
@@ -506,13 +689,16 @@ def approve(approval: Approval, draft_id: int = PathParam(ge=1, le=MAX_ID), log:
     if listing is not None:
         book.add([{"id": f"draft-{draft_id}", "listing_title": listing["title"], "asking_price": listing["asking_price"],
                    "marketplace": listing["marketplace"], "my_message": approval.sent}], "approved")
+        book.learn_later()
     return {**found, "saved_to_style": listing is not None}
 
 
 @app.get("/style", response_model=Style, dependencies=[Depends(key)])
 def your_style(book: StyleBook = Depends(style)):
     """What it learned from your messages: the style card (habits in 40% or
-    more of them) and the phrasebook (sentences in 2 or more). Plain code."""
+    more of them) and the phrasebook (sentences in 2 or more). Plain code, its gaps filled by what our AI found that
+    code checked is in your messages; our AI reads them again in the background when they've changed."""
+    book.learn_later()
     card = book.card()
     return Style(count=card.get("messages", 0), traits=[Row(k=k, v=v) for k, v in traits(card)],
                  phrases=[Row(k=k, v=v) for k, v in phrase_rows(card)],
@@ -549,7 +735,9 @@ def add_style_messages(messages: list[NewMessage] = Body(min_length=1, max_lengt
             raise HTTPException(422, "a message needs some words")
         rows.append({"listing_title": m.title.strip(), "asking_price": price, "marketplace": m.marketplace.strip(),
                      "my_message": m.text})
-    return [shown(m) for m in book.add(rows, "added")]
+    added = [shown(m) for m in book.add(rows, "added")]
+    book.learn_later()  # our AI reads them too, in the background (flip.style_ai)
+    return added
 
 
 @app.delete("/style/messages/{message_id}", status_code=204, dependencies=[Depends(key)])

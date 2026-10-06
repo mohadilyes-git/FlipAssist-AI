@@ -29,12 +29,35 @@ EMOJI = re.compile("[\U0001F1E6-\U0001F1FF\U0001F300-\U0001FAFF☀-➿⬀-⯿‼
 # seller replies; nothing is paid before you collect; no compliments, which read as softening them up
 LOCK_TALK = re.compile(r"\b(?:i ?cloud|find my(?! (?:way|feet|bearings|house|place|address|keys))|fmi|activation|"
                        r"apple[- ]?id|apple account|google account|frp|account lock)\b", re.IGNORECASE)
+# a price said between paying and when: "pay £200 now", "pay you the full £200 for it straight away", "pay 200 quid
+# now", and a phrasebook's "pay £[OFFER] now" (26 Sep red team: an AI's "I can pay £200 now" got past PAY_FIRST, and so
+# did the template's). Not "£200 cash now": cash is paid when you meet
+PAID_PRICE = r"(?:the )?(?:full )?(?:£\s?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{2})?|£?\[OFFER\]|\d+ ?(?:quid|pounds)) " \
+             r"(?:for (?:it|this|them|that) )?"
+# ...unless the words right after the time tie paying to meeting: "pay £200 now on collection", "straight away in cash
+# when I collect", "now, cash on collection", "asap - cash in hand", "right away after I've had a look" (26 Sep red team:
+# only the next word was read, so these were refused); never with another way of paying after it ("now, cash or PayPal")
+# (26 Sep final recheck: "upon confirmation", "after I hear back", "after we agree", "by cash app" and "cash or card"
+# were let through as meeting: only words that say you meet count)
+MEETING = r"(?:collect\w*|pick\w*(?: (?:it|them|the phone))? ?up|pickup|meet\w*|come|coming|arriv\w*|get there|" \
+          r"see (?:it|you|the phone)|seen (?:it|them|the phone)|seeing it|(?:have|had|having) a look|" \
+          r"check(?:ed|ing)? it|look(?:ed)? at it|" \
+          r"hand ?over|handing over)"
+WHEN_YOU_MEET = r"(?!\s*[,\-–—]?\s*(?:(?:on|upon|at) (?:the )?(?:collection|collecting|pick ?up|pickup|meeting|arrival|" \
+                r"handover|hand over|the door)|(?:when|whenever|once|after) (?:i|we|u|you)(?:['’]ve| have| had)? " \
+                rf"{MEETING}|after (?:seeing|having a look|checking)|in person|" \
+                r"(?:in |with |by )?cash(?! ?app\b)(?!\s*(?:or|/|&)\s))\b(?![^.?!]*\b(?:transfer|bank|bacs|pay ?pal|cash ?app|card)))"
 PAY_FIRST = re.compile(
-    r"\b(?:deposit|up[- ]?front|(?<!thanks )(?<!thank you )in advance|before (?:i |we )?(?:collect|collection|meet|see)\w*)\b"
-    r"|\bpay(?:ing)? (?:you |it )?(?:now|first(?! thing)|straight ?away|right away|asap)\b"
-    r"(?! (?:on|at|when|in person|in cash on|once))"
-    r"|\b(?:transfer|bacs|paypal|send|sending|ping)\s+(?:it |you |over |the )?(?:money |payment |cash |funds |it )?"
-    r"(?:now|today|tonight|over|first|asap|straight ?away|right away|in advance)\b"
+    r"\b(?:deposit|up[- ]?front|(?<!thanks )(?<!thank you )(?<!thank u )(?<!thanks u )(?<!thankyou )(?<!ty )(?<!thx )"
+    r"(?<!cheers )(?<!much )in advance|"
+    r"(?:pay|paying|transfer|transferring)\b[^.?!]{0,30}\bbefore (?:i |we )?(?:collect|collection|meet|see)\w*)\b"
+    rf"|\bpay(?:ing)? (?:you |it )?(?:{PAID_PRICE})?(?:right )?(?:now|first(?! thing)|straight ?away|right away|asap|"
+    rf"immediately|instantly)\b{WHEN_YOU_MEET}"
+    # sending it, the price said too: "transfer £200 now", "send you £200 over now", "paypal you 200 quid tonight" (26 Sep
+    # red team: only paying took a price, so "I can transfer £210 now if you can hold it" went out on Facebook)
+    rf"|\b(?:transfer|bacs|paypal|send|sending|ping)\s+(?:it |you |over |the )?(?:{PAID_PRICE})?(?:over |across )?"
+    r"(?:money |payment |cash |funds |it )?"
+    r"(?:now|today|tonight|over|first|asap|straight ?away|right away|immediately|instantly|in advance)\b"
     r"|\bsend (?:you )?(?:the )?(?:money|payment)\b", re.IGNORECASE)
 COMPLIMENT = re.compile(
     r"\blooks (?:really |very |so |absolutely |super )?(?:nice|lovely|great|perfect|brilliant|amazing|mint|immaculate|"
@@ -43,11 +66,174 @@ COMPLIMENT = re.compile(
     r"(?:console|phone|item|one|bit of kit|piece|laptop|watch|bike|set|headphones|earbuds|camera|tv|machine|unit|device|"
     r"tablet|ipad|iphone|kit)\b|(?<!not in )(?<!not )\bgreat condition\b|\bbeautiful\b|\bstunning\b|\bgorgeous\b",
     re.IGNORECASE)
-# a listing that won't take cash: then no message offers it (the user, 14 Sep: "mention cash unless the listing
+# a listing that won't take cash: then no message offers it (decided 14 Sep: "mention cash unless the listing
 # description says no cash")
-NO_CASH = re.compile(r"\bno cash(?: payments?)?\b|\bcash (?:is )?not (?:accepted|taken)\b|\bnot (?:accepting|taking) cash\b|"
-                     r"\b(?:bank transfer|transfer|pay ?pal|card|bacs)(?: payments?)? only\b|"
-                     r"\bonly (?:accept(?:ing)? )?(?:bank transfer|transfer|pay ?pal|card|bacs)\b", re.IGNORECASE)
+NO_CASH = re.compile(r"\bno cash(?: payments?)?\b|\bcash (?:is |are )?(?:not|never) (?:accepted|taken)\b|"
+                     r"\bcash isn'?t (?:accepted|taken)\b|\bnot (?:accepting|taking) cash\b|\bnot cash\b|\bcashless\b|"
+                     r"\b(?:do not|don'?t|won'?t|can'?t|cannot|no longer) (?:take|accept) cash\b|"
+                     r"\b(?:no longer|not) (?:taking|accepting) cash\b|\b(?:don'?t|do not|can'?t|cannot|won'?t|will not) "
+                     r"(?:do|take|accept) cash\b|\bcash payments? (?:are |is )?not accepted\b|"
+                     r"\bcash (?:will|would|can|is) not be (?:accepted|taken)\b|\bcash won'?t be (?:accepted|taken)\b|"
+                     r"\b(?:prefer(?:red)?|would rather|rather) not (?:to )?(?:take|accept|have|do) cash\b|"
+                     # a card only with a word of paying: "Graphics card only" isn't a way to pay (26 Sep)
+                     r"\b(?:bank transfers?|transfer|pay ?pal|card payments?|bacs)(?: payments?)? only\b|"
+                     r"\bonly (?:accept(?:ing)? )?(?:bank transfers?|transfer|pay ?pal|card payments?|bacs)\b",
+                     re.IGNORECASE)
+# ...and one that names another way to pay and offers no cash: "Bank transfer upon collection" (decided 26 Sep: a
+# listing that names another way to pay gets no cash offer). "Cash or bank transfer" takes cash; "No PayPal or bank
+# transfer" names no other way (offered)
+OTHER_PAYMENT = re.compile(r"\bbank transfers?\b|\bbacs\b|\bpay ?pal\b|\b(?:card|contactless) payments?\b|"
+                           r"\bpay(?:ment)? (?:by|via|with) (?:card|(?:bank )?transfer|bank|bacs)\b|"
+                           r"\bby (?:bank )?transfer\b|\bfaster payments?\b|\brevolut\b|\bmonzo\b|"
+                           r"\btransfer (?:on|upon|at|before|when) (?:collection|collecting|pick ?up)\b", re.IGNORECASE)
+# what a listing says isn't so, in the clause of what it names: "No PayPal or bank transfer", "bank transfer not
+# accepted", "Beware of scams asking for PayPal"
+CLAUSE_END = re.compile(r"[.!?;\n]")
+NEGATED_BEFORE = re.compile(r"\b(?:no|not|never|without|won'?t|can'?t|cannot|don'?t|doesn'?t|refuse|avoid)\b"
+                            r"(?! sure| idea| problem| worries| bother| returns?| refunds?| offers?| swaps?| trades?|"
+                            r" time ?wasters?| silly| low ?ball| messing| chancers)", re.IGNORECASE)
+# a word that starts a new thought in a clause: "Can't post so collection only"
+JOINS = re.compile(r"\b(?:so|because|cos|as|and|but|therefore|hence|which|then|thus)\b", re.IGNORECASE)
+NOT_SO_AFTER = re.compile(r"^\s*(?:[\w']+\s+){0,2}(?:(?:is|are|will be)\s+)?(?:not|never)\b|"
+                          r"^\s*(?:[\w']+\s+){0,2}(?:isn'?t|aren'?t|won'?t be)\b", re.IGNORECASE)  # "...in person not available"
+# a warning about a way to pay ("Beware of scammers asking for PayPal"), not the reason for one ("Due to scammers,
+# bank transfer on collection", "Collection only due to scammers"); not "fake notes" either
+WARNING = re.compile(r"\bbeware\b|\bwatch out\b|\bscam (?:alert|warning)s?\b|\bscammers? (?:asking|who ask|ask)\b",
+                     re.IGNORECASE)
+# a phone's or watch's own payment feature, not the seller's way of being paid: "NFC working, card payments fine"
+PAYMENT_FEATURE = re.compile(r"^\s*(?:are |is )?(?:all )?(?:fine|work\w*|ok|okay|tested|enabled|set up)\b", re.IGNORECASE)
+FEATURE_BEFORE = re.compile(r"\b(?:nfc|apple pay|google pay|samsung pay|wallet|takes|accepts|reader|terminal)\b"
+                            r"[^.,;]{0,15}$", re.IGNORECASE)
+# cash a listing names that isn't a way to pay: "Selling as I need the cash"
+CASH_NOT_PAYING = re.compile(r"\b(?:need|needing|want|wanting|raise|raising|spare)\s+(?:the\s+|some\s+)?cash\b",
+                             re.IGNORECASE)
+# a listing that's posted only: no collecting, so no cash either ("Postage only", "No collection", "Can only post").
+# Not "Collection or delivery only", "postage only £4.50 extra", "No collections on Sundays" or "no meet ups"
+# (you come to them), and a listing that also offers collection (offers_collection) is collected (26 Sep)
+NO_COLLECT = re.compile(
+    r"(?<!\bor )(?<!/)(?<!& local )(?<!and local )(?<!& )(?<!and )\b(?:postage|post(?:ed)?|postal|posting|delivery|"
+    r"shipping|courier)\s+only\b(?!\s*(?:£|\d|extra|costs?))|"
+    r"\b(?:can |will )?only\s+(?:be\s+)?(?:posted|post(?:ing)?|send(?:ing)?|ship(?:ped|ping)?)\b"
+    r"(?!\s+(?:tracked|recorded|signed|special|insured|first class|second class|1st|2nd|to (?:the )?uk|to uk|within|"
+    r"in the uk|uk|with|via|by|abroad|overseas|to the|to mainland))|"
+    r"\bno\s+(?:collections?|collecting|pick[- ]?ups?)\b(?!\s+(?:on|before|after|until|till|at|between|during|from|"
+    r"tomorrow|today|tonight|weekends?|(?:mon|tues|wednes|thurs|fri|satur|sun)days?|evenings?|mornings?|nights?)\b)|"
+    r"\bcollections?(?:\s+in person)?\s+(?:is not|isn'?t|are not|aren'?t|not)\s+(?:possible|available|an option)\b"
+    r"(?!\s+(?:before|after|until|till|on|at|between|during|tomorrow|today|tonight)\b)|"
+    r"\\bcollections?\\s+(?:is\\s+)?unavailable\\b(?!\\s+(?:on|before|after|until|till|til|at|between|during|in the|this|next|over the|tomorrow|today|tonight|weekends?|"
+    r"(?:mon|tues|wednes|thurs|fri|satur|sun)days?|evenings?|mornings?|nights?)\\b)|\\bnot available for collection\\b"
+    r"(?!\\s+(?:on|before|after|until|till|til|at|between|during|in the|this|next|over the|tomorrow|today|tonight|weekends?|"
+    r"(?:mon|tues|wednes|thurs|fri|satur|sun)days?|evenings?|mornings?|nights?)\\b)|"
+    r"\b(?:cannot|can'?t|won'?t) be collected\b(?!\s+(?:before|after|until|till|on|at|between|during|tomorrow|today)\b)|"
+    # "If you can't collect I can post": the buyer's, collection is the default
+    r"(?<!if you )(?<!if u )(?<!if you're )(?<!if youre )(?<!if you are )\\b(?:can(?:'|no)?t|cannot|unable to|won'?t|"
+    r"don'?t|not doing)\\s+(?:do\\s+|offer\\s+)?collect(?:ion|ions)?\\b(?!\\s+(?:on|before|after|until|till|til|at|between|during|in the|this|next|over the|tomorrow|today|tonight|weekends?|"
+    r"(?:mon|tues|wednes|thurs|fri|satur|sun)days?|evenings?|mornings?|nights?)\\b)",
+    re.IGNORECASE)
+# a listing that offers collection: "Collection only", "Collection from Leeds", "collection or post", "Local pickup"
+COLLECTION_OFFERED = re.compile(
+    r"\bcollection (?:only|from|at|or|available|preferred|welcome|possible|is fine|in person)\b|\blocal collection\b|"
+    r"\bcollect (?:only|from|in)\b|\bor collect(?:ion)?\b|"
+    r"\bpick[- ]?up (?:only|from|in|available)\b|\blocal pick ?up\b|\bcan be collected\b|\bbuyer (?:to )?collects?\b|"
+    r"\b(?:to|for) collection\b|\bcollect(?:ion)? in person\b|\bcan be picked up\b|"
+    r"\b(?:happy|ok|okay|fine) for (?:you|the buyer|buyer) to collect\b|\b(?:you're |you are )?welcome to collect\b|"
+    r"\byou can collect\b|\bbuyer can collect\b|\bcollection (?:&|and|/) (?:local )?(?:delivery|post(?:age)?)\b",
+    re.IGNORECASE)
+COLLECTION_ONLY = COLLECTION_OFFERED  # what an eBay or Vinted listing says when you may collect
+# talk of coming to the seller or of cash, asked or said ("Can collect it today?", "can come 2day", "would you prefer
+# cash?"): on a listing that's posted, neither fits. One pattern for the checks and for taking it out of your
+# sentences (flip.message_drafter.without_collecting). Not "collector's edition", "collectable", nor "meet you
+# halfway" on a price
+COLLECT_TALK = re.compile(r"\b(?:collect(?:ing|ion|ed)?|pick(?:ing)? (?:it |them |this )?up|pick ?up|"
+                          r"come (?:and |& )?(?:get|grab|see|collect|pick)|come (?:round|over|by|straight over|to yours|"
+                          r"today|tonight|tomorrow|tmrw|2day|2nite|later|now|this (?:evening|afternoon|morning))|"
+                          r"can come (?:today|tonight|tomorrow|tmrw|2day|2nite|later|now|round|over|by|this \w+)|"
+                          r"be round|pop (?:round|over|by)|swing (?:by|round)|drop by|nip (?:round|over)|"
+                          r"meet-?up|meet up|meet (?:you )?(?:today|tonight|tomorrow|later|this \w+|in|at|somewhere|"
+                          r"anywhere)|come (?:and |& )?view|come to (?:you|yours|your (?:place|house|address))|"
+                          r"drop (?:round|over|in)|get (?:it|them) (?:today|tonight|tomorrow|tmrw|2day|now|later|this \w+)|"
+                          r"where(?: ?abouts)? (?:can|could|shall|should) we meet|"
+                          r"drive over|head over|be there|grab (?:it|them))\b", re.IGNORECASE)
+CASH_TALK = re.compile(r"\bcash\b", re.IGNORECASE)
+# a word of the title that names a set, not a pickup: "the whole collection", "my record collection"
+SET_OF = re.compile(r"\b(?:the|whole|full|entire|new|my|your|his|her|their|this|that|our|record|card|game|summer|"
+                    r"winter|autumn|spring)\s+(?:\w+\s+)?$", re.IGNORECASE)
+
+
+def clause_around(text, start, end):
+    """What comes before a match in its clause, and what after: the clause runs
+    between a full stop, ! ? ; or line break and the next."""
+    left = max((m.end() for m in CLAUSE_END.finditer(text, 0, start)), default=0)
+    right = CLAUSE_END.search(text, end)
+    return text[left:start], text[end:right.start() if right else len(text)]
+
+
+def just_before(before, n=4):
+    """The last few words before a match in its part of the clause: "No time
+    wasters, bank transfer" puts no "no" before "bank transfer", "No PayPal or
+    bank transfer" does."""
+    return " ".join(JOINS.split(before.split(",")[-1])[-1].split()[-n:])
+
+
+def offered(pattern, text, warnings=True):
+    """The matches of a pattern (a way to pay, cash, collection) the text
+    offers: not one it says isn't so ("No PayPal or bank transfer", "bank
+    transfer not accepted", "Bank transfer upon collection, not cash"), nor
+    one in a warning about scams."""
+    found = []
+    for match in pattern.finditer(text):
+        before, after = clause_around(text, match.start(), match.end())
+        only = match.group().lower().endswith("only")  # "Collection only not posting": the "not" is the post's
+        if NEGATED_BEFORE.search(just_before(before)) or (NOT_SO_AFTER.match(after) and not only) or \
+                warnings and WARNING.search(before + after):
+            continue
+        found.append(match)
+    return found
+
+
+def says_no_cash(text):
+    """Whether a listing's description rules out cash: it says so (NO_CASH),
+    or it names another way to pay and offers no cash ("Bank transfer upon
+    collection"). "Cash or bank transfer" takes cash, and "No PayPal or bank
+    transfer" names no other way. The title is no part of it: a "SumUp card
+    reader" names no way to pay."""
+    if NO_CASH.search(text):
+        return True
+    paying_cash = [m for m in offered(CASH_TALK, text)
+                   if not CASH_NOT_PAYING.search(text[max(0, m.start() - 20):m.end()])]
+    ways = [m for m in offered(OTHER_PAYMENT, text) if not PAYMENT_FEATURE.match(text[m.end():])
+            and not FEATURE_BEFORE.search(text[max(0, m.start() - 30):m.start()])]
+    return bool(ways) and not paying_cash
+
+
+def offers_collection(text):
+    """Whether a listing offers collection ("Collection from Leeds LS6", "Collection
+    or post"), and doesn't say it isn't so ("Collection in person not available")."""
+    return bool(offered(COLLECTION_OFFERED, text, warnings=False))  # "Collection only due to scammers" offers it
+
+
+def talks_of(pattern, message, title=""):
+    """Whether a message talks of coming to the seller or of cash (COLLECT_TALK,
+    CASH_TALK), asked or said. Not the item's own name, as the title has it
+    ("the Pokemon Collection box", "the Johnny Cash LP"), a set of things
+    ("the whole collection"), or the seller's rule said back ("I see it's no
+    collection", "I know you don't take cash")."""
+    named = {w.lower() for w in re.findall(r"[A-Za-z]+", title)}
+    for found in pattern.finditer(message):
+        word = found.group().split()[0].lower()
+        before, _ = clause_around(message, found.start(), found.end())
+        said_before = (before.split() or [""])[-1].lower()
+        if word in named and (found.group()[:1].isupper() or SET_OF.search(before)
+                              or f"{said_before} {word}" in title.lower()):
+            continue  # the title's own words, as a name ("the ultra premium collection" too, in lower case)
+        if word.startswith("collection") and SET_OF.search(before):
+            continue  # "my record collection"
+        if found.group()[:1].isupper() and re.search(r"\b[A-Z][a-z]+ $", message[:found.start()]):
+            continue  # "Johnny Cash"
+        if NEGATED_BEFORE.search(just_before(before, 3)):
+            continue  # "no collection", "don't take cash": what isn't so offers nothing
+        return True
+    return False
 # a sentence about other items, not this one: "cheaper alternatives often come with damage or visible wear"
 OTHER_ITEMS = re.compile(r"\b(?:(?:cheaper|other|similar)\s+)?alternatives?\b|\bother (?:phones?|ones|listings?|sellers?|"
                          r"devices?|people)\b|\bcheaper ones\b|\bmost (?:phones|listings|sellers|people)\b|"
@@ -150,9 +336,58 @@ SAME_AS = [
     ("scuff free", "no scuff"), ("crack free", "no crack"), ("free from", "no"), ("free of", "no"),
 ]
 # phrases that contain a claim word but aren't a claim
-# why an offer over asking is made: so they'll hold it for you, or take the listing down
-HOLD = re.compile(r"\b(?:hold|reserve|keep it for|put it aside|set it aside|take (?:it|the (?:ad|advert|listing|post)) "
-                  r"down|off the market|end (?:the |your )?listing)\b", re.IGNORECASE)
+# why an offer over asking is made: so they'll hold it for you, or take the listing down. One vocabulary with the
+# writer's (writer.HELD), in the ways people say it: "keep it till Saturday", "keep it back for me", "save me it",
+# "hang onto it", "holding it" (26 Sep red team: "I'll do £210 if you can keep it back for me" read as giving no reason).
+# Not a battery that holds its charge ("hold a good charge", "holding ok") or "how's it holding up", nor "hold on, is
+# it unlocked?". Round 2 (26 Sep red team): nor asking whether it's held for someone already ("is it on hold?", "still
+# available or reserved?", "has it been reserved?": a lower offer that asked it was refused), but "keep the phone for
+# me" and "can you keep it?" ask for it
+ASKED_IF_HELD = "".join(rf"(?<!\b{said} )" for said in ("or", "is", "are", "is it", "is this", "is that", "this one",
+                                                         "been", "it's", "it’s", "its", "it is", "they", "not",
+                                                         "already", "still"))
+HOLD = re.compile(r"\b(?:(?<!\bon )hold(?:ing)?(?! (?:[\w']+ ){0,3}?charge\b| (?:its |a |the |it'?s |any |much )?"
+                  r"(?:up|well|out)\b| (?:ok|okay|alright|fine)\b| on\b(?! ?to\b))|"
+                  rf"reserv(?:e|ing)|{ASKED_IF_HELD}(?:reserved|on hold)|"
+                  r"(?:put|pop|stick|keep|place) (?:it |them )?(?:aside|by|to one side|on hold)|set (?:it |them )?aside|"
+                  r"(?:keep|keeping) (?:it|them|this|that)(?: one)? (?:for|till|til|until|back|aside|by|to one side)|"
+                  r"(?:keep|keeping|save|saving) (?:the|this|that) \w+ (?:for (?:me|us)|till|til|until|back|aside)|"
+                  r"(?:can|could|would|will|cud|wud) (?:you|u) (?:please |possibly |just )?keep (?:it|them)(?=\s*(?:[?.!,]|$))|"
+                  r"keep hold of|(?:save|saving) (?:it|them|this|that|one)|(?:save|keep) (?:me|us) (?:it|them|one)|"
+                  r"hang (?:on ?to|onto) (?:it|them)|mark (?:it |them )?(?:as )?(?:sold|reserved|pending)|"
+                  r"take (?:it|the (?:ad|advert|listing|post)) down|off the market|end (?:the |your )?listing)\b",
+                  re.IGNORECASE)
+# for an offer at or over asking, nothing that calls it low: "I know it's a bit cheeky", "sorry it's under asking",
+# nor an apology that compares it with what they want for it (26 Sep red team: "I know it's a bit less than you're
+# after", "I appreciate it's lower than you wanted", "I know it's not quite what you're asking" went out on an offer of
+# the asking price). The writer leaves these out at or over asking (flip.writer), and so does your style
+# (flip.style.for_kind), with an emoji that only ever came with them ("Cheeky I know 😂"). Round 2 (26 Sep red team):
+# "a bit under" said of the offer, where its clause ends or the price talk goes on ("a bit lower for cash?", "a bit
+# under but...", "a bit under the asking"), not "a bit less hassle than posting" or "a little under 20 mins away";
+# and "I know it's not much", not "...not much notice"
+# at or over the asking price, any sentence that says the offer is less: "Hope a bit less is ok.", "A bit under list
+# price I know.", "It's a little less than listed but cash is ready." (26 Sep final recheck: LOWBALL alone let these back
+# on offers of the full price); not "in less than an hour" or "less hassle than posting": only about the price
+UNDER_ASKING_TALK = re.compile(r"\b(?:a )?(?:bit|little|tad|touch|slightly) (?:less|lower|under|below|cheaper)\b"
+                               r"(?!\s+(?:hassle|faff|work|effort|bother|stress|trouble|time|messing))|"
+                               r"\b(?:less|lower|under|below|cheaper)\b[^.?!]{0,20}?\b(?:than )?(?:you(?:'re| are| r)? "
+                               r"(?:after|asking|wanted|want)|what(?:'s| is| you| u)|the (?:asking|price|list(?:ed| price)?|ad|"
+                               r"advert\w*)|(?:list(?:ed)?|asking|advertised)(?: price)?\b)", re.IGNORECASE)
+LOWBALL = re.compile(r"\b(?:cheeky|cheek|lowball|low ball|low offer|lowest|sorry|(?:under|below) (?:the |your |ur )?asking|"
+                     r"go lower|wiggle|cheap|bit low|too low|insult\w*|"
+                     r"(?:a )?(?:bit|little|tad) (?:under|less|lower)(?=\s*(?:[^\w\s£]|$|(?:but|though|tho|for|if|on|i know|"
+                     r"sorry|x{1,3})\b|(?:the |your |ur )?(?:asking|price)\b))|"
+                     r"worth a (?:shot|try)|hope (?:that'?s|it'?s|this is) ok|"
+                     r"i know (?:it'?s|that'?s|this is) (?:a (?:bit|little|tad) |slightly |quite a bit )?(?:less|lower|low|under|"
+                     r"below)|i know (?:it'?s|that'?s|this is) not (?:much|a lot|loads)(?! (?:of )?(?:notice|time|warning)\b)|"
+                     # ...against what they want for it: "less than you're after", "lower than your asking", "under
+                     # what you wanted", "not quite what u r after", "not the full asking price"
+                     r"(?:less|lower|cheaper)\b[^.?!]{0,20}?\bthan (?:you|u|your|ur|what|the (?:asking|price|listed)|asking)|"
+                     r"(?:under|below) what (?:you|u)|"
+                     r"not (?:quite |exactly |really )?what (?:you|u)(?:'?re| are| r|'?d| would)?\s*(?:after|asking|ask|"
+                     r"want\w*|hoping|looking|like|expect\w*)|"
+                     r"not (?:the |your |ur )?(?:full )?asking price|not (?:the |your |ur )?full (?:asking|price))\b",
+                     re.IGNORECASE)
 # a seller who isn't sure claims nothing, yes or no: "not sure if locked or not" leaves
 # "is it unlocked?" open. Read on the part's words, so "don't" is "don t"
 NOT_SURE = re.compile(r" (?:not sure|unsure|don t know|dont know|do not know|no idea|not certain|can t confirm|"
@@ -258,6 +493,10 @@ def denied_by(lead, negations=NEGATIONS):
         if "other" in ends and not any(w == "other" and after in ("than", "then") for w, after in zip(rest, rest[1:])):
             ends.discard("other")  # "no OTHER marks" denies more of them; "no marks OTHER THAN a scratch" excepts one
         ended = ends or any(verb in NEW_STATEMENT and set(rest[:k]) - {"t"} - NOT_THEIR_OWN for k, verb in enumerate(rest))
+        # ...or by not turning on or working, in a run-on: "wont turn on screen cracked" ("won't turn on" is "not
+        # working" by now: SAME_AS) says the screen is cracked (26 Sep)
+        ended = ended or bool(re.match(r"(?:t )?(?:(?:turn|switch|power|boot|come|start)s? (?:on|up)|work(?:s|ing)?) \S",
+                                       " ".join(rest)))
         if not ended:
             return True
     return False
@@ -394,7 +633,9 @@ OFF_PLATFORM = re.compile(r"\b(?:outside (?:of )?(?:ebay|vinted|the app|the site
                           # ending an auction early to sell outside it
                           r"end (?:it|the auction|your auction|the listing|your listing) (?:early|now)|"
                           r"ending (?:it|the auction|your auction|the listing|your listing)(?: early| now)?|"
-                          r"transfer (?:you )?the money)\b", re.IGNORECASE)
+                          r"transfer (?:you )?the money|pay ?pal(?:ing)? (?:you|it|the money|over)|"
+                          r"(?:pay|paying|payment|send it) (?:by|via|through|with|on|over) (?:pay ?pal|my bank(?:ing app)?|"
+                          r"banking app|bank app|bank)|banking app|bank app)\b", re.IGNORECASE)
 
 LINK = re.compile(r"https?://|www\.|\b[\w-]+\.(?:com|co\.uk|uk|net|org|io)\b"
                   r"|\b[\w-]+\.(?:ly|gl|me|link|to|app|page|co)/\S*", re.IGNORECASE)  # short links: "bit.ly/..."
@@ -456,11 +697,24 @@ ESIM_ONLY = (r"e[- ]?sim[- ]only|(?:only|just) (?:(?:has|takes|uses?|supports?|w
              r"sim (?:card )?(?:tray|slot))|(?:doesn['’ ]?t|does not|won['’ ]?t|will not|can['’ ]?t|cannot) "
              r"(?:take|use|support|accept) (?:a |an |any )?(?:physical )?sim(?: cards?)?|physical sim (?:is )?not supported")
 # a battery that's been replaced, by Apple or anyone ("Battery changed 4 months ago", "New battery", "replacement
-# battery"): the user's rule (23 Sep), a flaw whoever did it. Not "original battery", "battery like new"
-BATTERY_REPLACED = (rf"(?:new|replacement|replaced|changed|swapped|fresh) {TYPED_BATTERY}s?|"
-                    rf"{TYPED_BATTERY}s? (?:replacement|(?:(?:was|were|is|has|have|had|been|just|recently|got|being|"
-                    rf"already) ){{0,3}}(?:replaced|changed|swapped|renewed|(?:brand )?new)\b)|"
-                    rf"replaced (?:[\w-]+ ){{0,4}}with an? (?:[\w-]+ ){{0,2}}{TYPED_BATTERY}")
+# battery"): a rule set on 23 Sep, a flaw whoever did it. Not "original battery", "battery like new", nor one it
+# still needs, said before it ("Needs a new battery", "Could do with a new battery", "due a new battery") or after it
+# ("Battery replacement needed"): 26 Sep, each was said "the battery has been replaced". That's a weak one (BATTERY_WEAK)
+# "Due" is a need only when it isn't "due to", which says why one was fitted: "Had a new battery due to the old one
+# swelling" is replaced, and so is one the seller needed and then had ("Needed new battery so got it done", "Was due a
+# new battery so had one fitted"): the fourth red team, 26 Sep (each was read as one it needs)
+NEEDED_BEFORE = "".join(rf"(?<!{need} )" for need in (
+    "need", "needs", "needing", "need a", "needs a", "needing a", "need a brand", "needs a brand", "do with a",
+    "do with", "could use a", "need of a", "require", "requires", "require a", "requires a", "due", "due a", "due for a",
+    "ready for a", "time for a", "never had a", "never had"))
+NEEDED_AFTER = r"(?!\s+(?:is\s+|will\s+be\s+|would\s+be\s+|may\s+be\s+|might\s+be\s+)?(?:needed|required|due(?!\s+to\b)|" \
+               r"recommended))"
+HAD_AFTER_NEED = (rf"{TYPED_BATTERY}s?\b[^.?!]{{0,20}}?\bso (?:i |we )?(?:had|got) (?:(?:a new )?one (?:fitted|done|put in|"
+                  r"installed|replaced)|it (?:done|replaced|changed|swapped|fitted))\b")  # "...battery so had one fitted"
+BATTERY_REPLACED = (rf"{NEEDED_BEFORE}(?:new|replacement|replaced|changed|swapped|fresh) {TYPED_BATTERY}s?\b{NEEDED_AFTER}|"
+                    rf"{NEEDED_BEFORE}{TYPED_BATTERY}s? (?:replacement\b{NEEDED_AFTER}|(?:(?:was|were|is|has|have|had|been|"
+                    rf"just|recently|got|being|already) ){{0,3}}(?:replaced|changed|swapped|renewed|(?:brand )?new)\b)|"
+                    rf"replaced (?:[\w-]+ ){{0,4}}with an? (?:[\w-]+ ){{0,2}}{TYPED_BATTERY}|{HAD_AFTER_NEED}")
 # what the iPhone itself reports about a part ("Unable to verify this iPhone has a genuine Apple battery", "camera
 # unknown", "important battery message"), or a part that isn't Apple's ("non-Apple screen", "aftermarket screen")
 PART_NOT_APPLES = (r"unable to verify (?:this iphone has a genuine apple (?:battery|display|screen|camera|part)|(?:the |its |if the "
@@ -504,7 +758,13 @@ BATTERY_WEAK = (r"(?:battery|batt) (?:is |s )?(?:very |quite |a bit |really |pre
                 r"(?: time)? to charge|slow to charge|charges? (?:very |really |quite )?slow(?:ly)?|(?:may|might|will|would) need "
                 r"(?:a )?(?:new battery|battery replacement|replac\w*)|could do with (?:a )?(?:servic\w*|replac\w*|new battery|"
                 r"repair\w*)|(?:won['’ ]?t|doesn['’ ]?t|does not|will not|wouldn['’ ]?t) last (?:as long|long|all day|a full day)|"
-                r"battery (?:isn['’ ]?t|is not|s not) (?:as )?(?:great|good)")
+                r"battery (?:isn['’ ]?t|is not|s not) (?:as )?(?:great|good)|"
+                # ...or one it needs, which BATTERY_REPLACED read as replaced until 26 Sep: "Needs a new battery", "Due a
+                # new battery", "Battery replacement needed"
+                rf"(?:needs?|needing|requires?|in need of|due(?: for)?|could use) (?:a )?(?:brand )?(?:new|replacement) "
+                rf"{TYPED_BATTERY}s?\b|(?:needs?|needing|requires?|in need of|due(?: for)?) (?:a )?{TYPED_BATTERY} "
+                rf"(?:replacement|change|swap)\b|(?:(?:new|replacement) )?{TYPED_BATTERY}s? (?:replacement )?(?:is |will be )?"
+                r"(?:needed|required|due(?!\s+to\b)|recommended)\b")  # not "new battery due to the old one swelling"
 # each a kind of flaw of its own (flip.offers.condition_said: "issue: esim"...), so a message names only the listing's
 ISSUE_KINDS = {"esim": ESIM_ONLY, "battery replaced": BATTERY_REPLACED, "battery weak": BATTERY_WEAK,
                "part": PART_NOT_APPLES, "untested": UNTESTED, "ios": IOS_LIMIT, "dust": DUST}
@@ -623,7 +883,8 @@ SOMEONE_ELSE = re.compile(r"\byou(?:'re| are)? (?:welcome |free |happy )?(?:to|c
 HARMLESS_NO = re.compile(r"\b(?:no (?:problem|bother|worries|issue)|not a problem|can'?t wait)\b", re.IGNORECASE)
 # "can't collect" isn't a promise
 NOT_PROMISED = re.compile(r"\b(?:can'?t|cannot|can not|won'?t|wouldn'?t|shouldn'?t|unable to|not|no|never|"
-                          r"couldn'?t)\s+(?:\w+\s+){0,3}$", re.IGNORECASE)
+                          r"couldn'?t|(?:don'?t|doesn'?t) (?:take|accept|do|want))\s+(?:\w+\s+){0,3}$",
+                          re.IGNORECASE)  # "I see you don't take cash" says it back (not "I don't mind collecting")
 # a question tagged onto a promise doesn't make it a question: "I can collect today, does that work?"
 TAG_QUESTION = re.compile(r",?\s*(?:does that (?:work|suit(?: you)?|sound (?:ok|okay|good|alright))|"
                           r"is that (?:ok|okay|alright|fine|good)|if that'?s (?:ok|okay|alright|fine)|"
@@ -636,7 +897,10 @@ ONLY_QUESTION = re.compile(r",?\s+or is (?:it|that)\b.*$", re.IGNORECASE)
 # works") can't make it try every way of splitting them, which doubled the time with each emoji
 SIGN_OFF = re.compile(r"(?:\s*+(?:[\U0001F300-\U0001FAFF☀-➿\U0001F3FB-\U0001F3FF\ufe0f\u200d]++|\bx{1,3}\b|\.{2,}+|…))++\s*$",
                       re.IGNORECASE)
-CLAUSES = re.compile(r"[,;:]|\b(?:as|because|since|given|considering|seeing|with|due|though|although|now that|"
+# (not the "with" of "could do with a new battery": it isn't a reason's, 26 Sep; nor a "due" that isn't "due to": "it's
+# due a new battery" is one clause, the fourth red team, 26 Sep)
+CLAUSES = re.compile(r"[,;:]|\b(?:as|because|since|given|considering|seeing|(?<!\bdo )with|due(?=\s+to\b)|though|"
+                     r"although|now that|"
                      r"knowing|bearing in mind|in light of|in view of|despite|to allow for|to account for|"
                      r"to reflect)\b", re.IGNORECASE)
 # a clause that starts with one of these, in a sentence that ends in "?", asks
@@ -1080,8 +1344,58 @@ def check_length(what, text, limit, required=True):
     return []
 
 
-def check_no_invented_numbers(what, text, sources):
-    extra = numbers_in(text) - numbers_in(sources)
+# texting words with a digit in them aren't numbers: "can collect 2day", "cheers m8" (26 Sep)
+TEXT_SPEAK = re.compile(r"\b(?:2day|2nite|2night|2moro|2morrow|2mrw|2mro|2morow|2mora|2u|4u|4ever|b4|gr8|m8s?|l8r|l8|w8|"
+                        r"any1|some1|no1|every1)\b", re.IGNORECASE)
+
+
+# a clock time, as you'd say when you'll come: "after 6pm", "any time after 6", "before 9 tomorrow", "half 6",
+# "at 7:30", "6.30pm", "5-7pm" (26 Sep). A bare number is one only after a word that gives a time, never one that
+# counts ("in 10 mins", "2 days")
+CLOCK_TIME = re.compile(r"\b(?:(?P<lead>after|before|at|around|about|from|by|till|until|til|half(?: past)?|between|and|"
+                        r"or|to)\s+)?(?P<hour>\d{1,2})(?!\d)(?:[:.](?P<minute>[0-5]\d)(?!\d))?"
+                        r"(?:\s?(?P<mark>am|pm|o'?clock|ish)\b"
+                        r"|(?=(?P<range>\s?[-–]\s?\d{1,2}(?:[:.][0-5]\d)?\s?(?:am|pm)\b)))?"
+                        r"(?!\s?(?:mins?|minutes?|hours?|hrs?|days?|weeks?|months?|years?|miles?|%|gb|tb)\b)",
+                        re.IGNORECASE)
+
+
+def clock_times(text):
+    """The clock times a text gives, each with where it is in the text and
+    its time on a 12-hour clock: "after 6pm" and "after 6" are both (6, 0),
+    "half 6" and "at 6.30" (6, 30). "in 10 mins" and "2 of them" are none."""
+    found = []
+    for m in CLOCK_TIME.finditer(text):
+        lead, hour, minute, mark = (m.group("lead") or "").lower(), int(m.group("hour")), m.group("minute"), \
+            (m.group("mark") or "").lower()
+        if not (lead or minute or mark or m.group("range")) or hour > (12 if mark in ("am", "pm") else 23):
+            continue
+        found.append((m.span(), (hour % 12, int(minute) if minute else 30 if lead.startswith("half") else 0)))
+    return found
+
+
+def check_no_invented_numbers(what, text, sources, own=()):
+    """No number that's in none of the inputs. own: your own sentences (the
+    message drafter's phrasebook, flip.style). One of them in the text word
+    for word keeps its numbers ("Only 10 mins away."), and a clock time you
+    give in them is yours in any sentence about collecting ("Can collect from
+    Leeds LS6 after 6pm." from your "Can collect after 6pm."; 26 Sep red team:
+    refused every time, so the AI told to end with it was too). A time you
+    never give is still made up ("Can collect after 7pm")."""
+    if own:
+        mine = {tuple(words(sentence)) for sentence in own}
+        times = {clock for sentence in own for _, clock in clock_times(sentence)}
+        kept = []  # cut as flip.style cuts your sentences: "£170?😊 Can collect" is two
+        for sentence in re.split(r"(?<=[.!?])\s+|(?<=[.!?][\U0001F300-\U0001FAFF☀-➿])\s+|\n+", text):
+            if tuple(words(sentence)) in mine:
+                continue  # yours, word for word
+            if COLLECT_TALK.search(sentence):
+                for (start, end), clock in reversed(clock_times(sentence)):
+                    if clock in times:
+                        sentence = f"{sentence[:start]} {sentence[end:]}"
+            kept.append(sentence)
+        text = " ".join(kept)
+    extra = numbers_in(TEXT_SPEAK.sub(" ", text)) - numbers_in(sources)
     if extra:
         return [f"{what} has numbers that aren't in your inputs: {', '.join(sorted(extra))}"]
     return []
@@ -1409,15 +1723,33 @@ def offer_asked(message, offer):
     return False
 
 
+# ...unless the sentence names a way of paying off the site: "pay now, send me your sort code" (26 Sep red team)
+BANK_WORDS = re.compile(r"\bbank\b|\bsort code\b|\baccount (?:number|details)\b|\bpay ?pal\b|\bbacs\b|\btransfer\b|"
+                        r"\bemail\b|\bdetails\b|\brevolut\b|\bmonzo\b", re.IGNORECASE)
+
+
+def sentence_of(text, match):
+    """The sentence a match sits in."""
+    before, after = clause_around(text, match.start(), match.end())
+    return before + match.group() + after
+
+
+# paying straight away, the one way of paying first that's fine where it's bought through the site ("I'll pay the full
+# £400 straight away" too)
+PAY_NOW = re.compile(rf"pay(?:ing)? (?:you |it )?(?:{PAID_PRICE})?(?:right )?(?:now|straight ?away|right away|asap|"
+                     rf"immediately|instantly)$", re.IGNORECASE)
+
+
 def check_message_manner(message, greeting=None, usual=True, short=False, must=(), cash=True, emoji=False,
-                         praise=False, locks=False, no_cash=False):
+                         praise=False, locks=False, no_cash=False, no_collecting="", pay_first=True, title="",
+                         short_extra=0):
     """AlertFlip's rules for a message to a seller (its seller-message
     function), on top of check_message's: no asking about iCloud or locks
     (that's for once the seller replies), no paying before collecting, no
     compliments about the item, no talk of a conversation there hasn't been
     ("as you've said": it's the first message), and a usual message asks at
     most two questions (a longer one asks what the listing leaves open).
-    "I'll pay" twice is fine (the user, 14 Sep).
+    "I'll pay" twice is fine (decided 14 Sep).
 
     greeting: "Hi" when it must open with that, True for any greeting (yours),
     None when your messages don't open with one. short: AlertFlip's 250
@@ -1427,7 +1759,15 @@ def check_message_manner(message, greeting=None, usual=True, short=False, must=(
     through the site. emoji: whether your messages use them. praise: whether
     this draft gives the listing's good condition as its reason. locks: the
     listing talks about iCloud or locks, so the message may say what it says.
-    no_cash: the listing says no cash (NO_CASH), so the message mustn't offer it.
+    no_cash: the listing says no cash (says_no_cash), so the message mustn't
+    offer it; True, or the reason in words. Cash is refused asked as well as
+    said ("would you prefer cash?"). no_collecting: why the listing won't be
+    collected ("on eBay and Vinted you pay through the site and it's
+    posted"), so the message mustn't talk of collecting, asked or said; ""
+    when it may. pay_first: False on eBay and Vinted, where paying straight
+    away is how it's bought: there only sending money, a deposit or paying
+    upfront is refused. title: the listing's title, whose words aren't
+    talk of collecting or cash ("the Pokemon Collection box").
     """
     if not isinstance(message, str) or not message.strip():
         return []  # check_message reports that
@@ -1438,8 +1778,8 @@ def check_message_manner(message, greeting=None, usual=True, short=False, must=(
         problems.append(f"the message doesn't open with \"{greeting}\"")
     elif greeting is True and not (first and first.group().lower() in GREETING_WORDS):
         problems.append("the message doesn't open with a greeting")
-    if short and len(message) > SHORT_MESSAGE:
-        problems.append(f"the message is {len(message)} characters: a usual one is under {SHORT_MESSAGE}")
+    if short and len(message) > SHORT_MESSAGE + short_extra:  # short_extra: what code added after the AI's words
+        problems.append(f"the message is {len(message)} characters: a usual one is under {SHORT_MESSAGE + short_extra}")
     asked = questions_asked(message)
     if usual and asked > MAX_QUESTIONS:
         problems.append(f"the message asks {asked} questions: at most {MAX_QUESTIONS}")
@@ -1448,7 +1788,9 @@ def check_message_manner(message, greeting=None, usual=True, short=False, must=(
                           (PAY_FIRST, "offers to pay before collecting"),
                           (PRIOR_TALK, "says the seller said or agreed something, but it's the first message"),
                           *(() if praise else ((COMPLIMENT, "compliments the item"),))):
-        found = pattern.search(message)
+        # on eBay and Vinted "can pay straight away" is how it's bought; sending money, a deposit, PayPal isn't
+        found = next((m for m in pattern.finditer(message) if pay_first or pattern is not PAY_FIRST
+                      or not PAY_NOW.match(m.group()) or BANK_WORDS.search(sentence_of(message, m))), None)
         if found:
             problems.append(f"the message {what}: \"{found.group()}\"")
     if not emoji and EMOJI.search(message):
@@ -1456,10 +1798,14 @@ def check_message_manner(message, greeting=None, usual=True, short=False, must=(
     missing = [habit for habit in must if habit not in promised_in(message)]
     if missing:
         problems.append(f"the message doesn't say {' and '.join(SAYS[m] for m in missing)}: on Facebook and Gumtree it does")
-    if not cash and "cash" in promised_in(message):  # "the Johnny Cash LP" offers none
+    # cash asked as well as said: "Can you collect, or would you prefer cash?" offers it too ("the Johnny Cash LP" doesn't)
+    cash_said = "cash" in promised_in(message) or talks_of(CASH_TALK, message, title)
+    if not cash and cash_said:
         problems.append("the message offers cash, but on eBay and Vinted you pay through the site")
-    elif no_cash and "cash" in promised_in(message):
-        problems.append("the message offers cash, but the listing says no cash")
+    elif no_cash and cash_said:
+        problems.append(f"the message offers cash, but {no_cash if isinstance(no_cash, str) else 'the listing says no cash'}")
+    if no_collecting and ("collecting" in promised_in(message) or talks_of(COLLECT_TALK, message, title)):
+        problems.append(f"the message talks of collecting, but {no_collecting}")
     return problems
 
 
@@ -1471,7 +1817,7 @@ def questions_asked(message):
                (ends_asking(sentence) or QUESTION_START.match(sentence.strip()) and not sentence.rstrip().endswith((".", "!"))))
 
 
-def check_message(message, offer, sources, asking=None, kind="lower", min_words=0, ebay=True):
+def check_message(message, offer, sources, asking=None, kind="lower", min_words=0, ebay=True, own=()):
     """Every check on a drafted message to a seller. offer and asking are in pence.
 
     The only price it may state is the offer. The asking price may come up as
@@ -1483,6 +1829,7 @@ def check_message(message, offer, sources, asking=None, kind="lower", min_words=
     no message makes up a story about you. What it says comes with the item
     (box, charger, unlocked...) must be in the listing; asking is fine ("does
     it come with the box?"). flip.offers checks what it says about condition.
+    own: your own sentences, whose numbers are yours (check_no_invented_numbers).
     """
     problems = check_length("message", message, MAX_MESSAGE)
     if problems:
@@ -1514,7 +1861,7 @@ def check_message(message, offer, sources, asking=None, kind="lower", min_words=
     if kind == "lower" and second and not NOT_PROMISED.search(message[:second.start()]):
         said = re.split(r"(?<=[.!?])\s", message[second.start():])[0]
         problems.append(f"a lower offer can't offer more as well: \"{said.strip()}\"")
-    problems += check_no_invented_numbers("message", message, f"{sources} {pounds(offer)}")
+    problems += check_no_invented_numbers("message", message, f"{sources} {pounds(offer)}", own)
     problems += check_no_off_platform("message", message, ebay)
     problems += check_no_contact_details("message", message)
     problems += check_no_story("message", message, sources)

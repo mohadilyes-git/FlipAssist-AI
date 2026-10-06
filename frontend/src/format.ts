@@ -1,19 +1,45 @@
 // How the API's answers read on screen.
 
 const WRITERS: Record<string, string> = {
-  template: "Your own sentences (no AI)",
-  "gemma3:4b": "Gemma, on this Mac",
-  "flip-reader-5": "Fine-tuned Gemma, on this Mac",
-  "claude-haiku-5-5": "Claude Haiku (paid backup)",
+  template: "Added sentences (no AI)",  // AlertFlip's sentences, or yours once it has learned them (3 Oct)
+  "gemma3:4b": "Gemma 3 4B (on this Mac)",
+  "flip-reader-5": "flip-reader-5 (on this Mac)",
+  "flip-wording-3": "flip-wording-3 (on this Mac)",
+  "flip-kinds-1": "flip-kinds-1 (on this Mac)",
+  "claude-haiku-5-5": "Claude Haiku 5.5 (paid)",
+  "claude-sonnet-5-5": "Claude Sonnet 5.5 (paid)",
   code: "Code only",
-};
+};  // each model by its real name (4 Oct); one not here shows as it's called ("flip-reader-4")
 
-/** "template" -> "Your own sentences (no AI)", "gemma3:4b" -> "Gemma, on this Mac". */
+/** Who worded the offer's reason and who checked it: "Reason by flip-wording · checked by Claude Haiku". */
+export function reasonLine(reason: { by: string; checked: string }): string {
+  const checker = modelName("claude-haiku-5-5");
+  if (reason.checked === "fixed") return `Reason flagged by ${checker}, fixed by ${modelName(reason.by)}`;
+  const by = `Reason by ${modelName(reason.by)}`;
+  if (reason.checked === "ok") return `${by} · checked by ${checker}`;
+  if (reason.checked === "flagged, kept") return `${by} · flagged, kept as written`;
+  if (reason.checked === "pending") return `${by} · checking…`;
+  return `${by} · not checked`;
+}
+
+/** What a model did, for Home's "who did the work": "reading the listing", "checking the reason". */
+export function jobName(model: string, job: string): string {
+  if (job === "read") return "reading the listing";
+  if (job === "price") return "reading for a UK price";
+  if (job === "colour") return "checking the colour";
+  if (job === "reason") {
+    return model.startsWith("claude-haiku") ? "checking the reason" : model.startsWith("claude-sonnet") ? "fixing the reason"
+      : "wording the reason";
+  }
+  return "writing the message";
+}
+
+/** "template" -> "Added sentences (no AI)", "gemma3:4b" -> "Gemma 3 4B (on this Mac)". */
 export function writerName(model: string | null): string {
   return model ? (WRITERS[model] ?? model) : "Nobody yet";
 }
 
-/** A model's short name, for inside a sentence: "Gemma", "Claude Haiku". */
+/** A model's name for inside a sentence: "flip-wording-3", "Claude Haiku 5.5". */
 export function modelName(model: string): string {
   return writerName(model).split(/,| \(/)[0];
 }

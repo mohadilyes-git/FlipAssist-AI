@@ -1,5 +1,5 @@
-// The app: a Mac-style window with four screens in a sidebar, each at its own
-// address (#message, #listing, #home, #style) so a refresh keeps your place,
+// The app: a Mac-style window with five screens in a sidebar, each at its own
+// address (#home, #message, #style, #price, #listing) so a refresh keeps your place,
 // light or dark as your Mac is (or as you switch it), and on first launch
 // "Set up your style" before any of them.
 import { type ComponentType, useCallback, useEffect, useMemo, useState } from "react";
@@ -7,16 +7,20 @@ import { api, type Health, type Style } from "./api";
 import { HomeScreen } from "./screens/HomeScreen";
 import { ListingScreen } from "./screens/ListingScreen";
 import { MessageScreen } from "./screens/MessageScreen";
+import { PriceScreen } from "./screens/PriceScreen";
 import { Setup, type SetupStep } from "./screens/Setup";
 import { StyleScreen } from "./screens/StyleScreen";
-import { GaugeIcon, Logo, MoonIcon, PenIcon, SparkleIcon, SunIcon, TagIcon } from "./ui";
+import { GaugeIcon, Logo, MoonIcon, PenIcon, PoundIcon, SparkleIcon, SunIcon, TagIcon } from "./ui";
 
-export type Tab = "message" | "listing" | "home" | "style";
+export type Tab = "message" | "price" | "listing" | "home" | "style";
+// in this order (4 Oct): where you start, what you do most, what it learned from you, what the item is
+// worth (its own tab), then listing on eBay
 const TABS: { tab: Tab; label: string; icon: ComponentType<{ size?: number; stroke?: number }> }[] = [
-  { tab: "message", label: "AI message", icon: SparkleIcon },
-  { tab: "listing", label: "List on eBay", icon: TagIcon },
   { tab: "home", label: "Home", icon: GaugeIcon },
+  { tab: "message", label: "AI message", icon: SparkleIcon },
   { tab: "style", label: "Your style", icon: PenIcon },
+  { tab: "price", label: "AI UK price estimate", icon: PoundIcon },
+  { tab: "listing", label: "List on eBay", icon: TagIcon },
 ];
 export const SETUP_DONE = "flipassist.setupDone";
 export const THEME = "flipassist.theme";
@@ -48,7 +52,7 @@ export function markShell(page: Window = window) {
 
 const fromHash = (): Tab => {
   const found = window.location.hash.slice(1);
-  return TABS.some((t) => t.tab === found) ? (found as Tab) : "message";
+  return TABS.some((t) => t.tab === found) ? (found as Tab) : "home";  // it opens on Home
 };
 
 /** Light or dark: your Mac's choice, until you switch it here. */
@@ -125,7 +129,7 @@ export function App() {
   const start = () => {
     store(SETUP_DONE, "1");
     setSetup(null);
-    go("message");
+    go("home");
   };
 
   const name = setup ? "Set up your style" : TABS.find((t) => t.tab === tab)!.label;
@@ -187,8 +191,9 @@ export function App() {
                 <Setup step={setup} go={setSetup} style={style} onLearned={loadStyle} onStart={start} />
               ) : (
                 <>
-                  {/* the two screens you type into stay put while you look elsewhere; the others load fresh */}
+                  {/* the screens you type into stay put while you look elsewhere; the others load fresh */}
                   <div className="screen" hidden={tab !== "message"}><MessageScreen onApproved={loadStyle} /></div>
+                  <div className="screen" hidden={tab !== "price"}><PriceScreen /></div>
                   <div className="screen" hidden={tab !== "listing"}><ListingScreen /></div>
                   {tab === "home" && <HomeScreen go={go} count={count} running={running} reload={loadRunning} />}
                   {tab === "style" && (
@@ -205,11 +210,12 @@ export function App() {
   );
 }
 
-/** Top right of the window: whether Gemma, the AI on this Mac, is there to read and write. */
+/** Top right of the window: whether Ollama, which runs flip-reader-5, flip-wording-3 and Gemma 3 4B on this Mac, is
+ * there to read and write. */
 function StatusPill({ running }: { running: Running }) {
   if (running === null) return <span />;
   if (running === "down") return <span className="status-pill down">API not running</span>;
   return running.local_running
-    ? <span className="status-pill">Gemma running</span>
-    : <span className="status-pill off">Gemma not running</span>;
+    ? <span className="status-pill">Ollama running</span>
+    : <span className="status-pill off">Ollama not running</span>;
 }

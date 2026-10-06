@@ -130,7 +130,7 @@ class ColourLook:
     def __init__(self, log):
         self.log = log
 
-    def attempt(self, item_id, reply, problems, cost):
+    def attempt(self, item_id, reply, problems, cost, job=None):  # always "colour", whatever job it's handed
         self.log.attempt(item_id, reply, problems, cost, job="colour")
 
 

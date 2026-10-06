@@ -1,4 +1,4 @@
-// First launch: "Set up your style". Reply to 8 listings, or paste messages
+// First launch: "Set up your style". Reply to 6 listings, or paste messages
 // you've already sent. Either way they go to the API, which learns from them
 // with plain code (a style card, a phrasebook, and the 3 closest past messages
 // as examples for each new listing): nothing gets trained.
@@ -18,7 +18,8 @@ type Props = {
   onStart: () => void;
 };
 
-// each listing shows one way you might message a seller
+// each listing shows one way you might message a seller (3 Oct: no Vinted or posted-flaw card: the eBay AirPods
+// card teaches posted deals, and how you give a flaw is the same posted or collected)
 const LISTINGS: { title: string; price: number; market: string; description: string; kind: Kind; teaches: string }[] = [
   { title: "iPhone 13 128GB, cracked back", price: 220, market: "Facebook", kind: "lower", teaches: "whether you mention flaws",
     description: "Back glass cracked when I dropped it, screen perfect. Battery 86%. Collection from Leeds LS6." },
@@ -30,12 +31,8 @@ const LISTINGS: { title: string; price: number; market: string; description: str
     description: "Light scratches on the screen, does not affect use. Unlocked. Collect Leeds LS2." },
   { title: "MacBook Air M1 8GB", price: 450, market: "Facebook", kind: "asking", teaches: "paying full price",
     description: "Great condition, charger included. Price is firm, no offers." },
-  { title: "Nintendo Switch OLED", price: 210, market: "Vinted", kind: "lower", teaches: "Vinted offers",
-    description: "Barely used, boxed with the dock. Can post or collect from York." },
   { title: "Dyson V11 Absolute", price: 180, market: "Facebook", kind: "more", teaches: "offering more to hold it",
     description: "All attachments, new filter fitted. Lots of interest, first to collect." },
-  { title: "Apple Watch Series 7 45mm", price: 150, market: "eBay", kind: "lower", teaches: "flaws when posting",
-    description: "Battery 82%, small mark on the case. Postage only." },
 ];
 const OFFER: Record<Kind, (asking: number) => number> = { lower: lowerPrice, asking: (asking) => asking, more: morePrice };
 const OFFER_LABEL: Record<Kind, string> = { lower: "Offer lower", asking: "Pay asking", more: "Offer more" };
@@ -174,7 +171,7 @@ export function Setup({ step, go, style, onLearned, onStart }: Props) {
           </button>
         </div>
         <div className="paste-foot">
-          <button type="button" className="link" onClick={toCards}>Reply to 8 listings instead</button>
+          <button type="button" className="link" onClick={toCards}>Reply to {LISTINGS.length} listings instead</button>
           <button type="button" className="main" aria-busy={busy} disabled={busy || !filled.length}
             onClick={() => void learn(filled.map((p) => ({ title: p.title.trim(), price: p.price.trim(), text: p.text.trim() })))}>
             {busy ? "Learning…" : filled.length ? `Learn from ${filled.length} message${filled.length > 1 ? "s" : ""}` : "Learn my style"}
@@ -234,7 +231,7 @@ export function Setup({ step, go, style, onLearned, onStart }: Props) {
         </ol>
         <div className="choose">
           <button type="button" className="second" onClick={() => go("paste")}>Paste my messages</button>
-          <button type="button" className="main" onClick={toCards}>Reply to 8 listings</button>
+          <button type="button" className="main" onClick={toCards}>Reply to {LISTINGS.length} listings</button>
         </div>
         <p className="footnote">Nothing gets trained. It learns from your own messages.</p>
       </div>

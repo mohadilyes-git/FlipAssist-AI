@@ -34,6 +34,8 @@ class Reply:
     tokens_in: int = 0
     tokens_out: int = 0
     seconds: float = 0.0
+    tokens_cached: int = 0       # prompt tokens the API read from its cache (a tenth of the price)
+    tokens_cache_write: int = 0  # prompt tokens the API put in its cache (a quarter more than the price)
 
 
 HALF_CHARACTER = re.compile("[\ud800-\udfff]")  # a whole pair is one character by now: only halves are left
@@ -94,8 +96,10 @@ def parse_answer(text):
 class LocalModel:
     """Gemma 3 4B through Ollama on this Mac."""
 
-    def __init__(self, name="gemma3:4b", url="http://127.0.0.1:11434", timeout=300, max_tokens=1000):
-        self.name, self.url, self.timeout, self.max_tokens = name, url, timeout, max_tokens
+    def __init__(self, name="gemma3:4b", url="http://127.0.0.1:11434", timeout=300, max_tokens=1000, num_ctx=8192):
+        """num_ctx: the working memory, in tokens: room for photos by default; a model with short prompts takes less,
+        so Ollama can keep it loaded next to another (flip.wording)."""
+        self.name, self.url, self.timeout, self.max_tokens, self.num_ctx = name, url, timeout, max_tokens, num_ctx
 
     def ask(self, system, user, photos, schema, vary=False):
         """vary: for a rewrite, a different wording each time, not the same answer
@@ -107,7 +111,7 @@ class LocalModel:
             "keep_alive": "30m",  # stay loaded between items
             # Ollama's defaults are a random answer (temperature 1) and a short
             # memory (4,096 tokens). Same input, same answer; room for photos.
-            "options": {"temperature": 0.9 if vary else 0, **({} if vary else {"seed": 42}), "num_ctx": 8192,
+            "options": {"temperature": 0.9 if vary else 0, **({} if vary else {"seed": 42}), "num_ctx": self.num_ctx,
                         "num_predict": self.max_tokens, "stop": CURLY_ENDS},
             "messages": [{"role": "system", "content": system},
                          {"role": "user", "content": user, "images": list(photos)}],
@@ -148,8 +152,9 @@ class LocalModel:
 class ApiModel:
     """Claude Haiku through the Anthropic API, for answers the local model got wrong."""
 
-    def __init__(self, name="claude-haiku-5-5", client=None):
+    def __init__(self, name="claude-haiku-5-5", client=None, thinking=None):
         self.name, self.client = name, client  # the client is made on first use
+        self.thinking = thinking  # e.g. {"type": "disabled"}: a short verdict needs no thinking (flip.wording)
 
     def ask(self, system, user, photos, schema, vary=False):
         """vary is the local model's: this API takes no temperature, and the
@@ -169,6 +174,7 @@ class ApiModel:
                 # low effort: it thinks less, and thinking is billed. The format
                 # holds it to the shape. No temperature: this API no longer takes one
                 output_config={"effort": "low", "format": {"type": "json_schema", "schema": schema}},
+                **({"thinking": self.thinking} if self.thinking else {}),
             )
         except anthropic.APIConnectionError:
             return Reply(self.name, error="couldn't reach the API", reachable=False,
@@ -180,7 +186,9 @@ class ApiModel:
             return Reply(self.name, error=f"the API can't be used: {e}", reachable=False,
                          seconds=time.monotonic() - started)
         reply = Reply(self.name, tokens_in=response.usage.input_tokens, tokens_out=response.usage.output_tokens,
-                      seconds=time.monotonic() - started)
+                      seconds=time.monotonic() - started,
+                      tokens_cached=count(getattr(response.usage, "cache_read_input_tokens", 0) or 0),
+                      tokens_cache_write=count(getattr(response.usage, "cache_creation_input_tokens", 0) or 0))
         if response.stop_reason in ("refusal", "max_tokens"):
             reply.error = f"the API stopped early ({response.stop_reason})"
             return reply

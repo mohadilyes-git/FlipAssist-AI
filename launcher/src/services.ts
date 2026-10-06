@@ -3,13 +3,13 @@
 // started yourself keeps running after FlipAssist quits. What each one prints
 // goes to ~/Library/Logs/FlipAssist.
 import { type ChildProcess, spawn } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, openSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { GEMMA, modelsToWarm } from "./parts";
 
 export const OLLAMA = "http://127.0.0.1:11434";
 export const API = "http://127.0.0.1:8000";
-export const MODEL = "gemma3:4b";
 export const LOGS = path.join(os.homedir(), "Library", "Logs", "FlipAssist");
 // opened from the Dock, a Mac app gets a bare PATH, so Ollama is looked for where it installs
 const OLLAMA_AT = ["/opt/homebrew/bin/ollama", "/usr/local/bin/ollama", "/Applications/Ollama.app/Contents/Resources/ollama"];
@@ -52,8 +52,10 @@ export class Services {
 
   constructor(private readonly repo: string) {}
 
-  /** Gemma: Ollama started if it isn't running, then Gemma loaded into memory
-   * (without waiting for it), so the first draft doesn't wait for it to load. */
+  /** Gemma: Ollama started if it isn't running, then the models every draft
+   * uses loaded into memory (without waiting for them), so the first draft
+   * doesn't wait for them to load: FlipAssist's own reader and flip-wording
+   * (parts.modelsToWarm), or Gemma when the reader isn't there. */
   async gemma(): Promise<Gemma> {
     const up = async () => (await ask(`${OLLAMA}/api/tags`)) !== null;
     if (!(await up())) {
@@ -63,9 +65,25 @@ export class Services {
       if (!(await until(up, 30, started))) return "failed";
     }
     const tags = (await ask(`${OLLAMA}/api/tags`)) as { models?: { name?: string }[] } | null;
-    if (!tags?.models?.some((m) => m.name === MODEL)) return "no model";
-    void ask(`${OLLAMA}/api/generate`, { method: "POST", body: JSON.stringify({ model: MODEL, keep_alive: "30m" }) }, 120);
-    return "ready";
+    const installed = (tags?.models ?? []).map((m) => m.name ?? "");
+    const warm = modelsToWarm(installed, this.env(), process.env);
+    void (async () => { // one after the other: two loading at once fight over memory
+      for (const { model, numCtx } of warm) {
+        await ask(`${OLLAMA}/api/generate`, { method: "POST",
+          body: JSON.stringify({ model, keep_alive: "30m", options: { num_ctx: numCtx } }) }, 120);
+      }
+    })();
+    // what the launch screen says is Gemma's: it writes listings and, with the AI writer, messages
+    return installed.some((name) => name === GEMMA.model) ? "ready" : "no model";
+  }
+
+  /** The text of the repo's .env, or "" when there's none. */
+  private env(): string {
+    try {
+      return readFileSync(path.join(this.repo, ".env"), "utf8");
+    } catch {
+      return "";
+    }
   }
 
   /** FlipAssist's API, started from the repo's own Python (.venv) if it isn't running. */

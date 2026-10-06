@@ -80,11 +80,12 @@ function open(): BrowserWindow {
   return window;
 }
 
+// each model by its real name (4 Oct): Ollama runs flip-reader-5, flip-wording-3 and Gemma 3 4B on this Mac
 const GEMMA_WORDS: Record<Gemma, string> = {
-  "ready": "Gemma is ready",
-  "no ollama": "Gemma isn't installed: drafts use code only",
-  "no model": "Gemma isn't downloaded: drafts use code only",
-  "failed": `Gemma didn't start: drafts use code only (${LOGS}/ollama.log)`,
+  "ready": "flip-reader-5, flip-wording-3 and Gemma 3 4B are ready",
+  "no ollama": "Ollama isn't installed: drafts use code only",
+  "no model": "Gemma 3 4B isn't downloaded: the AI can't write messages or listings",
+  "failed": `Ollama didn't start: drafts use code only (${LOGS}/ollama.log)`,
 };
 
 async function launch() {
@@ -177,7 +178,16 @@ if (!app.requestSingleInstanceLock()) {
   });
   void app.whenReady().then(() => {
     protocol.handle("app", serve);
-    void launch();
+    // a fault while starting shows on the launch screen, which otherwise waits forever (3 Oct: a launch right after
+    // another FlipAssist quit stayed on "Starting FlipAssist…" and started nothing)
+    void launch().catch((error: unknown) => {
+      const words = `FlipAssist couldn't start (${String(error).slice(0, 160)}): quit it and open it again`;
+      void win?.webContents.executeJavaScript(`show(${JSON.stringify({ error: words })})`).catch(() => undefined);
+      if (process.argv.includes("--selftest")) {
+        console.log(`SELFTEST FAILED ${JSON.stringify({ error: String(error) })}`);
+        void services.stop().finally(() => app.exit(1));
+      }
+    });
   });
 }
 

@@ -3,9 +3,9 @@
 // the starting prices and checks every draft; your own sentences (or the AI)
 // write it. Nothing is sent from here: you copy it into the marketplace, and
 // approving it teaches your style.
-import { useMemo, useState } from "react";
-import { api, type Kind, type Length, type MessageDraft, type Writer } from "../api";
-import { cost, MARKETPLACES, readBy, seconds, writerName } from "../format";
+import { useEffect, useMemo, useState } from "react";
+import { api, type Kind, type Length, type Listing, type MessageDraft, type Writer } from "../api";
+import { cost, MARKETPLACES, readBy, reasonLine, seconds, writerName } from "../format";
 import { gapOf, lowerPrice, money, morePrice, sliderRange, toPence } from "../prices";
 import { CheckIcon, ChevronIcon, Chip, Head, PriceSlider, SparkleIcon, Steps, Warn, WarningIcon } from "../ui";
 
@@ -23,14 +23,26 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
   const [description, setDescription] = useState("");
   const [kind, setKind] = useState<Kind>("lower");
   const [moved, setMoved] = useState<Partial<Record<Kind, number>>>({});
-  const [mention, setMention] = useState<Mention>("auto");
+  const [mention, setMention] = useState<Mention>("yes"); // the flaw is said unless you pick otherwise (3 Oct)
   const [writer, setWriter] = useState<Writer>("auto");
   const [draft, setDraft] = useState<MessageDraft | null>(null);
+  const [draftedFor, setDraftedFor] = useState(""); // the title and description the draft on screen was made from
   const [text, setText] = useState("");
   const [length, setLength] = useState<Length>("usual"); // the length on screen: Rewrite keeps it
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [approval, setApproval] = useState<Approval | null>(null);
+  // a draft belongs to the listing it was written from: change the title or the description and it goes, so you
+  // write one for the listing as it is now (3 Oct; a draft that arrives for the old one goes too)
+  useEffect(() => {
+    if (draft && draftedFor !== JSON.stringify([title, description])) {
+      setDraft(null);
+      setText("");
+      setApproval(null);
+      setLength("usual");
+      setError("");
+    }
+  }, [title, description, draft, draftedFor]);
 
   const askingPence = toPence(asking);
   // each card's price: where you slid it, or the price code starts from (under £1 isn't a price to offer on)
@@ -50,8 +62,10 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
     setError("");
     setApproval(null);
     try {
+      const listing = { title, description, asking_price: (prices.asking / 100).toFixed(2), marketplace };
+      const thisListing = JSON.stringify([title, description]);
       const found = await api.draftMessage({
-        listing: { title, description, asking_price: (prices.asking / 100).toFixed(2), marketplace },
+        listing,
         kind,
         offer: (prices[kind] / 100).toFixed(2),
         mention: overrides.mention !== undefined ? overrides.mention : MENTION[mention],
@@ -59,6 +73,12 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
         previous: overrides.previous ?? null,
         writer,
         rewrite_of: overrides.rewrite_of ?? null,
+        check_later: true,
+        // Make it longer and Rewrite keep the reason the message on screen gives (it may be Sonnet's fix), but only for
+        // the same listing: a listing you've changed since gets its reason worded again (3 Oct: a new listing was
+        // given the last one's "there's a scratch on the screen")
+        reason: (overrides.previous ?? overrides.rewrite_of) && draft?.reason && draftedFor === thisListing
+          ? { ...draft.reason, quotes: draft.reading.quotes ?? draft.reading.flaws } : null,
       });
       const changing = overrides.previous ?? overrides.rewrite_of;
       if (!found.message && changing) {
@@ -67,12 +87,36 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
         return;
       }
       setDraft(found);
+      setDraftedFor(thisListing);
       setText(found.message ?? "");
       setLength(asked);
+      if (found.reason?.checked === "pending" && found.message) void checkReason(found, listing);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  // the draft is on screen already: Haiku checks its reason now, and a fix (Sonnet's) replaces the message only
+  // while it's still the one drafted, never over your own edits
+  async function checkReason(found: MessageDraft, listing: Listing) {
+    const update = (change: (d: MessageDraft) => MessageDraft) =>
+      setDraft((now) => (now && now.draft_id === found.draft_id ? change(now) : now));
+    try {
+      const done = await api.checkReason({
+        draft_id: found.draft_id,
+        // Haiku checks the reason against the sentences flip-wording worded it from; code's checks use the flaws
+        listing, flaws: found.reading.flaws, quotes: found.reading.quotes ?? [],
+        clause: found.reason!.clause, message: found.message!,
+        kind: found.kind, offer_pence: found.offer_pence,
+      });
+      update((d) => ({ ...d, message: done.message, reason: done.reason, attempts: [...d.attempts, ...done.attempts],
+        cost_pence: d.cost_pence + done.cost_pence,
+        warnings: [...d.warnings, ...done.problems.filter((p) => !d.warnings.includes(p))] })); // why a fix didn't go in
+      if (done.changed) setText((now) => (now === found.message ? done.message : now));
+    } catch {
+      update((d) => ({ ...d, reason: { ...d.reason!, checked: "not checked" } }));
     }
   }
 
@@ -256,6 +300,7 @@ function Drafted({ draft, text, setText, busy, approval, longer, onLength, onAns
         <p className="sub">
           {draft.written_by ? writerName(draft.written_by) : "No draft passed"} · {seconds(steps)} · {cost(draft.cost_pence)} · {readBy(reading.read_by)}
         </p>
+        {draft.reason && <p className="sub">{reasonLine(draft.reason)}</p>}
         {steps.length > 0 && (
           <button type="button" className="link" aria-expanded={why} onClick={() => setWhy(!why)}>
             Why · {steps.length} {steps.length === 1 ? "step" : "steps"}

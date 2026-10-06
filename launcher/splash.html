@@ -5,7 +5,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
 <title>FlipAssist</title>
 <style>
-  /* the launch screen, while Gemma and the API start: the app's own colours (frontend/src/styles.css) */
+  /* the launch screen, while Ollama's models and the API start: the app's own colours (frontend/src/styles.css) */
   :root {
     color-scheme: light;
     --bgT: #ffffff; --bgM: #eef1f6; --bgB: #dbe3ef;
@@ -56,7 +56,7 @@
   </span>
   <h1 id="title">Starting FlipAssist…</h1>
   <ul>
-    <li id="gemma" class="waiting"><span class="dot"></span><span><strong>Gemma, on this Mac</strong><small>Starting</small></span></li>
+    <li id="gemma" class="waiting"><span class="dot"></span><span><strong>Models on this Mac (Ollama)</strong><small>Starting</small></span></li>
     <li id="api" class="waiting"><span class="dot"></span><span><strong>FlipAssist's API</strong><small>Starting</small></span></li>
   </ul>
   <p id="error" role="alert" hidden></p>

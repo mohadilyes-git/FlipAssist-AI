@@ -19,7 +19,7 @@ can make things up, so code checks everything it reads:
    "unlocked to all networks", "see pics", "screen is perfect") isn't a flaw,
    nor is a mark on the screen protector ("the protector itself is
    scratched"); a battery health of 85% or under is ("Battery health 79%":
-   the user's line, read from their labels). A seller's own story is cut to
+   the line read from the labels). A seller's own story is cut to
    the flaw ("I dropped it and cracked the back" -> "cracked the back").
 3. The flaws code finds by itself are judged the same way and always stay:
    AI can add a flaw, never take one away. When the AI quotes the flaw more
@@ -61,6 +61,7 @@ from flip.checks import (CONDITION_PROMISES, ESIM, MARKS, NEGATIONS, NOT_A_FLAW,
 from flip.offers import (FLAWS, PARTS, backed, battery_apart, condition_said, esim_everywhere, figures_joined,
                          low_battery, read_listing, sentence_parts, this_items_parts)
 from flip.prompts import READING_SCHEMA, READING_SYSTEM, reading_prompt
+from flip.style import NOT_A_PLACE as NOT_PLACE_WORDS, NUMBERS_IN_WORDS, WHEN_WORDS
 
 # the listing's parts: its sentences and clauses, and what follows "apart from" or "except"
 SPLIT = PARTS
@@ -97,7 +98,7 @@ MAX_ITEM = 4  # words of one item in a list: "visible damage", not a sentence
 # a seller's own story, cut to the flaw: "I dropped it and cracked the back"
 FIRST_PERSON = re.compile(r"\b(?:I|I'?ve|I'?m|I'?d|[Mm]y|[Mm]ine|[Ww]e|[Ww]e'?ve|[Oo]ur)\b")
 # "no offers" in words that say it...
-NO_OFFERS = re.compile(r"\b(?:no offers|price\s*[:\-]?\s*(?:is\s+)?firm|firm (?:on (?:the )?price|price|at £?\d+)|"
+NO_OFFERS = re.compile(r"\b(?:no offers?(?! (?:refused|too|turned|rejected))|price\s*[:\-]?\s*(?:is\s+)?firm|firm (?:on (?:the )?price|price|at £?\d+)|"
                        r"not (?:open to|accepting|taking|interested in) (?:any )?offers|offers not accepted|"
                        r"offers\s*[:\-]\s*no\b|no swaps (?:or|and|/) offers|no haggl\w*|non[- ]?negotiable|"
                        r"(?:isn'?t|is not|not) negotiable|won'?t (?:go|accept) (?:any )?(?:lower|less)|no lower|"
@@ -117,7 +118,8 @@ LIMITED_OFFERS = re.compile(r"\bno offers (?:under|below|less than|over|until|ti
 PLACE_LEAD = re.compile(r"^(?:(?:can\s+)?(?:be\s+)?(?:collection|collect(?:ed)?|pick\s?up|pickup|meet(?:\s+up)?|based|"
                         r"located|situated|i'?m|i\s+am|local)(?:\s+(?:only|is|from|in|near|at|around|to))*\s*[,:\-–]?\s*"
                         r"|(?:from|in|near|at|around|the)\s+)+", re.IGNORECASE)
-PLACE_END = re.compile(r"\s*(?:[.!?;\n]|\s[-–—]\s|,|\b(?:or|if|only|please|and|after|before|between|until|till|"
+PLACE_END = re.compile(r"\s*(?:[.!?;\n]|\s[-–—]\s|,|\b(?:or|if|only|please|and|after|before|between|until|till|til|"
+                       r"onwards?|ish|o'?clock|"  # "from six onwards" is a time, not the place "Six Onwards" (26 Sep)
                        r"weekdays?|weekends?|evenings?|mornings?|afternoons?)\b|\d{1,2}(?::\d\d)?\s*(?:am|pm)\b).*$",
                        re.IGNORECASE)
 NOT_A_PLACE = {"collect", "collection", "collected", "pick", "pickup", "post", "postage", "posted", "cash", "me", "i'm",
@@ -127,8 +129,11 @@ NOT_A_PLACE = {"collect", "collection", "collected", "pick", "pickup", "post", "
                "saturday", "sunday", "mon", "tue", "tues", "wed", "thu", "thur", "thurs", "fri", "sat", "sun",
                "weekday", "weekdays", "please", "text", "message", "call", "dm", "free", "available", "only", "none",
                "no", "n/a", "na", "unknown", "null", "nil", "stated", "specified", "person", "mine", "work", "office",
-               "preferred", "anytime", "essential", "needed", "required", "possible", "welcome", "pm", "am"}
-# what comes with the item (the user, 23 Sep: a mark on one is no flaw of the item's): a screen or camera protector,
+               "preferred", "anytime", "essential", "needed", "required", "possible", "welcome", "pm", "am"} | WHEN_WORDS
+# ...with every word of when flip.style knows (26 Sep red team: "Collection from December" was the place "December",
+# "Collection from Leeds 2nite" was "Leeds 2nite"). Not all of style's NOT_A_PLACE, a word that's no place where a
+# place starts: places have "the" and numbers in them ("Bourton-on-the-Water", "Seven Sisters")
+# what comes with the item (decided 23 Sep: a mark on one is no flaw of the item's): a screen or camera protector,
 # a phone case or cover, the box, a charger or cable. A mark is the thing's only when it's said OF it ("the protector
 # itself is scratched", "case that has a crack"), right BEFORE it ("cracked screen protector") or ON it ("scratches on
 # the protector", "damage to the box"): a mark under it, hidden by it, made by it or anywhere else is the item's
@@ -704,9 +709,14 @@ def place(quote):
         return ""
     if found[:1].isupper() or found[:1].isdigit() or POSTCODE.fullmatch(found.upper()):
         return found
-    # a lowercase name only right after "from", "in", "near" or "at": "collection from leeds"
+    # a lowercase name only right after "from", "in", "near" or "at": "collection from leeds", not a word that's no
+    # place there ("collection in public", "from here", "at earliest convenience": flip.style's NOT_A_PLACE, 26 Sep).
+    # A number word starts one with a name after it ("seven sisters", "three bridges crawley"), never alone or with
+    # when ("from six", "six thirty"): 26 Sep red team, every number word was refused
     named = re.search(rf"\b(?:from|in|near|at)\s+{re.escape(found)}\b", quote, re.IGNORECASE)
-    return found.title() if named and found.replace(" ", "").isalpha() else ""
+    first, *rest = found.lower().split()
+    starts = first not in NOT_PLACE_WORDS or first in NUMBERS_IN_WORDS and bool(rest) and not set(rest) & NOT_PLACE_WORDS
+    return found.title() if named and found.replace(" ", "").isalpha() and starts else ""
 
 
 def reading_from(answer, text, read_by):
@@ -1048,11 +1058,19 @@ def reading_checked(answer, text, read_by):
     a seller's story is cut to the flaw, the same words count once, and the
     pickup and "no offers" are checked as for any reading. Not rules 2 and 3:
     it was trained to quote exactly the sentences that state a flaw, and
-    cutting its quotes into code's pieces lost flaws it had found."""
-    flaws = [story_cut(quote) for quote in answer["flaws"] if isinstance(quote, str) and quote.strip()]
+    cutting its quotes into code's pieces lost flaws it had found.
+    "quotes" keeps the reader's sentences before the story cut: flip-wording
+    words the reason from them (flip.wording), as it was trained to, and drops
+    the story itself. The cut is for code's own wording only: on 500 test
+    listings it changed 8 quotes, and most lost the part or the fault ("I will
+    say that the screen is quite scratched" -> "scratched and I tried to show
+    that...", 3 Oct)."""
+    quotes = [quote for quote in answer["flaws"] if isinstance(quote, str) and quote.strip()]
+    flaws = [story_cut(quote) for quote in quotes]
     pickup = place(answer["pickup"])
     said = answer["no_offers"].strip()
     return {"flaws": list({f.lower(): f for f in flaws}.values()),  # the same words once
+            "quotes": list({q.lower(): q for q in quotes}.values()),
             "pickup": pickup if pickup and in_listing(pickup, text) else "",
             "no_offers": said if said and no_offers_ok(said, text) else code_no_offers(text), "read_by": read_by}
 
@@ -1067,7 +1085,8 @@ def read_listing_with_ai(listing, local=None, api=None, mode="auto", log=None):
     system, user = reading_prompt(listing)
     answer = try_models(mode, {"local": local, "api": api},
                         ask=lambda ai: tidied(ai.ask(system, user, [], READING_SCHEMA), text),
-                        check=lambda found: check_reading(found, text), result=result, log=log)
+                        check=lambda found: check_reading(found, text), result=result, log=log,
+                        job="read")  # logged as reading, apart from writing (Home's "who did the work", 4 Oct)
     model = result["attempts"][-1]["model"] if answer is not None else None
     reading = code_reading(text) if answer is None else \
         (reading_checked if fine_tuned(model) else reading_from)(answer, text, model)

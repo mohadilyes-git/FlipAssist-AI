@@ -2,9 +2,10 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App, markShell, SETUP_DONE, THEME } from "../App";
-import type { ListingDraft, MessageDraft, Style } from "../api";
+import type { ListingDraft, MessageDraft, PriceEstimate, Style } from "../api";
 import { ListingScreen } from "../screens/ListingScreen";
 import { MessageScreen } from "../screens/MessageScreen";
+import { cautions, itemName, PriceScreen, sortedBy } from "../screens/PriceScreen";
 
 const DRAFT: MessageDraft = {
   draft_id: 7, status: "ready", written_by: "template", kind: "lower", offer: "£185", offer_pence: 18500,
@@ -75,9 +76,85 @@ describe("AI message", () => {
     expect(screen.getByText("Black dot on the screen")).toBeTruthy();
     expect(screen.getByText("Collect: Leeds LS6")).toBeTruthy();
     expect(screen.getByText("The seller says no offers")).toBeTruthy(); // Offer lower is picked
-    expect(screen.getByText("Your own sentences (no AI) · 1.2s · free · read by Gemma, on this Mac")).toBeTruthy();
+    expect(screen.getByText("Added sentences (no AI) · 1.2s · free · read by Gemma 3 4B (on this Mac)")).toBeTruthy();
     const body = sent(fetch, "POST /api/messages/draft");
     expect([body.listing.asking_price, body.offer, body.listing.marketplace]).toEqual(["220.00", "185.00", "facebook"]);
+  });
+
+  it("shows the draft at once, then the reason's check, and a fix replaces the message only if you haven't edited it", async () => {
+    const pending: MessageDraft = { ...DRAFT, message: "Hi mate, would you take £185 cash? I'm offering that because there's a dot on the screen. Can collect today.",
+      reason: { clause: "there's a dot on the screen", by: "flip-wording-3", checked: "pending" } };
+    const fixedMessage = "Hi mate, would you take £185 cash? I'm offering that because there's a black dot on the screen. Can collect today.";
+    const fetch = serve({ "POST /api/messages/draft": [200, pending],
+      "POST /api/messages/check-reason": [200, { reason: { clause: "there's a black dot on the screen", by: "claude-sonnet-5-5",
+        checked: "fixed" }, message: fixedMessage, changed: true, problems: [], cost_pence: 0.16,
+        attempts: [{ model: "claude-haiku-5-5", problems: [], seconds: 1, cost_pence: 0.008, job: "reason" },
+          { model: "claude-sonnet-5-5", problems: [], seconds: 1.4, cost_pence: 0.152, job: "reason" }] }] });
+    const user = userEvent.setup();
+    render(<MessageScreen />);
+    await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
+    await user.type(screen.getByLabelText("Asking price"), "£220");
+    await user.click(screen.getByRole("button", { name: "Write my message" }));
+    expect(await screen.findByDisplayValue(fixedMessage)).toBeTruthy();  // the fix replaced the untouched draft
+    expect(screen.getByText("Reason flagged by Claude Haiku 5.5, fixed by Claude Sonnet 5.5")).toBeTruthy();
+    expect(sent(fetch, "POST /api/messages/draft").check_later).toBe(true);
+    const check = sent(fetch, "POST /api/messages/check-reason");
+    expect([check.draft_id, check.clause, check.flaws, check.offer_pence]).toEqual([7, "there's a dot on the screen", ["Black dot on the screen"], 18500]);
+  });
+
+  it("checks the reason against the reader's whole sentences, the ones it was worded from", async () => {
+    const pending: MessageDraft = { ...DRAFT,
+      reading: { ...DRAFT.reading, flaws: ["cracked the back"], quotes: ["I dropped it and cracked the back"] },
+      reason: { clause: "the back is cracked", by: "flip-wording-3", checked: "pending" } };
+    const fetch = serve({ "POST /api/messages/draft": [200, pending],
+      "POST /api/messages/check-reason": [200, { reason: { ...pending.reason!, checked: "ok" }, message: pending.message,
+        changed: false, problems: [], cost_pence: 0.008, attempts: [] }] });
+    const user = userEvent.setup();
+    render(<MessageScreen />);
+    await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
+    await user.type(screen.getByLabelText("Asking price"), "£220");
+    await user.click(screen.getByRole("button", { name: "Write my message" }));
+    expect(await screen.findByText("Reason by flip-wording-3 · checked by Claude Haiku 5.5")).toBeTruthy();
+    const check = sent(fetch, "POST /api/messages/check-reason");
+    expect([check.quotes, check.flaws]).toEqual([["I dropped it and cracked the back"], ["cracked the back"]]);
+  });
+
+  it("no longer asks for a UK price: that has its own tab (4 Oct)", async () => {
+    const fetch = serve({ "POST /api/messages/draft": [200, DRAFT] });
+    const user = userEvent.setup();
+    render(<MessageScreen />);
+    await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
+    await user.type(screen.getByLabelText("Asking price"), "£220");
+    await user.click(screen.getByRole("button", { name: "Write my message" }));
+    await screen.findByDisplayValue(DRAFT.message!);
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual(["/api/messages/draft"]);
+    expect(screen.queryByLabelText("UK price")).toBeNull();
+  });
+
+  it("keeps your own edits when a fixed reason comes back", async () => {
+    const pending: MessageDraft = { ...DRAFT, reason: { clause: "there's a dot on the screen", by: "flip-wording-3", checked: "pending" } };
+    let release: () => void = () => {};
+    const waited = new Promise<void>((resolve) => { release = resolve; });
+    const fetch = vi.fn(async (url: string) => {
+      if (url === "/api/messages/check-reason") {
+        await waited;
+        return { ok: true, status: 200, json: async () => ({ reason: { clause: "x", by: "claude-sonnet-5-5", checked: "fixed" },
+          message: "the fixed one", changed: true, problems: [], attempts: [], cost_pence: 0.15 }) };
+      }
+      return { ok: true, status: 200, json: async () => pending };
+    });
+    vi.stubGlobal("fetch", fetch);
+    const user = userEvent.setup();
+    render(<MessageScreen />);
+    await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
+    await user.type(screen.getByLabelText("Asking price"), "£220");
+    await user.click(screen.getByRole("button", { name: "Write my message" }));
+    const box = await screen.findByDisplayValue(DRAFT.message!);
+    expect(screen.getByText("Reason by flip-wording-3 · checking…")).toBeTruthy();
+    await user.type(box, " Thanks");
+    release();
+    expect(await screen.findByText("Reason flagged by Claude Haiku 5.5, fixed by Claude Sonnet 5.5")).toBeTruthy();
+    expect(screen.getByDisplayValue(`${DRAFT.message} Thanks`)).toBeTruthy();  // yours stays
   });
 
   it("says so plainly when no draft passed the checks", async () => {
@@ -105,7 +182,7 @@ describe("AI message", () => {
     render(<MessageScreen />);
     await draft(user);
     await user.click(screen.getByRole("button", { name: /Why · 2 steps/ }));
-    expect(screen.getByText("Gemma, on this Mac passed")).toBeTruthy();
+    expect(screen.getByText("Gemma 3 4B (on this Mac) passed")).toBeTruthy();
     expect(screen.getByText("1.2s · free")).toBeTruthy();
   });
 
@@ -132,6 +209,36 @@ describe("AI message", () => {
     await user.click(screen.getByRole("button", { name: "Make it longer" }));
     const body = sent(fetch, "POST /api/messages/draft", 1);
     expect([body.length, body.previous]).toEqual(["longer", DRAFT.message + " Cheers"]);
+    expect(body.reason).toBeNull(); // this draft has no worded reason to keep
+  });
+
+  it("makes it longer keeping the checked reason on screen, not wording it again", async () => {
+    const checkedReason = { clause: "there's a black dot on the screen", by: "claude-sonnet-5-5", checked: "fixed" };
+    const fetch = serve({ "POST /api/messages/draft": [[200, { ...DRAFT, reason: checkedReason }],
+      [200, { ...DRAFT, draft_id: 8, reason: checkedReason }]] });
+    const user = userEvent.setup();
+    render(<MessageScreen />);
+    await draft(user);
+    await user.click(screen.getByRole("button", { name: "Make it longer" }));
+    expect(sent(fetch, "POST /api/messages/draft", 1).reason).toEqual({ ...checkedReason, quotes: DRAFT.reading.flaws });
+  });
+
+  it("clears the draft when you change the title or the description, so you write one for the listing as it is", async () => {
+    const checkedReason = { clause: "there's a black dot on the screen", by: "flip-wording-3", checked: "ok" };
+    const fetch = serve({ "POST /api/messages/draft": [[200, { ...DRAFT, reason: checkedReason }],
+      [200, { ...DRAFT, draft_id: 8, message: "the new one" }]] });
+    const user = userEvent.setup();
+    render(<MessageScreen />);
+    await draft(user);
+    await user.type(screen.getByLabelText("The seller's description"), " The phone turns off sometimes.");
+    expect(screen.queryByDisplayValue(DRAFT.message!)).toBeNull(); // the old message is gone...
+    expect(screen.queryByRole("button", { name: "Rewrite" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Write my message" })); // ...and you write a new one
+    expect(await screen.findByDisplayValue("the new one")).toBeTruthy();
+    const body = sent(fetch, "POST /api/messages/draft", 1);
+    expect([body.reason, body.rewrite_of, body.listing.description]).toEqual([null, null, " The phone turns off sometimes."]);
+    await user.type(screen.getByLabelText("Listing title"), " Pro");
+    expect(screen.queryByDisplayValue("the new one")).toBeNull(); // the title too
   });
 
   it("flips Make it longer to Make it shorter, and a rewrite keeps the length on screen", async () => {
@@ -231,6 +338,264 @@ describe("the price line", () => {
   });
 });
 
+describe("AI UK price estimate", () => {
+  const PRICED: PriceEstimate = { price: 150, middle: 175, low: 160, high: 190, currency: "GBP", sales: 51,
+    model: "iphone 13", storage_gb: 128, ram_gb: null, asked_storage_gb: 128, asked_ram_gb: null, kind: "iphone",
+    kinds: ["damage"], cuts: ["damage"], parts_price: false, rough: false, exact: true, mode: "catalogue",
+    flaws: ["cracked back", "battery 81%"], read_by: "flip-reader-5" };
+
+  it("reads the description for flaws and shows the price cut for them, with no eBay in it", async () => {
+    const fetch = serve({ "POST /api/prices/estimate": [200, PRICED] });
+    const user = userEvent.setup();
+    render(<PriceScreen />);
+    await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
+    await user.type(screen.getByLabelText("The seller's description"), "Cracked back, battery 81%");
+    await user.click(screen.getByRole("button", { name: "Check the UK price" }));
+    const hero = await screen.findByLabelText("UK price");
+    expect(hero.textContent).toContain("£150");
+    expect(hero.textContent).toContain("iPhone 13 128GB · from 51 UK sales");
+    expect(hero.textContent).toContain("£175with no flaws");
+    expect(hero.textContent).toContain("−14%cut for its flaws");
+    expect(hero.textContent).toContain("£160–£190middle half of clean sales(cheapest quarter left out)");
+    const flaws = screen.getByLabelText("Flaws it found");
+    expect(within(flaws).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["cracked back", "battery 81%"]);
+    expect(flaws.textContent).toContain("Read by flip-reader-5 (on this Mac) · counted as damage");
+    const how = within(screen.getByLabelText("How it works")).getAllByRole("listitem").map((li) => li.textContent);
+    expect(how.map((step) => step.split(/[,:.]| keeps| organises| reads/)[0])).toEqual(
+      ["AlertFlip prices API", "Claude Haiku 5", "The middle price of clean ones", "flip-reader-5"]);
+    expect(screen.queryAllByRole("paragraph").filter((p) => p.className === "warn-row")).toHaveLength(0);
+    expect(document.body.textContent).not.toMatch(/ebay/i);
+    expect(sent(fetch, "POST /api/prices/estimate")).toEqual(
+      { title: "iPhone 13 128GB Blue", description: "Cracked back, battery 81%" });
+  });
+
+  it("says when it's not a phone it prices, and drops a price once the listing changes", async () => {
+    serve({ "POST /api/prices/estimate": [[200, { currency: "GBP", cuts: [], rough: false, exact: false,
+      skipped: "Estimates are for iPhones, Samsung phones and MacBooks only" }], [200, PRICED]] });
+    const user = userEvent.setup();
+    render(<PriceScreen />);
+    await user.type(screen.getByLabelText("Listing title"), "PS5 Slim");
+    await user.click(screen.getByRole("button", { name: "Check the UK price" }));
+    expect(await screen.findByText("Estimates are for iPhones, Samsung phones and MacBooks only")).toBeTruthy();
+    await user.clear(screen.getByLabelText("Listing title"));
+    await user.type(screen.getByLabelText("Listing title"), "iPhone 13");
+    expect(screen.queryByText("Estimates are for iPhones, Samsung phones and MacBooks only")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Check the UK price" }));
+    expect((await screen.findByLabelText("UK price")).textContent).toContain("£150");
+  });
+
+  it("prices a MacBook with its RAM and storage, and says when it priced another size", async () => {
+    serve({ "POST /api/prices/estimate": [200, { ...PRICED, price: 420, middle: 420, low: 390, high: 460, sales: 33,
+      model: "macbook air 13 m1", kind: "macbook", storage_gb: 512, ram_gb: 8, asked_storage_gb: 1024,
+      asked_ram_gb: 8, kinds: [], cuts: [], flaws: [], exact: false, rough: true }] });
+    const user = userEvent.setup();
+    render(<PriceScreen />);
+    await user.type(screen.getByLabelText("Listing title"), "MacBook Air M1 8GB 1TB");
+    await user.click(screen.getByRole("button", { name: "Check the UK price" }));
+    const hero = await screen.findByLabelText("UK price");
+    expect(hero.textContent).toContain("MacBook Air 13-inch M1 8GB RAM 512GB · from 33 UK sales");
+    expect(hero.textContent).toContain("nonecut for its flaws");
+    expect(screen.getByText("Too few sales of an 8GB RAM 1TB one: this is an 8GB RAM 512GB one's price, not changed for size"))
+      .toBeTruthy();
+    expect(screen.getByText("None: priced as one with no flaws.")).toBeTruthy();
+  });
+
+  it("says what to know before trusting the price", () => {
+    const said = (change: Partial<PriceEstimate>) => cautions({ ...PRICED, ...change });
+    expect(said({})).toEqual([]);
+    expect(said({ asked_storage_gb: null })).toEqual(
+      ["Couldn't find the storage in the listing: priced as a 128GB one, the size that sells most"]);
+    expect(said({ exact: false })).toEqual(["Rough: only 51 sales of this size to go on"]);  // its own size, under 5
+    expect(said({ sales: 12, rough: true })).toEqual(["Rough: only 12 sales to go on"]);
+    expect(said({ kinds: ["lock"], parts_price: true })).toEqual(["Priced at what for-parts ones sell for"]);
+    expect(said({ kinds: ["network lock"], rough: true })).toEqual(["Rough: network lock is hard to price"]);
+    expect(said({ kind: "macbook", ram_gb: 8, asked_ram_gb: null, kinds: ["damage"] })).toEqual([
+      "Couldn't find the RAM in the listing: priced as an 8GB RAM 128GB one, the size that sells most",
+      "Rough for a MacBook: the flaw cuts were measured on phones"]);
+    expect(said({ mode: "keyword", model: null, item: "iPhone 17 Air" })).toEqual(
+      ["Rough: priced from a search by words, not a model it knows"]);
+  });
+
+  it("names the backend's models as they're written", () => {
+    expect(["iphone 13 pro max", "galaxy s23 fe", "iphone xr", "galaxy z flip 5", "galaxy s10 5g", "macbook air 13 m1",
+      "macbook pro 14 m3 pro", "macbook pro 2019"].map(itemName))
+      .toEqual(["iPhone 13 Pro Max", "Galaxy S23 FE", "iPhone XR", "Galaxy Z Flip 5", "Galaxy S10 5G",
+        "MacBook Air 13-inch M1", "MacBook Pro 14-inch M3 Pro", "MacBook Pro 2019"]);
+  });
+
+  // 6 Oct review: the card says what the price did. Each answer is the one /prices/estimate gave for the listing.
+  /** The listing typed in and checked, with this answer: the hero's text, the warnings and the flaws card's text */
+  async function check(title: string, description: string, answer: PriceEstimate) {
+    serve({ "POST /api/prices/estimate": [200, answer] });
+    const user = userEvent.setup();
+    render(<PriceScreen />);
+    await user.type(screen.getByLabelText("Listing title"), title);
+    await user.type(screen.getByLabelText("The seller's description"), description);
+    await user.click(screen.getByRole("button", { name: "Check the UK price" }));
+    const hero = await screen.findByLabelText("UK price");
+    return { hero: hero.textContent, flaws: screen.getByLabelText("Flaws it found").textContent,
+      warned: [...document.querySelectorAll(".warn-row")].map((p) => p.textContent) };
+  }
+
+  it("says it couldn't find a size, not that the listing has none", async () => {
+    // "128gig" was missed (flip/prices.py reads sizes; the screen only words what code knows), so the size that sells most
+    const got = await check("iPhone 13 Blue", "128gig, unlocked, works perfectly.", { ...PRICED, price: 285, middle: 285,
+      low: 270, high: 295, sales: 15, storage_gb: 256, asked_storage_gb: null, kinds: [], cuts: [], flaws: [], rough: true });
+    expect(got.hero).toContain("iPhone 13 256GB · from 15 UK sales");
+    expect(got.warned).toEqual(["Couldn't find the storage in the listing: priced as a 256GB one, the size that sells most",
+      "Rough: only 15 sales to go on"]);
+    expect(document.body.textContent).not.toContain("No storage in the listing");
+  });
+
+  it("says a MacBook was priced as another size, even when the listing leaves the other size out", async () => {
+    const swapped = { ...PRICED, kind: "macbook", model: "macbook air 13 m1", price: 550, middle: 550, low: 530, high: 560,
+      sales: 12, storage_gb: 512, ram_gb: 16, exact: false, rough: true, kinds: [], cuts: [], flaws: [] };
+    // S7: 3 sales of an 8GB RAM 256GB one, too few, so a 16GB RAM 512GB one's price
+    const got = await check("MacBook Air M1 256GB Space Grey", "Works perfectly, battery cycle count 210.",
+      { ...swapped, asked_storage_gb: 256, asked_ram_gb: null });
+    expect(got.hero).toContain("MacBook Air 13-inch M1 16GB RAM 512GB · from 12 UK sales");
+    expect(got.warned).toEqual(["Couldn't find the RAM in the listing, and too few sales of a 256GB one: this is a 16GB "
+      + "RAM 512GB one's price, not changed for size", "Rough: only 12 sales to go on"]);
+    // S7b: "MacBook Air M1 8GB Space Grey"
+    expect(cautions({ ...swapped, asked_storage_gb: null, asked_ram_gb: 8 })).toEqual(["Couldn't find the storage in the "
+      + "listing, and too few sales of an 8GB RAM one: this is a 16GB RAM 512GB one's price, not changed for size",
+    "Rough: only 12 sales to go on"]);
+  });
+
+  it("names the title's own flaws when the reader quoted none, rather than saying it has none", async () => {
+    // S10: the crack is only in the title, and the price is cut for it
+    let got = await check("iPhone 13 128GB cracked back", "Collection only from Leeds.", { ...PRICED, price: 190,
+      middle: 220, low: 210, high: 230, sales: 30, kinds: ["damage"], cuts: ["damage"], flaws: [] });
+    expect(got.hero).toContain("−14%cut for its flaws");
+    expect(got.flaws).toBe("Flaws it foundNone quoted from the description. Counted from the title: damage"
+      + "Read by flip-reader-5 (on this Mac)");
+    cleanup();
+    // S9: a for-parts title, priced at what for-parts ones sell for
+    got = await check("Faulty iPhone 12 64GB for parts", "Collection only from Leeds.", { ...PRICED, price: 70, middle: 180,
+      low: 170, high: 190, sales: 30, model: "iphone 12", storage_gb: 64, asked_storage_gb: 64, kinds: ["fault", "parts"],
+      cuts: [], parts_price: true, flaws: [] });
+    expect(got.flaws).toBe("Flaws it foundNone quoted from the description. Counted from the title: fault, parts"
+      + "Read by flip-reader-5 (on this Mac) · priced at what for-parts ones sell for, with nothing cut on top");
+  });
+
+  it("says which flaws a locked or for-parts price doesn't cut on top", async () => {
+    const description = "iCloud locked to the previous owner. Cracked screen and Face ID not working.";
+    const locked = { ...PRICED, price: 135, middle: 220, low: 210, high: 230, sales: 30, kinds: ["lock", "damage", "fault"],
+      cuts: ["lock"], flaws: ["iCloud locked to the previous owner.", "Cracked screen and Face ID not working."] };
+    // S1: 3 for-parts sales, too few, so the lock's rough guess: the crack and Face ID aren't cut on top
+    let got = await check("iPhone 13 128GB", description, locked);
+    expect(got.flaws).toContain("Read by flip-reader-5 (on this Mac) · counted as lock, damage, fault · priced as locked: "
+      + "damage and fault aren't cut on top");
+    cleanup();
+    // S2: 8 for-parts sales, so what they sold for
+    got = await check("iPhone 13 128GB", description, { ...locked, price: 95, cuts: [], parts_price: true });
+    expect(got.flaws).toContain("Read by flip-reader-5 (on this Mac) · counted as lock, damage, fault · priced at what "
+      + "for-parts ones sell for, with nothing cut on top");
+    cleanup();
+    // for parts, with too few for-parts sales
+    got = await check("iPhone 13 128GB", "Needs repair. Screen is cracked and Face ID doesn't work.", { ...locked,
+      price: 160, kinds: ["parts", "damage", "fault"], cuts: ["parts"],
+      flaws: ["Needs repair.", "Screen is cracked and Face ID doesn't work."] });
+    expect(got.flaws).toContain(" · counted as parts, damage, fault · priced as for parts: damage and fault aren't cut on top");
+    cleanup();
+    // S3: locked and for parts, nothing else to leave out
+    got = await check("iPhone 13 128GB", "Sold for parts. iCloud locked.", { ...locked, kinds: ["parts", "lock"],
+      flaws: ["Sold for parts.", "iCloud locked."] });
+    expect(got.flaws).toMatch(/ · counted as parts, lock$/);
+  });
+
+  it("warns of few sales when the listing gives no size, however few", () => {
+    const sizeless = { ...PRICED, asked_storage_gb: null, kinds: [], cuts: [], flaws: [] };
+    const which = "Couldn't find the storage in the listing: priced as a 128GB one, the size that sells most";
+    // S4, "iPhone 13 Blue": 3 sales of the size that sells most, too few to be exact
+    expect(cautions({ ...sizeless, exact: false, sales: 3, rough: true })).toEqual([which, "Rough: only 3 sales to go on"]);
+    // S4b: 12 of them
+    expect(cautions({ ...sizeless, exact: true, sales: 12, rough: true })).toEqual([which, "Rough: only 12 sales to go on"]);
+    expect(cautions({ ...sizeless, exact: false, sales: 1 })).toEqual([which, "Rough: only 1 sale to go on"]);
+    expect(cautions({ ...sizeless, sales: 20 })).toEqual([which]);
+    // "MacBook Air M1 Space Grey", 4 sales
+    expect(cautions({ ...sizeless, kind: "macbook", model: "macbook air 13 m1", storage_gb: 256, ram_gb: 8,
+      asked_ram_gb: null, exact: false, sales: 4 })).toEqual(["Couldn't find the storage or RAM in the listing: priced as "
+      + "an 8GB RAM 256GB one, the size that sells most", "Rough: only 4 sales to go on"]);
+  });
+
+  it("names flip-kinds-1 when it sorted the flaws, and nothing more when code's rules did", () => {
+    expect(sortedBy("flip-kinds-1")).toBe(" (sorted by flip-kinds-1)");
+    expect(sortedBy("flip-kinds-1 and code")).toBe(" (sorted by flip-kinds-1 and code)");
+    expect(sortedBy("code")).toBe("");
+    expect(sortedBy(null)).toBe("");
+    expect(sortedBy(undefined)).toBe("");
+  });
+
+  it("says how flaws cut the price as the prices API does it, with no amounts that could go stale", () => {
+    render(<PriceScreen />);
+    const step = within(screen.getByLabelText("How it works")).getAllByRole("listitem")[3].textContent;
+    expect(step).toBe("flip-reader-5, our AI on this Mac, reads the title and description for flaws (if its reading "
+      + "fails our checks, Claude Haiku 5.5 reads it instead, a paid call). flip-kinds-1, our flaw-sorting AI on this Mac, "
+      + "sorts each flaw into a kind (code's rules do when it isn't installed), and the price is cut by amounts measured on phone listings: any flaw takes a small cut, damage and faults cut the most, "
+      + "and different kinds' cuts multiply. A locked or for-parts one is priced at what for-parts ones of the same model "
+      + "and size sell for, or at a rough guess when too few have sold, with its other flaws not cut on top.");
+    expect(step).not.toMatch(/\d\s?%|per ?cent/);  // the prices API's cut table is its own and can change
+  });
+
+  it("says a search by words left out a size only the description gives", async () => {
+    const words = { ...PRICED, mode: "keyword", model: null, item: "Samsung Galaxy A52 phone (not A52s or A53)",
+      kind: "samsung", price: 130, middle: 130, low: 100, high: 140, sales: 20, storage_gb: null, ram_gb: null,
+      asked_storage_gb: 128, kinds: [], cuts: [], flaws: [] };
+    // S11: the A52 isn't a model the API knows, and "128GB" is only in the description
+    const got = await check("Samsung Galaxy A52 Black", "128GB, works perfectly.", words);
+    expect(got.warned).toEqual(
+      ["Rough: priced from a search by words, not a model it knows, and for any size: the listing's 128GB wasn't used"]);
+    // a size the title names is in the search words
+    const searched = ["Rough: priced from a search by words, not a model it knows"];
+    expect(cautions(words, "Samsung Galaxy A52 128GB Black")).toEqual(searched);
+    expect(cautions(words, "Samsung galaxy a52 128 black")).toEqual(searched);
+    expect(cautions({ ...words, asked_storage_gb: 1024 }, "Galaxy S10 Plus 1TB")).toEqual(searched);
+    // a MacBook's RAM and SSD from "16GB RAM, 512GB SSD." in the description: "MacBook Pro 16" is a screen, not RAM
+    const mac = { ...words, kind: "macbook", item: "MacBook Pro 2017", asked_storage_gb: 512, asked_ram_gb: 16 };
+    const both = "Rough: priced from a search by words, not a model it knows, and for any size: the listing's 16GB RAM "
+      + "512GB wasn't used";
+    expect(cautions(mac, "MacBook Pro 2017 13 inch Space Grey")).toEqual([both]);
+    expect(cautions(mac, "MacBook Pro 16 2019 Space Grey")).toEqual([both]);
+    expect(cautions(mac, "MacBook Pro 2017 16GB")).toEqual(["Rough: priced from a search by words, not a model it knows, "
+      + "and for any storage: the listing's 512GB wasn't used"]);
+    expect(cautions(mac, "MacBook Pro 2017 16/512")).toEqual(searched);
+  });
+
+  it("says a for-parts price isn't from the clean sales it counts", async () => {
+    // S2: 30 clean sales, and 8 for-parts ones the price is from (the API doesn't say how many)
+    let got = await check("iPhone 13 128GB", "iCloud locked to the previous owner. Cracked screen and Face ID not working.",
+      { ...PRICED, price: 95, middle: 220, low: 210, high: 230, sales: 30, kinds: ["lock", "damage", "fault"], cuts: [],
+        parts_price: true, flaws: ["iCloud locked to the previous owner.", "Cracked screen and Face ID not working."] });
+    expect(got.hero).toContain("iPhone 13 128GB · for-parts price · clean price from 30 UK sales");
+    expect(got.warned).toEqual(["Priced at what for-parts ones sell for"]);
+    cleanup();
+    // S9: "Faulty iPhone 12 64GB for parts"
+    got = await check("Faulty iPhone 12 64GB for parts", "Collection only from Leeds.", { ...PRICED, price: 70, middle: 180,
+      low: 170, high: 190, sales: 30, model: "iphone 12", storage_gb: 64, asked_storage_gb: 64, kinds: ["fault", "parts"],
+      cuts: [], parts_price: true, flaws: [] });
+    expect(got.hero).toContain("iPhone 12 64GB · for-parts price · clean price from 30 UK sales");
+    // so few clean sales say nothing about it
+    const parts = { ...PRICED, kinds: ["lock"], cuts: [], parts_price: true };
+    expect(cautions({ ...parts, sales: 12 })).toEqual(["Priced at what for-parts ones sell for"]);
+    expect(cautions({ ...parts, exact: false, sales: 3 })).toEqual(["Priced at what for-parts ones sell for"]);
+  });
+
+  it("doesn't call a MacBook's own for-parts price a cut measured on phones", () => {
+    // S8: "MacBook Air M1 8GB 256GB", "Activation locked, I don't have the password.", 8 for-parts sales
+    const mac = { ...PRICED, kind: "macbook", model: "macbook air 13 m1", price: 175, middle: 430, low: 410, high: 450,
+      sales: 25, storage_gb: 256, ram_gb: 8, asked_storage_gb: 256, asked_ram_gb: 8, kinds: ["lock"], cuts: [],
+      parts_price: true, flaws: ["Activation locked, I don't have the password."] };
+    expect(cautions(mac)).toEqual(["Priced at what for-parts ones sell for"]);
+    // 3 for-parts sales, too few: the lock's rough guess, measured on phones
+    expect(cautions({ ...mac, price: 265, cuts: ["lock"], parts_price: false })).toEqual(
+      ["Rough: lock is hard to price", "Rough for a MacBook: the flaw cuts were measured on phones"]);
+    // "Small crack on the corner of the lid."
+    expect(cautions({ ...mac, price: 370, kinds: ["damage"], cuts: ["damage"], parts_price: false })).toEqual(
+      ["Rough for a MacBook: the flaw cuts were measured on phones"]);
+  });
+});
+
 describe("List on eBay", () => {
   const LISTED: ListingDraft = {
     draft_id: 3, status: "needs you", ebay_title: "Apple iPhone 13 128GB Midnight Unlocked", condition_id: "3000",
@@ -269,7 +634,7 @@ describe("List on eBay", () => {
     render(<ListingScreen />);
     await user.type(screen.getByLabelText("The seller's title"), "iphone 13 128gb");
     await user.click(screen.getByRole("button", { name: "Draft listing" }));
-    expect(await screen.findByText("Midnight (from the photos, by Claude Haiku)")).toBeTruthy();
+    expect(await screen.findByText("Midnight (from the photos, by Claude Haiku 5.5)")).toBeTruthy();
     // a phone's eBay Colour field says who picked it too
     cleanup();
     serve({ "POST /api/listings/draft": [200, { ...LISTED, colour: "Midnight", colour_from: "photos",
@@ -279,7 +644,7 @@ describe("List on eBay", () => {
     render(<ListingScreen />);
     await user.type(screen.getByLabelText("The seller's title"), "iphone 13 128gb");
     await user.click(screen.getByRole("button", { name: "Draft listing" }));
-    expect(await screen.findByText("from the photos: Midnight, by Claude Haiku")).toBeTruthy();
+    expect(await screen.findByText("from the photos: Midnight, by Claude Haiku 5.5")).toBeTruthy();
     cleanup();
     serve({ "POST /api/listings/draft": [200, { ...LISTED, colour: "Midnight", colour_from: "photos",
       colour_by: "claude-haiku-5-5", attempts: [LISTED.attempts[0],
@@ -288,10 +653,10 @@ describe("List on eBay", () => {
     render(<ListingScreen />);
     await user.type(screen.getByLabelText("The seller's title"), "iphone 13 128gb");
     await user.click(screen.getByRole("button", { name: "Draft listing" }));
-    await screen.findByText("Midnight (from the photos, by Claude Haiku)");
-    expect(screen.getByText(/^Gemma, on this Mac ·/)).toBeTruthy(); // Gemma wrote it; Haiku only looked at the colour
+    await screen.findByText("Midnight (from the photos, by Claude Haiku 5.5)");
+    expect(screen.getByText(/^Gemma 3 4B \(on this Mac\) ·/)).toBeTruthy(); // Gemma wrote it; Haiku only looked at the colour
     await user.click(screen.getByRole("button", { name: "Why" }));
-    expect(screen.getByText("Claude Haiku, colour only: passed")).toBeTruthy();
+    expect(screen.getByText("Claude Haiku 5.5, colour only: passed")).toBeTruthy();
   });
 
   it("leaves out a photo too big to send, or a file that isn't a photo, and says so", async () => {
@@ -414,7 +779,7 @@ describe("the app", () => {
       [{ title: "iPhone 12 64GB", price: "£150", text: "Hi mate, would you take £125 cash? Cheers" }]);
     await user.click(screen.getByRole("button", { name: "Start" }));
     expect(screen.getByRole("navigation")).toBeTruthy();
-    expect(window.location.hash).toBe("#message");
+    expect(window.location.hash).toBe("#home"); // it opens on Home (4 Oct)
     expect(localStorage.getItem(SETUP_DONE)).toBe("1");
   });
 
@@ -452,18 +817,19 @@ describe("the app", () => {
     expect(book.getByRole("button", { name: "Remove “Cheers” from your style" })).toBeTruthy();
   });
 
-  it("goes through the 8 listings one at a time, sending only the ones you answered", async () => {
+  it("goes through the 6 listings one at a time, sending only the ones you answered", async () => {
     const fetch = serve({ ...usual, "GET /api/style": [[200, NO_STYLE], [200, STYLE]],
       "POST /api/style/messages": [201, []] });
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole("button", { name: "Reply to 8 listings" }));
-    expect(screen.getByText("1 of 8")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Reply to 6 listings" }));
+    expect(screen.getByText("1 of 6")).toBeTruthy();
     expect(screen.getByText("Offer lower · £185")).toBeTruthy();
     await user.type(screen.getByLabelText("Your message to this seller"), "Hi mate, £185 given the crack?");
     await user.click(screen.getByRole("button", { name: "Next" }));
-    for (let n = 2; n < 8; n++) await user.click(screen.getByRole("button", { name: "Skip" }));
-    expect(screen.getByText("Offer lower · £125")).toBeTruthy();
+    for (let n = 2; n < 6; n++) await user.click(screen.getByRole("button", { name: "Skip" }));
+    expect(screen.getByText("6 of 6")).toBeTruthy();
+    expect(screen.queryByText(/Vinted|Apple Watch/)).toBeNull(); // 3 Oct: those two cards are gone
     await user.click(screen.getByRole("button", { name: "See my style" }));
     expect(await screen.findByText("Learned from 1 message")).toBeTruthy();
     expect(sent(fetch, "POST /api/style/messages")).toEqual([{ title: "iPhone 13 128GB, cracked back", price: "220",
@@ -482,8 +848,13 @@ describe("the app", () => {
     serve(usual);
     const user = userEvent.setup();
     render(<App />);
-    await user.type(screen.getByLabelText("Listing title"), "iPhone 13");
-    expect(await screen.findByText("Gemma running")).toBeTruthy();
+    expect(screen.getByText("FlipAssist · Home")).toBeTruthy(); // it opens on Home (4 Oct)
+    expect(within(screen.getByRole("navigation")).getAllByRole("link").map((l) => l.textContent)).toEqual(
+      ["Home", "AI message", "Your style", "AI UK price estimate", "List on eBay"]);
+    await user.click(within(screen.getByRole("navigation")).getByText("AI message"));
+    // the shown screen's box: UK price has a Listing title too, kept (hidden) while you're elsewhere
+    await user.type(screen.getByRole("textbox", { name: "Listing title" }), "iPhone 13");
+    expect(await screen.findByText("Ollama running")).toBeTruthy();
     expect(await screen.findByText("Learning from 14 of your messages")).toBeTruthy();
     await user.click(within(screen.getByRole("navigation")).getByText("Home"));
     expect(await screen.findByText("Done on this Mac")).toBeTruthy();

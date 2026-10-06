@@ -79,7 +79,7 @@ def test_what_you_remove_comes_off_the_card_and_the_ai_is_told_never_to_write_it
     card = found.card()
     assert "cash" not in card["mentions"] and "cash" not in card["promises"] and "greeting" not in card
     assert card["removed"] == {"greetings": ["Hi mate"], "habits": ["cash"], "phrases": [], "asks": [], "emoji": False,
-                               "flaw": False}
+                               "flaw": False, "likes": False}
     assert [r["used"] for r in found.learned()] == [False, True, False, True, True, True]
     assert describe(card)[-2:] == ['Never opens with "Hi mate"', "Never mentions paying cash"]
     # put back, it's on the card again; what isn't removed, or was never learned, can't be
@@ -150,7 +150,7 @@ class Examples:
     def __init__(self, messages):
         self.messages = messages
 
-    def similar(self, query, leave_out=None, n=3):
+    def similar(self, query, leave_out=None, n=3, deal=None):
         return [{**m, "id": f"m{i}", "listing_title": "Bose"} for i, m in enumerate(self.messages)]
 
 

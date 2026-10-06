@@ -1904,3 +1904,12 @@ textarea.input {
   align-items: center;
   justify-content: center;
 }
+
+/* the listing's UK price under the draft (4 Oct) */
+/* ── UK price ───────────────────────────────────────────────────────────── */
+.hero-stats.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.price-flaws { margin: 4px 0 6px; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.price-flaws li { list-style: disc; font-size: 14px; }
+.how-it-works { margin: 4px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+.how-it-works li { list-style: decimal; font-size: 13.5px; line-height: 1.45; color: var(--tx2); }
+.how-it-works strong { font-weight: 650; }

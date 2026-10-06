@@ -327,8 +327,12 @@ def test_the_api_costs_fractions_of_a_penny_and_the_local_model_nothing(monkeypa
     assert cost_pence("gemma3:4b", 1500, 300) == 0
     # 1,500 in at $0.10 per million + 300 out at $0.50 per million = $0.0003 = 0.024p
     assert cost_pence("claude-haiku-5-5", 1500, 300) == Decimal("0.024")
+    # Sonnet 5.5, the reason's fixer (flip.wording, 3 Oct): 1,500 in at $2 + 300 out at $10 = $0.006 = 0.48p
+    assert cost_pence("claude-sonnet-5-5", 1500, 300) == Decimal("0.48")
+    # ...from the cache, the 1,500 in cost a tenth: $0.0003 + $0.003 = 0.264p
+    assert cost_pence("claude-sonnet-5-5", 0, 300, tokens_cached=1500) == Decimal("0.264")
     # a paid model with no price here yet is never free: priced as the dearest one known (the explainer's, 14 Sep)
-    assert cost_pence("claude-sonnet-9", 1500, 300) == cost_pence("claude-haiku-5-5", 1500, 300) > 0
+    assert cost_pence("claude-sonnet-9", 1500, 300) == cost_pence("claude-sonnet-5-5", 1500, 300) > 0
 
 
 def test_every_attempt_and_outcome_goes_in_the_audit_log(tmp_path):

@@ -376,7 +376,7 @@ def test_no_other_marks_and_other_phones_add_no_flaw(description, flaws):
     assert reading_from(EMPTY, f"iPhone 13 128GB\n{description}", "gemma")["flaws"] == flaws
 
 
-# ── the user's labels (23 Sep): a battery at 85% or under, and words the list was missing (made-up listings) ──
+# ── the labels of 23 Sep: a battery at 85% or under, and words the list was missing (made-up listings) ──
 
 @pytest.mark.parametrize("line, flaw", [
     ("Battery health 82%", "Battery health 82%"),
@@ -445,7 +445,7 @@ def test_esim_only_is_a_flaw_except_on_a_phone_that_only_comes_that_way():
 
 
 
-# ── the user's labels, round 2 (23 Sep): a replaced battery is always a flaw, more missed words, and what only
+# ── the labels of 23 Sep, round 2: a replaced battery is always a flaw, more missed words, and what only
 # comes with it or only points back at a flaw is none (made-up listings, the explainer's look-alikes) ───────────
 
 @pytest.mark.parametrize("line", [
@@ -714,13 +714,15 @@ def test_a_fine_tuned_reading_still_gets_the_safety_checks():
     story = {"id": "l3", "title": "iPhone 12", "description": "I dropped it and cracked the back. Works fine."}
     told = {"flaws": ["I dropped it and cracked the back", "I dropped it and cracked the back"], "pickup": "",
             "no_offers": ""}
-    assert read_listing_with_ai(story, FakeModel("flip-reader-5", told))["flaws"] == ["cracked the back"]
+    reading = read_listing_with_ai(story, FakeModel("flip-reader-5", told))
+    assert reading["flaws"] == ["cracked the back"]  # code's own wording gets the flaw without the story...
+    assert reading["quotes"] == ["I dropped it and cracked the back"]  # ...flip-wording the sentence it was trained on
 
 
 def test_reading_checked_checks_the_pickup_and_no_offers():
     answer = {"flaws": [], "pickup": "Text me before you come", "no_offers": "Collection only from Leeds LS6"}
     assert reading_checked(answer, TEXT, "flip-reader-5") == \
-        {"flaws": [], "pickup": "", "no_offers": "Price is firm", "read_by": "flip-reader-5"}  # code reads it instead
+        {"flaws": [], "quotes": [], "pickup": "", "no_offers": "Price is firm", "read_by": "flip-reader-5"}  # code reads it
 
 
 @pytest.mark.parametrize("model, ours", [("flip-reader-5", True), ("flip-reader-5:latest", True), ("flip-reader-4", True),

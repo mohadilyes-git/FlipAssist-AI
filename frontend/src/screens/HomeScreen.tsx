@@ -3,7 +3,7 @@
 import { type MouseEvent, useCallback, useEffect, useState } from "react";
 import { api, type Stats } from "../api";
 import type { Running, Tab } from "../App";
-import { cost, writerName } from "../format";
+import { cost, jobName, modelName } from "../format";
 import { GaugeIcon, Head, PenIcon, TagIcon } from "../ui";
 
 type Props = { go: (tab: Tab) => void; count: number; running: Running; reload: () => Promise<void> };
@@ -72,9 +72,9 @@ export function HomeScreen({ go, count, running, reload }: Props) {
         <section className="card">
           <p className="caps">Who did the work</p>
           {stats?.models.length ? stats.models.map((m) => (
-            <div className="model" key={m.model}>
+            <div className="model" key={`${m.model} ${m.job}`}>
               <p className="model-head">
-                <span>{writerName(m.model)}</span>
+                <span>{modelName(m.model)} · {jobName(m.model, m.job)}</span>
                 <span className={m.cost_pence ? undefined : "free"}>{cost(m.cost_pence)}</span>
               </p>
               <span className="bar"><span style={{ width: percent(m.passed, m.attempts) }} /></span>
@@ -98,10 +98,11 @@ function runningRows(running: Running): { name: string; state: string; ok: boole
     return [{ name: "FlipAssist's API", state: "Not running: start it with .venv/bin/uvicorn flip.api:app", ok: false }];
   }
   return [
-    { name: writerName(running.local_model), ok: running.local_running,
-      state: running.local_running ? "Running" : "Not running: start it with ollama serve" },
-    { name: writerName(running.api_model), ok: running.api_key_set,
-      state: running.api_key_set ? "Ready if Gemma's answer fails a check" : "No key: local only" },
+    { name: "Ollama: flip-reader-5, flip-wording-3, Gemma 3 4B", ok: running.local_running,
+      state: running.local_running ? "Running on this Mac" : "Not running: start it with ollama serve" },
+    { name: "Claude Haiku 5.5 and Claude Sonnet 5.5 (paid)", ok: running.api_key_set,
+      state: running.api_key_set ? "Ready: checks each reason, and writes when this Mac's models can't"
+        : "No key: everything stays on this Mac" },
     { name: "API key", ok: running.flip_api_key_set, state: running.flip_api_key_set ? "Set" : "Missing: every draft is refused" },
   ];
 }

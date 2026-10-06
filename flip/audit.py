@@ -98,6 +98,19 @@ class AuditLog:
             self.db.commit()
         return {"draft_id": draft_id, "edited": edited, "at": at}
 
+    def redrafted(self, draft_id, message):
+        """A message draft's text after the reason's check changed it (flip.wording): approving the new text then
+        counts as sent unedited. False if there's no such message draft."""
+        with self.lock:
+            row = self.db.execute("select answer from drafts where id = ? and job = 'message'", (draft_id,)).fetchone()
+            if row is None:
+                return False
+            answer = json.loads(row[0]) or {}
+            answer["message"] = message
+            self.db.execute("update drafts set answer = ? where id = ?", (json.dumps(answer, ensure_ascii=False), draft_id))
+            self.db.commit()
+        return True
+
     def listing(self, draft_id):
         """The listing a message was drafted for (its title, asking_price and
         marketplace), or None: a listing's draft, or a draft from before."""
@@ -108,9 +121,10 @@ class AuditLog:
     def stats(self):
         """The cost meter: how drafts ended, which model did the work, what it
         cost, and how often you changed a draft before sending it. "Done on
-        this Mac" is the share of passing answers that came from the template
-        or the local model, not the paid API. A look at the colour alone is
-        counted in its model's attempts and cost, but it didn't write the draft."""
+        this Mac" is the share of passing readings and messages that came from
+        code or a model on this Mac, not the paid API; the reason's check and
+        fix, and a look at the colour alone, are counted in their model's
+        attempts and cost (each model once for each job it did), not there."""
         with self.lock:
             ended = dict(self.db.execute("select status, count(*) from drafts group by status").fetchall())
             rows = self.db.execute("select model, problems, cost_pence, coalesce(job, 'draft') from attempts").fetchall()
@@ -118,19 +132,25 @@ class AuditLog:
             approved, edited = self.db.execute(
                 "select count(*), coalesce(sum(edited), 0) from approvals"
                 " where id in (select max(id) from approvals group by draft_id)").fetchone()
+        # each model by the job it did (4 Oct: Claude Haiku checking a reason isn't Claude Haiku writing a message,
+        # and "done on this Mac" counts reading and writing, not the reason's paid check)
         models, wrote = {}, {}
         for model, problems, cost, job in rows:
-            use = models.setdefault(model, {"model": model, "attempts": 0, "passed": 0, "cost_pence": Decimal(0)})
+            use = models.setdefault((model, job), {"model": model, "job": job, "attempts": 0, "passed": 0,
+                                                   "cost_pence": Decimal(0)})
             use["attempts"] += 1
             use["passed"] += problems == "[]"
             use["cost_pence"] += pence(cost)
-            wrote[model] = wrote.get(model, 0) + (problems == "[]" and job != "colour")
+            if job in ("read", "draft"):
+                wrote[model] = wrote.get(model, 0) + (problems == "[]")
         passed = sum(wrote.values())
         local = sum(n for model, n in wrote.items() if not model.startswith("claude"))
         drafts, cost = sum(ended.values()), sum(m["cost_pence"] for m in models.values())
+        # a UK price check's reading (job "price") isn't a draft's: left out of the cost per 100 drafts (4 Oct)
+        drafted = sum(m["cost_pence"] for m in models.values() if m["job"] != "price")
         return {"drafts": drafts, "ready": ended.get("ready", 0), "needs_you": ended.get("needs you", 0),
                 "done_on_this_mac": round(local / passed, 3) if passed else 0.0,
                 "models": [{**m, "cost_pence": float(round(m["cost_pence"], 4))} for m in models.values()],
                 "cost_pence": float(round(cost, 4)),
-                "cost_per_100_drafts_pence": float(round(100 * cost / drafts, 4)) if drafts else 0.0,
+                "cost_per_100_drafts_pence": float(round(100 * drafted / drafts, 4)) if drafts else 0.0,
                 "approved": approved, "edited_before_sending": edited}
