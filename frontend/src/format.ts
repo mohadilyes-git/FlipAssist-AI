@@ -5,6 +5,8 @@ const WRITERS: Record<string, string> = {
   "gemma3:4b": "Gemma 3 4B (on this Mac)",
   "flip-reader-5": "flip-reader-5 (on this Mac)",
   "flip-wording-3": "flip-wording-3 (on this Mac)",
+  "flip-wording-4b": "flip-wording-4b (on this Mac)",  // the wording model since 6 Oct
+  "flip-style-1b": "flip-style-1b (on this Mac)",  // the style reader since 6 Oct
   "flip-kinds-1": "flip-kinds-1 (on this Mac)",
   "claude-haiku-5-5": "Claude Haiku 5.5 (paid)",
   "claude-sonnet-5-5": "Claude Sonnet 5.5 (paid)",

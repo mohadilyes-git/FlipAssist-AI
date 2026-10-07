@@ -1,19 +1,21 @@
 """The reason in an offer, worded (steps 3-5 of drafting a message, 3 Oct 2026).
 
 flip-reader-5 has picked out the seller's sentences that state a flaw. Here:
-3. flip-wording, FlipAssist's flaw-wording model (Gemma 3 4B with a LoRA trained on 12,428 labelled reasons, round 3,
-   merged for Ollama as "flip-wording-3"), turns those sentences into one clause a buyer puts after "I'm offering that
-   because": "there's a hairline crack on the top left of the screen and the battery health is 79%". Free, on this Mac.
+3. flip-wording, FlipAssist's flaw-wording model (Gemma 3 4B with a LoRA trained on 14,513 labelled reasons, round 4b,
+   merged for Ollama as "flip-wording-4b"; "flip-wording-3" before 6 Oct), turns those sentences into one clause a buyer
+   puts after "I'm offering that because": "there's a hairline crack on the top left of the screen and the battery health
+   is 79%". Free, on this Mac.
 4. Claude Haiku reads every clause against FlipAssist's rules (data/wording_rules.md) and only says "ok" or "fix".
 5. Only a clause Haiku flags goes to Claude Sonnet, which keeps it or writes the corrected one.
 
-Measured on 740 held-out listings, judged blind (3 Oct): flip-wording alone 91.6% sendable; with Haiku's flag and
-Sonnet's fix about 95%, with Sonnet called on about 10% of messages. Each step can fail without stopping the draft: no
+Measured on 740 held-out listings, judged blind (3 Oct, round 3): flip-wording alone 91.6% sendable; with Haiku's flag
+and Sonnet's fix about 95%, with Sonnet called on about 10% of messages. Round 4b, judged side by side with round 3 under
+the four rules added on 6 Oct (MODELS.md): 90.3% sendable against 88.0% (p = 0.024), a made-up fact 3.4% against 5.0%. Each step can fail without stopping the draft: no
 Ollama or no flip-wording -> None (code words the reason, as before); Haiku or Sonnet fails or times out ->
 flip-wording's clause as it is. In "local" mode nothing leaves the Mac: flip-wording only.
 
 Settings, read from the environment each time (.env):
-  FLIP_WORDING_MODEL  default flip-wording-3; empty = off (code words every reason)
+  FLIP_WORDING_MODEL  default flip-wording-4b (MODEL); empty = off (code words every reason)
   FLIP_WORDING_CHECK  default claude-haiku-5-5; empty = no check
   FLIP_WORDING_FIX    default claude-sonnet-5-5; empty = a flagged clause is kept as it is
 """
@@ -35,6 +37,8 @@ RULES = (DATA / "wording_rules.md").read_text()
 CHECKER = ("You check the reason a UK buyer's offer message gives for offering less on a second-hand item: the clause "
            "after \"I'm offering that because\", written by a small model from the seller's flaw words. These are the "
            "rules a reason must follow (written for the people who label reasons; they're yours too):\n\n" + RULES)
+# FlipAssist's wording model in Ollama (6 Oct: round 4b; flip-wording-3 before), unless FLIP_WORDING_MODEL names another
+MODEL = "flip-wording-4b"
 # the answer's shape, exactly as in the 3 Oct test (Ollama holds flip-wording to it while it writes)
 WORDING = {"type": "object", "properties": {"reason": {"type": "string"}}, "required": ["reason"]}
 FLAG = {"type": "object", "properties": {"verdict": {"type": "string", "enum": ["ok", "fix"]}}, "required": ["verdict"],
@@ -48,7 +52,7 @@ LEAD_IN = re.compile(r"^i'?m offering (?:that|this|you that) because\s+", re.IGN
 def settings():
     """The three model names, read from the environment each time (an empty one switches that step off)."""
     key = bool(os.environ.get("ANTHROPIC_API_KEY", "").strip())  # no key: flip-wording's clause, unchecked
-    return {"wording": os.environ.get("FLIP_WORDING_MODEL", "flip-wording-3").strip(),
+    return {"wording": os.environ.get("FLIP_WORDING_MODEL", MODEL).strip(),
             "check": os.environ.get("FLIP_WORDING_CHECK", "claude-haiku-5-5").strip() if key else "",
             "fix": os.environ.get("FLIP_WORDING_FIX", "claude-sonnet-5-5").strip() if key else ""}
 
@@ -171,7 +175,8 @@ def worded_reason(title, flaws, mode="auto", models=None, result=None, log=None,
         return None
     names, models = settings(), models or {}
     # a small working memory: its prompts are under 600 tokens, and 2,048 lets Ollama keep it loaded next to the
-    # reader on a 16 GB Mac (3 Oct: both stayed loaded, 1.2 s instead of 3-4 s each time it was swapped back in)
+    # reader when memory allows (3 Oct: both stayed loaded, 1.2 s instead of 3-4 s each time it was swapped back in;
+    # 6 Oct review: since 4 Oct, with other apps open on this 16 GB Mac, Ollama mostly keeps one and swaps, ~2.5 s)
     wording = models["wording"] if "wording" in models else \
         LocalModel(names["wording"], timeout=60, max_tokens=160, num_ctx=2048) if names["wording"] else None
     if wording is None:

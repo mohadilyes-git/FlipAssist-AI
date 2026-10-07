@@ -181,7 +181,10 @@ def test_tidy():
 def test_settings_read_the_environment_and_need_an_api_key_to_check(monkeypatch):
     monkeypatch.delenv("FLIP_WORDING_MODEL", raising=False)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
-    assert settings() == {"wording": "flip-wording-3", "check": "claude-haiku-5-5", "fix": "claude-sonnet-5-5"}
+    # round 4b since 6 Oct; FLIP_WORDING_MODEL=flip-wording-3 goes back
+    assert settings() == {"wording": "flip-wording-4b", "check": "claude-haiku-5-5", "fix": "claude-sonnet-5-5"}
+    monkeypatch.setenv("FLIP_WORDING_MODEL", "flip-wording-3")
+    assert settings()["wording"] == "flip-wording-3"
     monkeypatch.setenv("FLIP_WORDING_MODEL", "")
     assert settings()["wording"] == ""  # off: code words every reason
     monkeypatch.delenv("ANTHROPIC_API_KEY")

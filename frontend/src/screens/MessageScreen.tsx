@@ -109,7 +109,7 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
         // Haiku checks the reason against the sentences flip-wording worded it from; code's checks use the flaws
         listing, flaws: found.reading.flaws, quotes: found.reading.quotes ?? [],
         clause: found.reason!.clause, message: found.message!,
-        kind: found.kind, offer_pence: found.offer_pence,
+        kind: found.kind, offer_pence: found.offer_pence, by: found.reason!.by, // credited to the model that worded it
       });
       update((d) => ({ ...d, message: done.message, reason: done.reason, attempts: [...d.attempts, ...done.attempts],
         cost_pence: d.cost_pence + done.cost_pence,

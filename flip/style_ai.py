@@ -1,18 +1,21 @@
 """Your style, read by our AI as well as by code (3 Oct 2026). Code (flip.style) learns what you write the same way
-twice; people write differently (long sentences, typos, shortcuts, "100£", "sam x"), so our Gemma, on this Mac, also
+twice; people write differently (long sentences, typos, shortcuts, "100£", "sam x"), so our AI, on this Mac, also
 reads your messages and suggests your habits as fill-in-the-blank phrases ("I can pay {price}", "I like the {item}").
+Since 6 Oct our AI is flip-style-1b (MODEL): Gemma 3 4B fine-tuned on 2,833 made-up buyers to name the habits they
+repeat. On the hard style test (evals/style, 40 made-up buyers it never saw) it found 182 of 189 habits, with 6 wrong
+and 3 invented, where plain Gemma 3 4B found 146, with 37 wrong and 230 invented (FLIP_STYLE_AI=gemma3:4b goes back).
 
 Every suggestion is checked by code against your messages before it's used: it's kept only when its words are in at
 least HABIT of them (and SHARE), with the blanks filled by each message's own price and item. So the AI can find a
 habit code missed, but never invent one. A kept one only fills a gap: what code learned stays as it is.
 
 What it fills is your sign-off only ("sam x", "thanks so much 😊", "thx mia xx"): on 10 made-up writers that was the
-one thing it found that code didn't (code alone 39 of 46 habits, with our AI 41), and the 3 Oct review showed that
+one thing plain Gemma found that code didn't (code alone 39 of 46 habits, with it 41), and the 3 Oct review showed that
 its offers, closings, greetings and "like" phrases could pass the check and still go wrong in a draft ("Collect
 tonight." from "I can't collect tonight"), for no gain. The rest of its answer is kept, to measure again later.
 
 1. propose(messages, model): the AI's suggestions, run when your messages change (StyleBook.learn_with_ai), never
-   while drafting: about 9 s on this Mac, free, and your messages never leave it.
+   while drafting: free, and your messages never leave this Mac.
 2. checked(proposals, messages): the suggested sign-off, when it's how enough of your messages end.
 3. merged(card, found): your style card with it when code found none, marked as found by our AI.
 """
@@ -26,7 +29,7 @@ from flip.catalogue import words
 from flip.style import (CALLED, CLOSING_SLOTS, CORE_THANKS, HABIT, HABIT_WORDS, KINDS, NOT_A_NAME, SHARE, SMILEY, TAIL_TOKEN,
                         THANKS, WHEN_WORDS, WHOLE_EMOJI, kind_of, said_tail, tail_start, unsigned)
 
-MODEL = "gemma3:4b"
+MODEL = "flip-style-1b"  # FlipAssist's style reader in Ollama (plain gemma3:4b before 6 Oct)
 # words a sign-off has beside thanks and a name: "thanks so much", "thanks a lot", "thank you", "ta x"
 SIGN_FILLER = {"so", "very", "a", "lot", "loads", "again", "you", "x", "xx", "xxx"}
 SYSTEM = """You read a buyer's past messages to sellers on second-hand marketplaces (Facebook, eBay, Vinted, Gumtree) \
@@ -75,14 +78,21 @@ def user_text(messages):
 
 
 def propose(messages, model):
-    """Our AI's suggestions for your messages ({} when it can't answer), the newest MOST_MESSAGES of them."""
+    """Our AI's suggestions for your messages, the newest MOST_MESSAGES of them: {} when it finds no habit (or there are
+    too few messages to have one), None when it couldn't answer (no model, Ollama off, a fault, an unreadable reply), so
+    the reading is tried again later. 6 Oct: flip-style-1b answers all-empty for a buyer who repeats nothing, and that
+    answer counts as a reading."""
+    if model is None:
+        return None
     mine = [m for m in messages if m.get("my_message")][-MOST_MESSAGES:]
-    if len(mine) < HABIT or model is None:
+    if len(mine) < HABIT:
         return {}
     try:
         reply = model.ask(SYSTEM, user_text(mine), [], SCHEMA)
     except Exception:  # noqa: BLE001 - a learning that can't run leaves your style as code learned it
-        return {}
+        return None
+    if not isinstance(getattr(reply, "answer", None), dict):
+        return None
     return tidy(reply.answer)
 
 

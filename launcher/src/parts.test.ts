@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fileFor, keyFrom, modelsToWarm, settingFrom, typeOf } from "./parts";
+import { fileFor, keyFrom, modelsToWarm, readyWords, settingFrom, typeOf } from "./parts";
 
 test("the key is read the way the API reads .env", () => {
   assert.equal(keyFrom("ANTHROPIC_API_KEY=a\nFLIP_API_KEY=abc123\n"), "abc123");
@@ -35,15 +35,23 @@ test("a setting is read the way the API reads .env: missing is undefined, empty 
 });
 
 test("FlipAssist opens with the models every draft uses loaded, each with the working memory it's asked with", () => {
-  const all = ["gemma3:4b", "flip-reader-5:latest", "flip-wording-3:latest", "flip-wording-2:latest"];
+  const all = ["gemma3:4b", "flip-reader-5:latest", "flip-wording-4b:latest", "flip-wording-3:latest"];
   // the reader last: when only one fits, Ollama keeps the newest, and every draft reads first
-  assert.deepEqual(modelsToWarm(all, ""), [{ model: "flip-wording-3", numCtx: 2048 }, { model: "flip-reader-5", numCtx: 8192 }]);
+  assert.deepEqual(modelsToWarm(all, ""), [{ model: "flip-wording-4b", numCtx: 2048 }, { model: "flip-reader-5", numCtx: 8192 }]);
   // no reader: Gemma reads, so it's loaded instead; no flip-wording: code words the reason
   assert.deepEqual(modelsToWarm(["gemma3:4b"], ""), [{ model: "gemma3:4b", numCtx: 8192 }]);
   // turned off or renamed in .env, and what's set already wins over .env, as with the API
-  assert.deepEqual(modelsToWarm(all, "FLIP_READER_MODEL=\nFLIP_WORDING_MODEL=flip-wording-2"),
-    [{ model: "flip-wording-2", numCtx: 2048 }, { model: "gemma3:4b", numCtx: 8192 }]);
-  assert.deepEqual(modelsToWarm(all, "FLIP_WORDING_MODEL=flip-wording-2", { FLIP_WORDING_MODEL: "" }),
+  assert.deepEqual(modelsToWarm(all, "FLIP_READER_MODEL=\nFLIP_WORDING_MODEL=flip-wording-3"),
+    [{ model: "flip-wording-3", numCtx: 2048 }, { model: "gemma3:4b", numCtx: 8192 }]);
+  assert.deepEqual(modelsToWarm(all, "FLIP_WORDING_MODEL=flip-wording-3", { FLIP_WORDING_MODEL: "" }),
     [{ model: "flip-reader-5", numCtx: 8192 }]);
   assert.deepEqual(modelsToWarm([], ""), []); // nothing downloaded: drafts use code only
+});
+
+test("the launch screen names what's ready and says a model that isn't installed (6 Oct review)", () => {
+  assert.equal(readyWords(["gemma3:4b", "flip-reader-5:latest", "flip-wording-4b:latest"], ""),
+    "flip-reader-5, flip-wording-4b and Gemma 3 4B are ready");
+  assert.equal(readyWords(["gemma3:4b", "flip-reader-5:latest"], ""),
+    "flip-reader-5 and Gemma 3 4B are ready; flip-wording-4b isn't installed, so code words the reason");
+  assert.equal(readyWords(["gemma3:4b"], "FLIP_WORDING_MODEL="), "Gemma 3 4B is ready; flip-reader-5 isn't installed, so Gemma reads");
 });

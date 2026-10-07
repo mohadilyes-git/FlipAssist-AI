@@ -80,9 +80,9 @@ function open(): BrowserWindow {
   return window;
 }
 
-// each model by its real name (4 Oct): Ollama runs flip-reader-5, flip-wording-3 and Gemma 3 4B on this Mac
+// each model by its real name (4 Oct): Ollama runs flip-reader-5, flip-wording-4b (6 Oct) and Gemma 3 4B on this Mac
 const GEMMA_WORDS: Record<Gemma, string> = {
-  "ready": "flip-reader-5, flip-wording-3 and Gemma 3 4B are ready",
+  "ready": "flip-reader-5, flip-wording-4b and Gemma 3 4B are ready",
   "no ollama": "Ollama isn't installed: drafts use code only",
   "no model": "Gemma 3 4B isn't downloaded: the AI can't write messages or listings",
   "failed": `Ollama didn't start: drafts use code only (${LOGS}/ollama.log)`,
@@ -102,7 +102,8 @@ async function launch() {
     key = "";
   }
   const gemma = services.gemma().then((state) => {
-    void say({ gemma: state === "ready" ? "ok" : "warn", gemmaWords: GEMMA_WORDS[state] });
+    // named from what Ollama really has (6 Oct review), not a fixed list
+    void say({ gemma: state === "ready" ? "ok" : "warn", gemmaWords: state === "ready" ? services.readyWords() : GEMMA_WORDS[state] });
     return state;
   });
   const api = await services.api();

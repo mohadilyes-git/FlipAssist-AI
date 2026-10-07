@@ -71,6 +71,32 @@ def test_health_needs_no_key_and_shows_none(client, monkeypatch):
     assert "pretend-anthropic-key" not in answer.text and KEY not in answer.text
 
 
+def test_health_names_each_model_by_its_job_and_says_which_isnt_installed(client, monkeypatch):
+    """6 Oct review: Home said every model was running whenever Ollama answered."""
+    import io
+    import urllib.request
+
+    class Tags(io.BytesIO):
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    listed = {"models": [{"name": n} for n in ("flip-reader-5:latest", "flip-kinds-1:latest", "gemma3:4b")]}
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: Tags(json.dumps(listed).encode()))
+    for setting in ("FLIP_READER_MODEL", "FLIP_WORDING_MODEL", "FLIP_KINDS_MODEL", "FLIP_STYLE_AI"):
+        monkeypatch.delenv(setting, raising=False)
+    models = {m["job"]: (m["name"], m["installed"]) for m in TestClient(api.app).get("/health").json()["models"]}
+    assert models == {"reads listings": ("flip-reader-5", True), "words the reason": ("flip-wording-4b", False),
+                      "sorts price flaws": ("flip-kinds-1", True), "reads your style": ("flip-style-1b", False),
+                      "writes messages": ("gemma3:4b", True)}
+    monkeypatch.setenv("FLIP_STYLE_AI", "")  # turned off: not asked for, so not listed
+    assert "reads your style" not in {m["job"] for m in TestClient(api.app).get("/health").json()["models"]}
+
+
 @pytest.mark.parametrize("headers, status", [({}, 401), ({"X-API-Key": "wrong"}, 401)])
 def test_everything_else_needs_the_key(client, headers, status):
     for answer in (TestClient(api.app, headers=headers).get("/stats"),

@@ -41,16 +41,17 @@ from flip.ai import ApiModel, LocalModel, whole_text
 from flip.audit import AuditLog
 from flip.catalogue import load_catalogue, load_conditions
 from flip.draft import load_env
-from flip.kinds import sorter as kinds_sorter
+from flip.kinds import model_name as kinds_model, sorter as kinds_sorter
 from flip.prices import estimate, kind_of, settings as prices_settings
 from flip.drafter import draft_listing
 from flip.message_drafter import MESSAGE_TOKENS, Refused, draft_message, offer_to_draft
 from flip.offers import check_battery_reason, check_condition_talk
-from flip.wording import check_reason, completed, settings
+from flip.style_ai import MODEL as STYLE_MODEL
+from flip.wording import MODEL as WORDING_MODEL, check_reason, completed, settings
 from flip.money import to_pence
 from flip.photos import NotAPhoto, photo_base64, photo_kind
 from flip.prompts import offer_words
-from flip.reader import read_listing_with_ai, reader_for
+from flip.reader import read_listing_with_ai, reader_for, reader_name
 from flip.retrieval import MessageIndex
 from flip.style import StyleBook, phrase_rows, traits
 
@@ -80,7 +81,8 @@ class Listing(BaseModel):
 
 class Reason(BaseModel):
     clause: str = Field(description="the reason after \"I'm offering that because\", as the message gives it")
-    by: str = Field(description="who worded it: flip-wording-3, or claude-sonnet-5-5 when Sonnet fixed it")
+    by: str = Field(description="who worded it: FlipAssist's wording model (flip-wording-4b since 6 Oct), or "
+                             "claude-sonnet-5-5 when Sonnet fixed it")
     checked: str = Field(description='"ok" (Haiku passed it), "fixed" (Sonnet), "flagged, kept", "not checked"')
 
 
@@ -128,6 +130,8 @@ class ReasonCheckRequest(BaseModel):
     message: str = Field(min_length=1, max_length=5000, description="the message as drafted")
     kind: Literal["lower", "asking", "more"] = "lower"
     offer_pence: int = Field(ge=100, le=10**9)
+    by: str | None = Field(None, max_length=100, description="reason.by from the draft: the model that worded the "
+                                                             "clause, credited when the check keeps it (6 Oct review)")
 
 
 class Attempt(BaseModel):
@@ -299,6 +303,13 @@ class Stats(BaseModel):
     edited_before_sending: int
 
 
+class ModelState(BaseModel):
+    job: str = Field(description='"reads listings", "words the reason", "sorts price flaws", "reads your style" or '
+                                 '"writes messages"')
+    name: str = Field(description="the model's name in Ollama")
+    installed: bool = Field(description="this Mac's Ollama has it; when it doesn't, code (or Gemma) does that job")
+
+
 class Health(BaseModel):
     local_model: str
     local_running: bool
@@ -306,6 +317,9 @@ class Health(BaseModel):
     api_key_set: bool = Field(description="the Anthropic key for the paid fallback is in .env")
     flip_api_key_set: bool = Field(description=f"the key callers need is set, {MIN_KEY} characters or more; "
                                                 "without it every call is refused")
+    models: list[ModelState] = Field(default_factory=list, description="the models Ollama is asked for, by job, and "
+                                     "whether it has each (empty when Ollama isn't running; a job turned off in .env "
+                                     "isn't listed)")
 
 
 # ── what every endpoint shares ──────────────────────────────────────────────
@@ -352,10 +366,16 @@ def setup():
 @lru_cache
 def style():
     """Your messages, your style card from them, and the search for the closest."""
-    # our AI (Gemma, on this Mac) reads your messages too when they change (flip.style_ai); the drafts use only what
-    # code finds in them. FLIP_STYLE_AI= (empty) in .env leaves your style to code alone
-    name = os.environ.get("FLIP_STYLE_AI", "gemma3:4b").strip()
+    # our AI (flip-style-1b, FlipAssist's style reader, on this Mac; plain Gemma before 6 Oct) reads your messages too
+    # when they change (flip.style_ai); the drafts use only what code checks in them. FLIP_STYLE_AI= (empty) in .env
+    # leaves your style to code alone; FLIP_STYLE_AI=gemma3:4b goes back to plain Gemma
+    name = style_model()
     return StyleBook(index=MessageIndex(), ai=LocalModel(name, timeout=180, max_tokens=700) if name else None)
+
+
+def style_model():
+    """The style reader's name: FLIP_STYLE_AI from the environment or .env, flip-style-1b when it isn't set; "" = off."""
+    return os.environ.get("FLIP_STYLE_AI", STYLE_MODEL).strip()
 
 
 def usable_key():
@@ -473,14 +493,22 @@ app.router.route_class = WholeTextRoute
 def health():
     """Whether the local model is running and the keys are set. No key needed, and no key shown."""
     local = LocalModel()
+    running, names = False, set()
     try:
         with urllib.request.urlopen(f"{local.url}/api/tags", timeout=2) as answer:
             running = answer.status == 200
-    except OSError:
-        running = False
+            listed = json.load(answer).get("models") or []
+            names = {m["name"] for m in listed if isinstance(m, dict) and isinstance(m.get("name"), str)}
+    except (OSError, ValueError, AttributeError):
+        pass
+    # each model by its job, so a missing one shows (6 Oct review: Home said they were all running when Ollama was)
+    wanted = [("reads listings", reader_name()), ("words the reason", settings()["wording"]),
+              ("sorts price flaws", kinds_model()), ("reads your style", style_model()), ("writes messages", local.name)]
+    models = [ModelState(job=job, name=name, installed=name in names or f"{name}:latest" in names)
+              for job, name in wanted if name] if running else []
     return Health(local_model=local.name, local_running=running, api_model=ApiModel().name,
                   api_key_set=bool(os.environ.get("ANTHROPIC_API_KEY")),
-                  flip_api_key_set=bool(usable_key()))
+                  flip_api_key_set=bool(usable_key()), models=models)
 
 
 @app.post("/messages/draft", response_model=MessageDraft, dependencies=[Depends(key)])
@@ -644,14 +672,14 @@ def check_a_reason(request: ReasonCheckRequest, s: Setup = Depends(setup)):
     leaves the message as it was."""
     result = {"item_id": request.listing.id, "attempts": []}
     flaws = completed(request.quotes or request.flaws, request.listing.description)  # as the draft gave flip-wording
+    # the model that worded it, as the draft said; the settings' only when the app didn't send it
+    worded_by = request.by or settings()["wording"] or WORDING_MODEL
     if s.wording is None:
         checked = {"clause": request.clause, "by": "", "checked": "not checked"}
     else:
         models = None if s.wording == "settings" else s.wording
-        checked = check_reason(request.listing.title, flaws, request.clause, settings()["wording"] or "flip-wording-3",
-                               models, result, s.log)
+        checked = check_reason(request.listing.title, flaws, request.clause, worded_by, models, result, s.log)
     message, problems = request.message, []
-    worded_by = settings()["wording"] or "flip-wording-3"
     if checked["checked"] == "fixed":
         new = checked["clause"]
         at = request.message.lower().find(request.clause.lower())

@@ -78,6 +78,8 @@ export type ReasonCheckRequest = {
   message: string;
   kind: Kind;
   offer_pence: number;
+  /** reason.by: the model that worded the clause, credited back when the check keeps it */
+  by?: string;
 };
 
 /** Haiku's check of a pending reason, and Sonnet's fix when Haiku flagged it: changed means a new message to show */
@@ -185,6 +187,8 @@ export type Health = {
   api_model: string;
   api_key_set: boolean;
   flip_api_key_set: boolean;
+  /** the models Ollama is asked for, by job, and whether this Mac has each (empty when Ollama isn't running) */
+  models?: { job: string; name: string; installed: boolean }[];
 };
 
 export class ApiError extends Error {

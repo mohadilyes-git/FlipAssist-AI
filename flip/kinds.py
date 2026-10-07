@@ -85,5 +85,5 @@ def sorter(url="http://127.0.0.1:11434"):
     name = model_name()
     if not name or not installed(name, url):
         return None
-    # short prompts: a small working memory, so Ollama can keep it loaded next to the reader (as in the test)
+    # short prompts: a small working memory (as in the test), so Ollama can keep it next to the reader when memory allows
     return Sorter(LocalModel(name, url=url, timeout=60, max_tokens=60, num_ctx=2048))

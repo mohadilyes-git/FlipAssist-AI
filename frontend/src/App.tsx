@@ -210,7 +210,7 @@ export function App() {
   );
 }
 
-/** Top right of the window: whether Ollama, which runs flip-reader-5, flip-wording-3 and Gemma 3 4B on this Mac, is
+/** Top right of the window: whether Ollama, which runs FlipAssist's models and Gemma 3 4B on this Mac, is
  * there to read and write. */
 function StatusPill({ running }: { running: Running }) {
   if (running === null) return <span />;

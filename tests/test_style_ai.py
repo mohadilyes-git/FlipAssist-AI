@@ -3,6 +3,7 @@ your messages, only in the gaps code left, and marked as found by our AI. Made-u
 
 from flip.message_drafter import draft_message
 from flip.style import StyleBook, shortcuts_of, shortened, without
+from flip.ai import Reply
 from flip.style_ai import checked, merged, tidy
 from tests.fakes import FakeModel
 
@@ -49,6 +50,34 @@ def test_the_book_learns_with_our_ai_once_and_lists_what_it_found(tmp_path):
     assert rows["signature"] == ("Signs off with (found by our AI)", "ta jo x")
     assert rows["phrase:closing:can collect 2day."] == ("Closing", "can collect 2day.")  # code's, its sign-off once
     assert StyleBook(tmp_path / "plain.sqlite3").learn_with_ai() is False  # no AI: code alone
+
+
+def test_a_new_style_model_reads_the_same_messages_again(tmp_path):
+    """6 Oct: plain Gemma's reading is used until a new model (flip-style-1b) has read the same messages, then the new
+    one's is; a model that couldn't answer is asked again later, and one that answers "no habits" is not."""
+    rows = [{k: m[k] for k in ("listing_title", "asking_price", "marketplace", "my_message")} for m in JO]
+    StyleBook(tmp_path / "style.sqlite3", ai=FakeModel("gemma3:4b", SAID)).add(rows, "added")
+    old = StyleBook(tmp_path / "style.sqlite3", ai=FakeModel("gemma3:4b", SAID))
+    assert old.learn_with_ai() and not old.ai_stale() and old.ai_proposals()["offer"] == "wud u take 150"
+    newer = FakeModel("flip-style-1b", {**SAID, "offer": "wud u take {price}"})
+    new = StyleBook(tmp_path / "style.sqlite3", ai=newer)
+    assert new.ai_stale() and new.learn_with_ai() and not new.ai_stale()
+    assert new.ai_proposals()["offer"] == "wud u take {price}"  # the new model's reading is the one used
+    assert new.db.execute("select model from ai_style").fetchall() == [("flip-style-1b",)]  # one per messages
+    assert not new.learn_with_ai() and len(newer.asked) == 1  # read once
+    off = StyleBook(tmp_path / "style.sqlite3")  # FLIP_STYLE_AI= : code alone, and the stored reading isn't used
+    assert off.ai_stale() is False and not off.learned_card().get("ai_found")
+    assert new.learned_card().get("ai_found") == ["signature"]
+
+    down = StyleBook(tmp_path / "down.sqlite3", ai=FakeModel(
+        "flip-style-1b", Reply("flip-style-1b", error="the local model refused (404)", reachable=False)))
+    down.add(rows, "added")
+    assert down.learn_with_ai() is False and down.ai_stale()  # not installed: tried again later
+
+    nothing = {"greeting": "", "offer": "", "after_offer": [], "likes": "", "sign_off": "", "short_words": []}
+    quiet = StyleBook(tmp_path / "quiet.sqlite3", ai=FakeModel("flip-style-1b", nothing))
+    quiet.add(rows, "added")
+    assert quiet.learn_with_ai() and not quiet.ai_stale() and quiet.ai_proposals() == {}  # "no habits" is kept
 
 
 def test_a_draft_writes_your_shortcuts_after_the_checks(tmp_path):

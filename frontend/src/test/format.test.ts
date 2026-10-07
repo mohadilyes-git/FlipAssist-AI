@@ -8,6 +8,8 @@ describe("who read the listing", () => {
   });
   it("still names Gemma and code", () => {
     expect(writerName("gemma3:4b")).toBe("Gemma 3 4B (on this Mac)");
+    expect(writerName("flip-wording-4b")).toBe("flip-wording-4b (on this Mac)");
+    expect(writerName("flip-style-1b")).toBe("flip-style-1b (on this Mac)");
     expect(readBy("code")).toBe("read by code (no AI)");
   });
 });

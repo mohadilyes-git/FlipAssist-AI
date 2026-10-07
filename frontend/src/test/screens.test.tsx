@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App, markShell, SETUP_DONE, THEME } from "../App";
 import type { ListingDraft, MessageDraft, PriceEstimate, Style } from "../api";
 import { ListingScreen } from "../screens/ListingScreen";
+import { ollamaRow } from "../screens/HomeScreen";
 import { MessageScreen } from "../screens/MessageScreen";
 import { cautions, itemName, PriceScreen, sortedBy } from "../screens/PriceScreen";
 
@@ -906,5 +907,25 @@ describe("the app", () => {
     serve({});
     render(<App />);
     expect(await screen.findByText("API not running")).toBeTruthy();
+  });
+});
+
+describe("the Ollama row on Home (6 Oct review)", () => {
+  const base = { local_model: "gemma3:4b", local_running: true, api_model: "claude-haiku-5-5", api_key_set: true,
+    flip_api_key_set: true };
+  it("names each model it's asked for, and says one that isn't installed and what does its job instead", () => {
+    expect(ollamaRow({ ...base, models: [
+      { job: "reads listings", name: "flip-reader-5", installed: true },
+      { job: "words the reason", name: "flip-wording-4b", installed: true },
+      { job: "writes messages", name: "gemma3:4b", installed: true }] }))
+      .toEqual({ name: "Ollama: flip-reader-5, flip-wording-4b, Gemma 3 4B", ok: true, state: "Running on this Mac" });
+    const missing = ollamaRow({ ...base, models: [
+      { job: "reads listings", name: "flip-reader-5", installed: false },
+      { job: "words the reason", name: "flip-wording-4b", installed: false }] });
+    expect(missing.ok).toBe(false);
+    expect(missing.state).toBe("Running, but not installed: flip-reader-5 (reads listings: Gemma does it instead), "
+      + "flip-wording-4b (words the reason: code does it instead)");
+    expect(ollamaRow({ ...base, local_running: false, models: [] }))
+      .toEqual({ name: "Ollama: Gemma 3 4B", ok: false, state: "Not running: start it with ollama serve" });
   });
 });

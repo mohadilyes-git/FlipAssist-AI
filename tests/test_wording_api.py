@@ -35,6 +35,7 @@ def models(wording=CLAUSE, check="ok", fix=None):
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("FLIP_API_KEY", KEY)
+    monkeypatch.delenv("FLIP_WORDING_MODEL", raising=False)  # whatever .env says, the tests' own models
     log = AuditLog(tmp_path / "audit.sqlite3")
     book = StyleBook(tmp_path / "style.sqlite3")
 
@@ -63,7 +64,7 @@ def checked(client, draft, used):
     answer = client.post("/messages/check-reason", json={
         "draft_id": draft["draft_id"], "listing": LISTING, "flaws": draft["reading"]["flaws"],
         "clause": draft["reason"]["clause"], "message": draft["message"], "kind": draft["kind"],
-        "offer_pence": draft["offer_pence"]})
+        "offer_pence": draft["offer_pence"], "by": draft["reason"]["by"]})  # as the app sends it
     assert answer.status_code == 200, answer.text
     return answer.json()
 
@@ -95,6 +96,7 @@ def test_a_fixed_reason_goes_into_the_message_and_approving_it_counts_as_unedite
 def test_a_reason_haiku_passes_leaves_the_message_as_it_is(client):
     draft = drafted(client, models())
     done = checked(client, draft, models(check="ok"))
+    # credited to the model that worded it, as the draft said (6 Oct review)
     assert done["reason"] == {"clause": CLAUSE, "by": "flip-wording-3", "checked": "ok"}
     assert not done["changed"] and done["message"] == draft["message"]
 

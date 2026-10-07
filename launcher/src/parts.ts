@@ -29,7 +29,7 @@ export type Warm = { model: string; numCtx: number };
 // FlipAssist's own models, which every draft uses (3 Oct): its reader reads each listing (flip.reader), and
 // flip-wording words the offer's reason (flip.wording). A setting in .env renames one, or turns it off when empty.
 export const READER = { setting: "FLIP_READER_MODEL", model: "flip-reader-5", numCtx: 8192 };
-export const WORDING = { setting: "FLIP_WORDING_MODEL", model: "flip-wording-3", numCtx: 2048 };
+export const WORDING = { setting: "FLIP_WORDING_MODEL", model: "flip-wording-4b", numCtx: 2048 }; // flip-wording-3 before 6 Oct
 // Gemma reads when the reader isn't there, and writes when the AI writes (the AI writer, Rewrite)
 export const GEMMA = { model: "gemma3:4b", numCtx: 8192 };
 
@@ -39,17 +39,37 @@ export const GEMMA = { model: "gemma3:4b", numCtx: 8192 };
  * set: the environment the API starts with. Gemma isn't loaded beside the reader: on a 16 GB Mac three models don't
  * stay loaded together, so it loads when the AI first writes. */
 export function modelsToWarm(installed: string[], env: string, set: Record<string, string | undefined> = {}): Warm[] {
-  const has = (model: string) => installed.some((name) => name === model || name === `${model}:latest`);
-  // as the API reads it: what's set already wins over .env (load_env never overwrites)
-  const named = (own: { setting: string; model: string }) =>
-    (set[own.setting] ?? settingFrom(env, own.setting) ?? own.model).trim();
-  const reader = named(READER);
-  const wording = named(WORDING);
+  const has = hasIn(installed);
+  const reader = named(READER, env, set);
+  const wording = named(WORDING, env, set);
   const warm: Warm[] = [];
   if (wording && has(wording)) warm.push({ model: wording, numCtx: WORDING.numCtx });
   if (reader && has(reader)) warm.push({ model: reader, numCtx: READER.numCtx });
   else if (has(GEMMA.model)) warm.push({ model: GEMMA.model, numCtx: GEMMA.numCtx });
   return warm;
+}
+
+/** A model's name as the API reads it: what's set already wins over .env (load_env never overwrites); "" = off. */
+function named(own: { setting: string; model: string }, env: string, set: Record<string, string | undefined>): string {
+  return (set[own.setting] ?? settingFrom(env, own.setting) ?? own.model).trim();
+}
+
+/** Whether Ollama's list of names has a model ("flip-reader-5" or "flip-reader-5:latest"). */
+function hasIn(installed: string[]): (model: string) => boolean {
+  return (model) => installed.some((name) => name === model || name === `${model}:latest`);
+}
+
+/** What the launch screen says once Ollama has Gemma: the models found, by name, and any of the two every draft uses
+ * that isn't installed, with what does its job instead (6 Oct review: it named them without looking). */
+export function readyWords(installed: string[], env: string, set: Record<string, string | undefined> = {}): string {
+  const has = hasIn(installed);
+  const reader = named(READER, env, set);
+  const wording = named(WORDING, env, set);
+  const ready = [reader, wording].filter((model) => model && has(model)).concat(has(GEMMA.model) ? ["Gemma 3 4B"] : []);
+  const missing = [reader && !has(reader) ? `${reader} isn't installed, so Gemma reads` : "",
+    wording && !has(wording) ? `${wording} isn't installed, so code words the reason` : ""].filter(Boolean);
+  const list = ready.length > 1 ? `${ready.slice(0, -1).join(", ")} and ${ready[ready.length - 1]}` : ready[0] ?? "";
+  return [list ? `${list} ${ready.length > 1 ? "are" : "is"} ready` : "", ...missing].filter(Boolean).join("; ");
 }
 
 /** The file of the built app that a path asks for ("/" is index.html), or null

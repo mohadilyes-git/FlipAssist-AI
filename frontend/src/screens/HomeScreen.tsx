@@ -1,7 +1,7 @@
 // Home: the cost meter in the blue hero card, whether everything's running,
 // and who did the work. From /stats and /health.
 import { type MouseEvent, useCallback, useEffect, useState } from "react";
-import { api, type Stats } from "../api";
+import { api, type Health, type Stats } from "../api";
 import type { Running, Tab } from "../App";
 import { cost, jobName, modelName } from "../format";
 import { GaugeIcon, Head, PenIcon, TagIcon } from "../ui";
@@ -92,14 +92,26 @@ export function HomeScreen({ go, count, running, reload }: Props) {
   );
 }
 
+/** Ollama and the models it's asked for, each by name: one that isn't installed is said, with what does its job instead
+ * (6 Oct review: the row said every model was running whenever Ollama was). */
+export function ollamaRow(running: Health): { name: string; state: string; ok: boolean } {
+  const models = running.models ?? [];
+  const named = models.length ? models.map((m) => modelName(m.name)).join(", ") : modelName(running.local_model);
+  const missing = models.filter((m) => !m.installed);
+  if (!running.local_running) return { name: `Ollama: ${named}`, ok: false, state: "Not running: start it with ollama serve" };
+  if (!missing.length) return { name: `Ollama: ${named}`, ok: true, state: "Running on this Mac" };
+  return { name: `Ollama: ${named}`, ok: false,
+    state: `Running, but not installed: ${missing.map((m) =>
+      `${modelName(m.name)} (${m.job}: ${m.job === "reads listings" ? "Gemma" : "code"} does it instead)`).join(", ")}` };
+}
+
 function runningRows(running: Running): { name: string; state: string; ok: boolean }[] {
   if (running === null) return [{ name: "FlipAssist's API", state: "Checking…", ok: true }];
   if (running === "down") {
     return [{ name: "FlipAssist's API", state: "Not running: start it with .venv/bin/uvicorn flip.api:app", ok: false }];
   }
   return [
-    { name: "Ollama: flip-reader-5, flip-wording-3, Gemma 3 4B", ok: running.local_running,
-      state: running.local_running ? "Running on this Mac" : "Not running: start it with ollama serve" },
+    ollamaRow(running),
     { name: "Claude Haiku 5.5 and Claude Sonnet 5.5 (paid)", ok: running.api_key_set,
       state: running.api_key_set ? "Ready: checks each reason, and writes when this Mac's models can't"
         : "No key: everything stays on this Mac" },

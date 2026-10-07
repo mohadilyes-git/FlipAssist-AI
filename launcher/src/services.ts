@@ -6,7 +6,7 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { GEMMA, modelsToWarm } from "./parts";
+import { GEMMA, modelsToWarm, readyWords } from "./parts";
 
 export const OLLAMA = "http://127.0.0.1:11434";
 export const API = "http://127.0.0.1:8000";
@@ -49,6 +49,7 @@ const isFlipAssist = (body: unknown) => typeof body === "object" && body !== nul
 
 export class Services {
   private started: Started[] = [];
+  private installed: string[] = []; // the models Ollama listed when it came up
 
   constructor(private readonly repo: string) {}
 
@@ -65,7 +66,7 @@ export class Services {
       if (!(await until(up, 30, started))) return "failed";
     }
     const tags = (await ask(`${OLLAMA}/api/tags`)) as { models?: { name?: string }[] } | null;
-    const installed = (tags?.models ?? []).map((m) => m.name ?? "");
+    const installed = (this.installed = (tags?.models ?? []).map((m) => m.name ?? ""));
     const warm = modelsToWarm(installed, this.env(), process.env);
     void (async () => { // one after the other: two loading at once fight over memory
       for (const { model, numCtx } of warm) {
@@ -75,6 +76,12 @@ export class Services {
     })();
     // what the launch screen says is Gemma's: it writes listings and, with the AI writer, messages
     return installed.some((name) => name === GEMMA.model) ? "ready" : "no model";
+  }
+
+  /** What the launch screen says once Gemma is ready: the models Ollama has, and a missing one with what does its
+   * job instead (parts.readyWords). */
+  readyWords(): string {
+    return readyWords(this.installed, this.env(), process.env);
   }
 
   /** The text of the repo's .env, or "" when there's none. */

@@ -1474,7 +1474,8 @@ class StyleBook:
             if self._learned_card is None:
                 messages = self.messages(newest_first=False)
                 card = style_card(messages)
-                proposals = self.ai_proposals()
+                # with our AI off (FLIP_STYLE_AI=), code alone: an older reading isn't used either (6 Oct review)
+                proposals = self.ai_proposals() if self.ai is not None else {}
                 try:  # what our AI stored can never break your style: code's card, as it was, if it does
                     self._learned_card = merged(card, checked(proposals, messages), messages) if proposals else card
                 except Exception:  # noqa: BLE001
@@ -1492,21 +1493,24 @@ class StyleBook:
             return {}
 
     def ai_stale(self):
-        """Whether our AI hasn't read your messages as they are now."""
+        """Whether our AI hasn't read your messages as they are now: a reading by another model counts as none, so a new
+        style model (flip-style-1b after plain Gemma, 6 Oct) reads them again."""
         from flip.style_ai import messages_key
         with self.lock:
             key = messages_key(self.messages(newest_first=False))
-            return self.db.execute("select 1 from ai_style where key = ?", (key,)).fetchone() is None
+            row = self.db.execute("select model from ai_style where key = ?", (key,)).fetchone()
+        return row is None or (self.ai is not None and row[0] != getattr(self.ai, "name", ""))
 
     def learn_with_ai(self):
-        """Our AI reads your messages (flip.style_ai.propose) and its suggestions are kept for the card; nothing
-        when there's no AI, it can't answer, or it has read these messages already. True when it learned."""
+        """Our AI reads your messages (flip.style_ai.propose) and its suggestions are kept for the card, an answer of
+        no habits too (so it isn't asked again for the same messages); nothing when there's no AI, it can't answer, or
+        it has read these messages already. True when it learned."""
         from flip.style_ai import messages_key, propose
         if self.ai is None or not self.ai_stale():
             return False
         messages = self.messages(newest_first=False)
         proposals = propose(messages, self.ai)
-        if not proposals:
+        if proposals is None:
             return False
         at = datetime.now(timezone.utc).isoformat(timespec="seconds")
         with self.lock:
