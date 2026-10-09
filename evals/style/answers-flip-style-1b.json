@@ -1,0 +1,553 @@
+{
+ "w01": {
+  "proposals": {
+   "greeting": "hiya",
+   "offer": "wud u take {price}",
+   "after_offer": [
+    "can collect 2day"
+   ],
+   "short_words": [
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "please",
+     "written": "pls"
+    },
+    {
+     "word": "today",
+     "written": "2day"
+    }
+   ]
+  },
+  "secs": 65.68
+ },
+ "w02": {
+  "proposals": {
+   "greeting": "HELLO",
+   "offer": "I'LL GIVE YOU {price}",
+   "sign_off": "CHEERS CLIVE :)"
+  },
+  "secs": 0.58
+ },
+ "w03": {
+  "proposals": {
+   "greeting": "Good afternoon",
+   "offer": "Would you be willing to accept {price}?",
+   "sign_off": "Kind regards, Harriet",
+   "after_offer": [
+    "I can pay straight away"
+   ]
+  },
+  "secs": 0.66
+ },
+ "w04": {
+  "proposals": {
+   "greeting": "heyyy",
+   "offer": "would you do {price}",
+   "sign_off": "kayla 😊",
+   "after_offer": [
+    "can grab it today"
+   ]
+  },
+  "secs": 0.59
+ },
+ "w05": {
+  "proposals": {
+   "greeting": "hi mate",
+   "offer": "can u do {price}?",
+   "likes": "love the {item}",
+   "sign_off": "cheers, rory",
+   "after_offer": [
+    "collect tmrw",
+    "cash waiting"
+   ],
+   "short_words": [
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "tomorrow",
+     "written": "tmrw"
+    }
+   ]
+  },
+  "secs": 0.9
+ },
+ "w06": {
+  "proposals": {
+   "greeting": "hiya",
+   "offer": "would you be ok with {price}",
+   "likes": "absolutely love the {item}",
+   "sign_off": "thanks so much Tamsin x",
+   "after_offer": [
+    "can pay straight away"
+   ]
+  },
+  "secs": 0.73
+ },
+ "w07": {
+  "proposals": {
+   "greeting": "Hello my friend",
+   "offer": "I can give {price}, is ok?",
+   "sign_off": "Thank you, Radek",
+   "after_offer": [
+    "I can come tmrw for collect",
+    "No problem I pay cash"
+   ],
+   "short_words": [
+    {
+     "word": "please",
+     "written": "pls"
+    },
+    {
+     "word": "tomorrow",
+     "written": "tmrw"
+    }
+   ]
+  },
+  "secs": 1.0
+ },
+ "w08": {
+  "proposals": {
+   "greeting": "Awright pal",
+   "offer": "Any chance of {price}",
+   "sign_off": "Cheers, Fraser :)",
+   "after_offer": [
+    "can collect the night"
+   ]
+  },
+  "secs": 0.64
+ },
+ "w09": {
+  "proposals": {
+   "greeting": "Hey there",
+   "offer": "Would you do {price}",
+   "sign_off": "Thanks! -Devon :)",
+   "after_offer": [
+    "venmo or cash"
+   ]
+  },
+  "secs": 0.63
+ },
+ "w10": {
+  "proposals": {
+   "greeting": "hey mtae",
+   "offer": "woudl yuo take {price}",
+   "after_offer": [
+    "can colelct today"
+   ],
+   "short_words": [
+    {
+     "word": "you",
+     "written": "yuo"
+    },
+    {
+     "word": "mate",
+     "written": "mtae"
+    },
+    {
+     "word": "collect",
+     "written": "colelct"
+    }
+   ]
+  },
+  "secs": 0.91
+ },
+ "w11": {
+  "proposals": {
+   "greeting": "Hiya hun",
+   "sign_off": "thanks hun xx",
+   "after_offer": [
+    "can collect whenever suits"
+   ]
+  },
+  "secs": 0.55
+ },
+ "w12": {
+  "proposals": {
+   "greeting": "Hi mate",
+   "offer": "Would you take {price}?",
+   "sign_off": "Cheers, Rob",
+   "after_offer": [
+    "Can collect today"
+   ]
+  },
+  "secs": 0.61
+ },
+ "w13": {
+  "proposals": {
+   "greeting": "hey there",
+   "offer": "would you be up for {price}?",
+   "likes": "really like the {item}",
+   "sign_off": "remi :), cheers"
+  },
+  "secs": 0.63
+ },
+ "w14": {
+  "proposals": {
+   "greeting": "yo bro",
+   "offer": "wud u do {price}",
+   "likes": "lowkey love the {item}",
+   "sign_off": "rhys 😎",
+   "after_offer": [
+    "can pay straight away"
+   ],
+   "short_words": [
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    }
+   ]
+  },
+  "secs": 0.87
+ },
+ "w15": {
+  "proposals": {
+   "greeting": "Hello",
+   "offer": "can u do {price}",
+   "likes": "love the {item}",
+   "sign_off": "ta, maya :-)",
+   "short_words": [
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "please",
+     "written": "pls"
+    }
+   ]
+  },
+  "secs": 0.82
+ },
+ "w16": {
+  "proposals": {
+   "greeting": "Hello there",
+   "offer": "Would you consider {price}?",
+   "likes": "I really like the {item}",
+   "sign_off": "Many thanks, Harriet"
+  },
+  "secs": 0.77
+ },
+ "w17": {
+  "proposals": {
+   "greeting": "hiya",
+   "offer": "wud u do {price}",
+   "likes": "i love the {item}",
+   "short_words": [
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "please",
+     "written": "pls"
+    },
+    {
+     "word": "could",
+     "written": "cud"
+    },
+    {
+     "word": "today",
+     "written": "2day"
+    }
+   ]
+  },
+  "secs": 1.08
+ },
+ "w18": {
+  "proposals": {
+   "greeting": "HELLO",
+   "offer": "WILL YOU TAKE {price}",
+   "sign_off": "CHEERS TREVOR",
+   "after_offer": [
+    "CASH WAITING"
+   ]
+  },
+  "secs": 0.55
+ },
+ "w19": {
+  "proposals": {
+   "greeting": "Hello",
+   "offer": "I would like to offer {price}",
+   "sign_off": "Kind regards, Eleanor",
+   "after_offer": [
+    "I can collect at your convenience"
+   ]
+  },
+  "secs": 0.6
+ },
+ "w20": {
+  "proposals": {
+   "offer": "would you do {price} 🙏",
+   "sign_off": "thank youuu 🥰",
+   "after_offer": [
+    "can pick up asap 🏃‍♀️"
+   ]
+  },
+  "secs": 0.58
+ },
+ "w21": {
+  "proposals": {
+   "greeting": "hi",
+   "offer": "{price} any good?",
+   "likes": "love the {item}",
+   "sign_off": "ta corey"
+  },
+  "secs": 0.51
+ },
+ "w22": {
+  "proposals": {
+   "greeting": "hey lovely",
+   "offer": "would you be up for {price}",
+   "likes": "I absolutely love the {item}",
+   "sign_off": "thanks a million, Tamsin x",
+   "after_offer": [
+    "can pay as soon as you accept"
+   ]
+  },
+  "secs": 0.74
+ },
+ "w23": {
+  "proposals": {
+   "greeting": "hello friend",
+   "offer": "I can give {price}, is good?",
+   "likes": "I like very much the {item}",
+   "sign_off": "Have nice day, Mihai",
+   "after_offer": [
+    "today I come for pick up",
+    "cash I bring with me"
+   ],
+   "short_words": [
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "please",
+     "written": "pls"
+    }
+   ]
+  },
+  "secs": 0.98
+ },
+ "w24": {
+  "proposals": {
+   "greeting": "Awrite pal",
+   "offer": "would you go {price}?",
+   "likes": "cracking wee {item}",
+   "sign_off": "cheers, Fraser :)",
+   "after_offer": [
+    "can pay right away",
+    "can collect the morra"
+   ]
+  },
+  "secs": 0.7
+ },
+ "w25": {
+  "proposals": {
+   "offer": "would you do {price}",
+   "sign_off": "Appreciate it, Trevor"
+  },
+  "secs": 0.5
+ },
+ "w26": {
+  "proposals": {
+   "offer": "woudl yuo take {price}",
+   "likes": "i realy like the {item}",
+   "sign_off": "thnaks, kieran"
+  },
+  "secs": 0.62
+ },
+ "w27": {
+  "proposals": {
+   "offer": "Could you do {price}?",
+   "sign_off": "Jodie :) xx",
+   "after_offer": [
+    "Happy to collect whenever suits"
+   ]
+  },
+  "secs": 0.58
+ },
+ "w28": {
+  "proposals": {
+   "offer": "Can do {price} cash",
+   "likes": "Like the look of the {item}",
+   "sign_off": "Dean :)"
+  },
+  "secs": 0.57
+ },
+ "w29": {
+  "proposals": {
+   "greeting": "hey there",
+   "offer": "would you go to {price}",
+   "sign_off": "nadia :)",
+   "after_offer": [
+    "can buy straight away"
+   ]
+  },
+  "secs": 0.61
+ },
+ "w30": {
+  "proposals": {
+   "greeting": "yo bro",
+   "offer": "cud u do {price}?",
+   "likes": "lowkey love the {item}",
+   "sign_off": "safe 🙏",
+   "after_offer": [
+    "can pull up whenever"
+   ]
+  },
+  "secs": 0.64
+ },
+ "w31": {
+  "proposals": {
+   "greeting": "Alright mate",
+   "offer": "Would you do {price}",
+   "after_offer": [
+    "can pay straight away"
+   ]
+  },
+  "secs": 0.53
+ },
+ "w32": {
+  "proposals": {
+   "greeting": "Hello there",
+   "offer": "Would you consider {price}?",
+   "likes": "I really like the {item}",
+   "sign_off": "Many thanks, Rosalind",
+   "after_offer": [
+    "I'd buy it right away"
+   ]
+  },
+  "secs": 0.75
+ },
+ "w33": {
+  "proposals": {
+   "greeting": "hiya",
+   "offer": "wud u take {price}",
+   "likes": "luv the {item}",
+   "sign_off": "thx tegan x",
+   "after_offer": [
+    "cud collect 2day"
+   ],
+   "short_words": [
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "today",
+     "written": "2day"
+    },
+    {
+     "word": "thanks",
+     "written": "thx"
+    },
+    {
+     "word": "please",
+     "written": "pls"
+    },
+    {
+     "word": "love",
+     "written": "luv"
+    }
+   ]
+  },
+  "secs": 1.32
+ },
+ "w34": {
+  "proposals": {
+   "greeting": "HELLO",
+   "offer": "I'LL GIVE YOU {price}",
+   "likes": "LOOKS A NICE {item}",
+   "sign_off": "CHEERS BERNARD :-)",
+   "after_offer": [
+    "CASH IN HAND"
+   ]
+  },
+  "secs": 0.71
+ },
+ "w35": {
+  "proposals": {
+   "offer": "Would you be willing to accept {price}?",
+   "likes": "I am very interested in the {item}",
+   "sign_off": "Kind regards, Philippa",
+   "after_offer": [
+    "I can pay immediately",
+    "I am happy to collect"
+   ]
+  },
+  "secs": 0.74
+ },
+ "w36": {
+  "proposals": {
+   "greeting": "heyyy",
+   "offer": "could you do {price}?",
+   "sign_off": "thanksss 🥹💖",
+   "after_offer": [
+    "can collect today"
+   ]
+  },
+  "secs": 0.57
+ },
+ "w37": {
+  "proposals": {
+   "greeting": "Hi,",
+   "offer": "would you accept {price}?",
+   "sign_off": "Dale :)",
+   "after_offer": [
+    "Can pay straight away"
+   ]
+  },
+  "secs": 0.55
+ },
+ "w38": {
+  "proposals": {
+   "greeting": "hiya",
+   "offer": "would you consider {price}",
+   "likes": "I absolutely love the {item}",
+   "after_offer": [
+    "I can pick up whenever suits"
+   ]
+  },
+  "secs": 0.63
+ },
+ "w39": {
+  "proposals": {
+   "greeting": "Hello my friend",
+   "offer": "I can give {price}, is ok?",
+   "likes": "I like very much the {item}",
+   "sign_off": "Thank you, have nice day"
+  },
+  "secs": 0.71
+ },
+ "w40": {
+  "proposals": {
+   "greeting": "awright pal",
+   "offer": "Would you take {price}?",
+   "likes": "cracking wee {item}",
+   "sign_off": "Cheers, Lachie"
+  },
+  "secs": 0.66
+ }
+}

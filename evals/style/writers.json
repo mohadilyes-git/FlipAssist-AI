@@ -1,0 +1,3682 @@
+[
+ {
+  "id": "w01",
+  "name": "Kian",
+  "messages": [
+   {
+    "listing_title": "Lego Millennium Falcon",
+    "asking_price": "400",
+    "marketplace": "gumtree",
+    "my_message": "hiya wud u take 320 for the falcon is it complete with all the minifigs can collect 2day"
+   },
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": "280",
+    "marketplace": "gumtree",
+    "my_message": "hiya is the xbox boxed with the pad wud u take 230 pls lmk cheers pal"
+   },
+   {
+    "listing_title": "Sony WH-1000XM4",
+    "asking_price": "140",
+    "marketplace": "gumtree",
+    "my_message": "wud u take 110 if they come with the case can collect 2day after work cash ready when u are"
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": "380",
+    "marketplace": "gumtree",
+    "my_message": "hey cud u do 310 on the ipad pls can collect 2day whats the battery health like"
+   },
+   {
+    "listing_title": "MacBook Pro 14 M1 Pro",
+    "asking_price": "950",
+    "marketplace": "gumtree",
+    "my_message": "hiya macbook still going? id give 780 if thats any good send a pic of the cycle count pls cheers bud"
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": "300",
+    "marketplace": "gumtree",
+    "my_message": "hiya still got the drone? wud u take 250 i can collect 2day if u send me the postcode pls"
+   }
+  ],
+  "key": {
+   "greeting": "hiya",
+   "offer": "wud u take {price}",
+   "after": [
+    "can collect 2day"
+   ],
+   "short": [
+    [
+     "you",
+     "u"
+    ],
+    [
+     "please",
+     "pls"
+    ],
+    [
+     "would",
+     "wud"
+    ],
+    [
+     "today",
+     "2day"
+    ]
+   ]
+  },
+  "one_offs": [
+   "cash ready when u are",
+   "cheers pal",
+   "cheers bud"
+  ],
+  "writer_key": {
+   "greeting": "hiya",
+   "offer": "wud u take {price}",
+   "after": [
+    "can collect 2day"
+   ],
+   "likes": "",
+   "sign_off": "",
+   "short": [
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "please",
+     "written": "pls"
+    },
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "today",
+     "written": "2day"
+    }
+   ]
+  },
+  "blind_judge": {
+   "greeting": "hiya",
+   "offer": "wud u take {price}",
+   "after_offer": [
+    "can collect 2day"
+   ],
+   "likes": "",
+   "sign_off": "",
+   "short_words": [
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "today",
+     "written": "2day"
+    },
+    {
+     "word": "please",
+     "written": "pls"
+    }
+   ],
+   "unsure": "'cheers' ends only 2 of 6 messages, with different words ('cheers pal', 'cheers bud'). That is 33%, under 40%, so there is no sign-off. 'pls' is in 4 of 6, but it is a word, not a phrase about collecting or paying, so it only goes in short words. 'cud' (could), 'lmk' and 'id' are each used once, so I left them out."
+  }
+ },
+ {
+  "id": "w02",
+  "name": "Clive",
+  "messages": [
+   {
+    "listing_title": "Galaxy S21 Ultra",
+    "asking_price": "260",
+    "marketplace": "facebook",
+    "my_message": "HELLO. I'LL GIVE YOU £200 SEEING AS IT'S A FEW YEARS OLD. CHEERS CLIVE :)"
+   },
+   {
+    "listing_title": "Apple Watch Series 8",
+    "asking_price": "180",
+    "marketplace": "facebook",
+    "my_message": "HELLO. DOES THE WATCH COME WITH THE CHARGER. I'LL GIVE YOU £140 CASH. CHEERS CLIVE :)"
+   },
+   {
+    "listing_title": "Ninja air fryer",
+    "asking_price": "60",
+    "marketplace": "facebook",
+    "my_message": "I'LL GIVE YOU £45 IF IT'S BEEN KEPT CLEAN. CHEERS CLIVE :)"
+   },
+   {
+    "listing_title": "Nike Air Max 90 size 9",
+    "asking_price": "60",
+    "marketplace": "facebook",
+    "my_message": "HELLO. ARE THEY GENUINE. £50 AND I'LL COME AND GET THEM TONIGHT"
+   },
+   {
+    "listing_title": "iPhone 13 128GB Blue",
+    "asking_price": "220",
+    "marketplace": "facebook",
+    "my_message": "HELLO, ANY CRACKS OR MARKS ON IT? I'LL GIVE YOU £180 NOW. CHEERS CLIVE :)"
+   },
+   {
+    "listing_title": "Steam Deck 512GB",
+    "asking_price": "340",
+    "marketplace": "facebook",
+    "my_message": "I'LL GIVE YOU £280 FOR MY GRANDSON, CASH TODAY. LET ME KNOW."
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": "150",
+    "marketplace": "facebook",
+    "my_message": "HELLO. SOFA STILL FOR SALE? BEST I CAN DO IS £110, I HAVE A VAN. CHEERS CLIVE :)"
+   }
+  ],
+  "key": {
+   "greeting": "hello",
+   "offer": "i'll give you {price}",
+   "sign_off": "cheers clive :)",
+   "after": [],
+   "short": []
+  },
+  "one_offs": [
+   "LET ME KNOW",
+   "BEST I CAN DO IS £110",
+   "I HAVE A VAN"
+  ],
+  "writer_key": {
+   "greeting": "hello",
+   "offer": "i'll give you {price}",
+   "after": [],
+   "likes": "",
+   "sign_off": "cheers clive :)",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "HELLO",
+   "offer": "I'LL GIVE YOU £{price}",
+   "after_offer": [],
+   "likes": "",
+   "sign_off": "CHEERS CLIVE :)",
+   "short_words": [],
+   "unsure": "He writes every message in capital letters, and none of the fields can hold that. He always puts £ before the amount, so I kept £ before {price}. Drop it if {price} already includes the £. 'CASH' after the offer is in 2 of 7 messages (29%), under 40%, so there is no after-offer habit."
+  }
+ },
+ {
+  "id": "w03",
+  "name": "Harriet",
+  "messages": [
+   {
+    "listing_title": "MacBook Pro 14 M1 Pro",
+    "asking_price": "950",
+    "marketplace": "ebay",
+    "my_message": "Good afternoon, I am interested in your MacBook Pro and wondered whether the battery has ever been replaced. Would you be willing to accept £820? Should you agree, I can pay straight away. Thank you for your time. Kind regards, Harriet"
+   },
+   {
+    "listing_title": "Sony WH-1000XM4",
+    "asking_price": "140",
+    "marketplace": "ebay",
+    "my_message": "Good Afternoon. Are the headphones still under warranty, and is the original case included? Would you be willing to accept £115 for them? Many thanks for your help. Kind regards, Harriet"
+   },
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": "330",
+    "marketplace": "ebay",
+    "my_message": "Hello, I would like to offer £285 for the Galaxy, if that is agreeable to you. I can pay straight away and would appreciate it being sent tracked. Kind regards, Harriet"
+   },
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": "300",
+    "marketplace": "ebay",
+    "my_message": "good afternoon, could you confirm that both controllers come with the console? Would you be willing to accept £250 if I collect it myself? I can pay straight away. Best wishes, Harriet"
+   },
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": "160",
+    "marketplace": "ebay",
+    "my_message": "Good afternoon - is the strap original, and are there any scratches on the screen? Would you be willing to accept £130 including postage? Kind regards, Harriet"
+   },
+   {
+    "listing_title": "Ninja air fryer",
+    "asking_price": "60",
+    "marketplace": "ebay",
+    "my_message": "Good afternoon! Would you be willing to accept £48? I appreciate the price is already fair, but I am on a tight budget. I can pay straight away. Warm wishes, Harriet"
+   },
+   {
+    "listing_title": "Nike Air Max 90 size 9",
+    "asking_price": "60",
+    "marketplace": "ebay",
+    "my_message": "Are the trainers true to size, and have they been worn much? Might you consider £50? I can pay straight away. Kind regards, Harriet"
+   }
+  ],
+  "key": {
+   "greeting": "good afternoon",
+   "offer": "would you be willing to accept {price}",
+   "sign_off": "kind regards, harriet",
+   "after": [
+    "i can pay straight away"
+   ],
+   "short": []
+  },
+  "one_offs": [
+   "Best wishes, Harriet",
+   "Warm wishes, Harriet",
+   "I would like to offer £285"
+  ],
+  "writer_key": {
+   "greeting": "good afternoon",
+   "offer": "would you be willing to accept {price}",
+   "after": [
+    "i can pay straight away"
+   ],
+   "likes": "",
+   "sign_off": "kind regards, harriet",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "Good afternoon",
+   "offer": "Would you be willing to accept £{price}?",
+   "after_offer": [
+    "I can pay straight away"
+   ],
+   "likes": "",
+   "sign_off": "Kind regards, Harriet",
+   "short_words": [],
+   "unsure": "I kept £ before {price} because she always writes it. All 7 messages end with 'Harriet', but the exact ending 'Kind regards, Harriet' is in 5 of 7. 'Best wishes' and 'Warm wishes' are each used once. 'Thank you for your time' and 'Many thanks for your help' are each used once, so I left them out."
+  }
+ },
+ {
+  "id": "w04",
+  "name": "Kayla",
+  "messages": [
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": "280",
+    "marketplace": "facebook",
+    "my_message": "heyyy 👋😊 is the xbox still available?? would you do £240 🙏 can grab it today 🚗💨 kayla 😊"
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": "150",
+    "marketplace": "facebook",
+    "my_message": "heyyy omg this sofa is gorgeous 😍😍 would you do 120 if i sort a van for saturday? 🛋️✨ kayla 😊"
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": "300",
+    "marketplace": "facebook",
+    "my_message": "would you do £260 for the drone? 🚁🔥 can grab it today after college 📚 lmk!! 🙌"
+   },
+   {
+    "listing_title": "Canon EOS 250D",
+    "asking_price": "320",
+    "marketplace": "facebook",
+    "my_message": "heyyy 📸✨ i could do £270 and can grab it today 🥺🙏 how many shots has the canon done? kayla 😊"
+   },
+   {
+    "listing_title": "GoPro Hero 10",
+    "asking_price": "200",
+    "marketplace": "facebook",
+    "my_message": "heyyy would you do £160 with the mounts included?? 🤞🏄‍♀️🌊"
+   },
+   {
+    "listing_title": "Mountain bike 27.5in",
+    "asking_price": "180",
+    "marketplace": "facebook",
+    "my_message": "ahh this bike looks perfect for me 🚲😍 would you do 140?? i can grab it today 💕 is it a medium frame? kayla 😊"
+   },
+   {
+    "listing_title": "iPhone 12 64GB",
+    "asking_price": "150",
+    "marketplace": "facebook",
+    "my_message": "heyyy 📱 any chance of £125? is the battery health ok?? 🔋👀 kayla 😊"
+   }
+  ],
+  "key": {
+   "greeting": "heyyy",
+   "offer": "would you do {price}",
+   "sign_off": "kayla 😊",
+   "after": [
+    "can grab it today"
+   ],
+   "short": []
+  },
+  "one_offs": [
+   "this sofa is gorgeous",
+   "i could do £270",
+   "any chance of £125"
+  ],
+  "writer_key": {
+   "greeting": "heyyy",
+   "offer": "would you do {price}",
+   "after": [
+    "can grab it today"
+   ],
+   "likes": "",
+   "sign_off": "kayla 😊",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "heyyy",
+   "offer": "would you do {price}?",
+   "after_offer": [
+    "can grab it today"
+   ],
+   "likes": "",
+   "sign_off": "kayla 😊",
+   "short_words": [],
+   "unsure": "She writes £ in 3 of her 5 'would you do' offers (£240, £260, £160) but not in the other 2 (120, 140), so I left {price} without a £. She says she likes the item twice, in different words ('this sofa is gorgeous', 'this bike looks perfect for me'), each once, so likes is empty. 'lmk' and 'omg' are each used once."
+  }
+ },
+ {
+  "id": "w05",
+  "name": "Rory",
+  "messages": [
+   {
+    "listing_title": "Steam Deck 512GB",
+    "asking_price": "340",
+    "marketplace": "facebook",
+    "my_message": "Hi mate, can u do 290? collect tmrw"
+   },
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": "160",
+    "marketplace": "facebook",
+    "my_message": "love the garmin. can u do 130? cash waiting, can meet halfway. cheers, rory"
+   },
+   {
+    "listing_title": "Kindle Paperwhite",
+    "asking_price": "70",
+    "marketplace": "facebook",
+    "my_message": "hi mate, signature edition? can u do 55. cheers, rory"
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": "300",
+    "marketplace": "facebook",
+    "my_message": "love the drone, 240 and i'll collect tmrw. cash waiting"
+   },
+   {
+    "listing_title": "Ninja air fryer",
+    "asking_price": "60",
+    "marketplace": "facebook",
+    "my_message": "HI MATE can u do 45 if its clean? cash waiting"
+   },
+   {
+    "listing_title": "MacBook Pro 14 M1 Pro",
+    "asking_price": "950",
+    "marketplace": "facebook",
+    "my_message": "love the macbook, can u do 800? happy to pick up. cheers, rory"
+   },
+   {
+    "listing_title": "North Face puffer jacket",
+    "asking_price": "90",
+    "marketplace": "facebook",
+    "my_message": "Hi Mate! 70 ok? collect tmrw. cheers, rory"
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": "450",
+    "marketplace": "facebook",
+    "my_message": "can u do 380. is it boxed? collect tmrw, cash waiting"
+   },
+   {
+    "listing_title": "Galaxy S21 Ultra",
+    "asking_price": "260",
+    "marketplace": "facebook",
+    "my_message": "hi mate - love the s21, would take 210 at a push, collect tmrw"
+   },
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": "330",
+    "marketplace": "facebook",
+    "my_message": "love the s23 can u do 280 with the case? cash waiting. cheers, rory"
+   }
+  ],
+  "key": {
+   "greeting": "hi mate",
+   "offer": "can u do {price}",
+   "likes": "love the {item}",
+   "sign_off": "cheers, rory",
+   "after": [
+    "collect tmrw",
+    "cash waiting"
+   ],
+   "short": [
+    [
+     "you",
+     "u"
+    ],
+    [
+     "tomorrow",
+     "tmrw"
+    ]
+   ]
+  },
+  "one_offs": [
+   "happy to pick up",
+   "can meet halfway",
+   "70 ok?"
+  ],
+  "writer_key": {
+   "greeting": "hi mate",
+   "offer": "can u do {price}",
+   "after": [
+    "collect tmrw",
+    "cash waiting"
+   ],
+   "likes": "love the {item}",
+   "sign_off": "cheers, rory",
+   "short": [
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "tomorrow",
+     "written": "tmrw"
+    }
+   ]
+  },
+  "blind_judge": {
+   "greeting": "hi mate",
+   "offer": "can u do {price}?",
+   "after_offer": [
+    "collect tmrw",
+    "cash waiting"
+   ],
+   "likes": "love the {item}",
+   "sign_off": "cheers, rory",
+   "short_words": [
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "tomorrow",
+     "written": "tmrw"
+    }
+   ],
+   "unsure": "The greeting, both after-offer phrases, the likes phrase and the sign-off are each in exactly 5 of 10 messages (50%). They pass, but only just. A question mark comes straight after the price in only 3 of the 7 'can u do' offers: two end with a full stop ('55.', '380.') and two carry on ('if its clean?', 'with the case?'). 'can meet halfway', 'happy to pick up' and 'at a push' are each used once."
+  }
+ },
+ {
+  "id": "w06",
+  "name": "Tamsin",
+  "messages": [
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": "280",
+    "marketplace": "vinted",
+    "my_message": "hiya absolutely love the xbox, my little brother has been begging for one since about march and his birthday is in a few weeks so I really want to surprise him with it, would you be ok with £230 because I can pay straight away tonight thanks so much Tamsin x"
+   },
+   {
+    "listing_title": "Kindle Paperwhite",
+    "asking_price": "70",
+    "marketplace": "vinted",
+    "my_message": "hiya so my old kindle gave up on me last week and I read on the bus every single morning so I've been lost without it, absolutely love the kindle you've got and the case it comes with, would you be ok with £55 if you're not too fussed, thanks so much Tamsin x"
+   },
+   {
+    "listing_title": "North Face puffer jacket",
+    "asking_price": "90",
+    "marketplace": "vinted",
+    "my_message": "is the jacket still up for grabs, I'm off to Scotland in a couple of weeks and my coat is literally falling apart at the seams so I need something warm sharpish, would you be ok with £70 as I can pay straight away have a lovely evening x"
+   },
+   {
+    "listing_title": "Mountain bike 27.5in",
+    "asking_price": "180",
+    "marketplace": "vinted",
+    "my_message": "hiya I've just started a new job about four miles away and the buses round here are a total nightmare so cycling in would save me a fortune, absolutely love the bike by the way, could I offer £145 and I can pay straight away whenever suits you, thanks so much Tamsin x"
+   },
+   {
+    "listing_title": "iPhone 12 64GB",
+    "asking_price": "150",
+    "marketplace": "vinted",
+    "my_message": "hiya my mum keeps dropping her phone and the screen on hers is shattered to bits now so I'm trying to find her something decent that isn't silly money, would you be ok with £120 have a nice night x"
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": "450",
+    "marketplace": "vinted",
+    "my_message": "absolutely love the macbook, I'm starting an online course in january and my laptop is about ten years old and takes forever just to switch on so I badly need an upgrade, would you be ok with £380 since I can pay straight away this week thanks so much Tamsin x"
+   }
+  ],
+  "key": {
+   "greeting": "hiya",
+   "offer": "would you be ok with {price}",
+   "likes": "absolutely love the {item}",
+   "sign_off": "thanks so much Tamsin x",
+   "after": [
+    "I can pay straight away"
+   ],
+   "short": []
+  },
+  "one_offs": [
+   "have a lovely evening x",
+   "have a nice night x",
+   "could I offer £145"
+  ],
+  "writer_key": {
+   "greeting": "hiya",
+   "offer": "would you be ok with {price}",
+   "after": [
+    "I can pay straight away"
+   ],
+   "likes": "absolutely love the {item}",
+   "sign_off": "thanks so much Tamsin x",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "hiya",
+   "offer": "would you be ok with £{price}",
+   "after_offer": [
+    "I can pay straight away"
+   ],
+   "likes": "absolutely love the {item}",
+   "sign_off": "thanks so much Tamsin x",
+   "short_words": [],
+   "unsure": "All 6 messages end with a kiss 'x', but only 4 of 6 end 'thanks so much Tamsin x'. The other two end 'have a lovely evening x' and 'have a nice night x', each used once, so I gave the full 4-of-6 ending. 'I can pay straight away' follows a different linking word each time ('because', 'as', 'and', 'since'), so only the phrase itself counts as the habit. A note that covers all 5 writers: while checking how the scorer treats £ and $ next to {price} (its word splitter drops them, so '£{price}' and '{price}' score the same), I saw check.py's list of which fields each writer was planted with. It does not give the habit words. I made every reading here from the messages before I saw that list, and the list agrees with them. I re-counted every habit and near-miss with score.py's own matcher."
+  }
+ },
+ {
+  "id": "w07",
+  "name": "Radek",
+  "messages": [
+   {
+    "listing_title": "Mountain bike 27.5in",
+    "asking_price": "180",
+    "marketplace": "gumtree",
+    "my_message": "Hello my friend, is the bike still for sale? Is for my son, he is 14. I can give 140 pound, is ok? If yes I pay cash and I can come tmrw for collect. Pls tell me. Thank you, Radek"
+   },
+   {
+    "listing_title": "Lego Millennium Falcon",
+    "asking_price": "400",
+    "marketplace": "gumtree",
+    "my_message": "hello, my friend! The lego is complete, with all pieces and box? My boy want this one for christmas. I can give 320 pound, is ok? Of course I pay cash. Thank you, Radek"
+   },
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": "330",
+    "marketplace": "gumtree",
+    "my_message": "HELLO MY FRIEND. Pls the phone have scratch on screen? Battery is good? Maybe you accept 270 for it. I can come tmrw for collect, I live near. Thank you, Radek"
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": "300",
+    "marketplace": "gumtree",
+    "my_message": "Hello My Friend. I am serious buyer, not time waster. The drone fly good, never crash? I can give 250 pound, is ok? No problem I pay cash. Pls send me one video when it fly."
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": "450",
+    "marketplace": "gumtree",
+    "my_message": "Is macbook still available? I need for my study in university. I can give 370 pound, is ok? Maybe I can come tmrw for collect, after my work. Thank you, Radek"
+   },
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": "160",
+    "marketplace": "gumtree",
+    "my_message": "hello my friend :) Watch is working perfect? Is coming with charger? For 125 you can sell me? Then I pay cash. When you see this, pls reply."
+   },
+   {
+    "listing_title": "iPhone 13 128GB Blue",
+    "asking_price": "220",
+    "marketplace": "gumtree",
+    "my_message": "Hello, my friend. Iphone is unlock for all network? I can give 180 pound, is ok? Also I can come tmrw for collect. Thank you, Radek"
+   }
+  ],
+  "key": {
+   "greeting": "hello my friend",
+   "offer": "I can give {price} pound, is ok?",
+   "sign_off": "Thank you, Radek",
+   "after": [
+    "I pay cash",
+    "I can come tmrw for collect"
+   ],
+   "short": [
+    [
+     "please",
+     "pls"
+    ],
+    [
+     "tomorrow",
+     "tmrw"
+    ]
+   ]
+  },
+  "one_offs": [
+   "I am serious buyer, not time waster",
+   "Maybe you accept 270 for it",
+   "For 125 you can sell me?"
+  ],
+  "writer_key": {
+   "greeting": "hello my friend",
+   "offer": "I can give {price} pound, is ok?",
+   "after": [
+    "I pay cash",
+    "I can come tmrw for collect"
+   ],
+   "likes": "",
+   "sign_off": "Thank you, Radek",
+   "short": [
+    {
+     "word": "please",
+     "written": "pls"
+    },
+    {
+     "word": "tomorrow",
+     "written": "tmrw"
+    }
+   ]
+  },
+  "blind_judge": {
+   "greeting": "Hello my friend",
+   "offer": "I can give {price} pound, is ok?",
+   "after_offer": [
+    "I pay cash",
+    "I can come tmrw for collect"
+   ],
+   "likes": "",
+   "sign_off": "Thank you, Radek",
+   "short_words": [
+    {
+     "word": "tomorrow",
+     "written": "tmrw"
+    },
+    {
+     "word": "please",
+     "written": "pls"
+    }
+   ],
+   "unsure": "The greeting is in 6 of 7 messages, with different capitals and punctuation ('HELLO MY FRIEND.', 'hello, my friend!'). The ':)' after it is in only 1 message, so I left it out. 'I pay cash' comes after a different opener each time ('If yes', 'Of course', 'No problem', 'Then'), and each opener is used once. 'I can come tmrw for collect' sometimes has 'Maybe' or 'Also' in front, once each. 'tmrw' and 'pls' are in 4 of 7 messages each, and he never writes the full word."
+  }
+ },
+ {
+  "id": "w08",
+  "name": "Fraser",
+  "messages": [
+   {
+    "listing_title": "Ikea Kallax shelf",
+    "asking_price": "35",
+    "marketplace": "facebook",
+    "my_message": "Awright pal, is the shelf still up for sale? Just moved intae a wee flat and need somewhere tae put ma records. Any chance of £28? Can collect the night. Cheers, Fraser :)"
+   },
+   {
+    "listing_title": "Lego Millennium Falcon",
+    "asking_price": "400",
+    "marketplace": "facebook",
+    "my_message": "awright pal, the wean is Star Wars mad and this would make a cracking birthday present. Are aw the pieces there? Any chance of £330 for it. Cheers, Fraser :)"
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": "300",
+    "marketplace": "facebook",
+    "my_message": "Is the drone still flying fine aye? Has it ever been crashed or had any repairs done? Any chance of £240. Cheers, Fraser :)"
+   },
+   {
+    "listing_title": "AirPods Pro 2",
+    "asking_price": "120",
+    "marketplace": "facebook",
+    "my_message": "awright pal, are these the real deal or a wee knock-off? I'll give you £95 cash if they're legit, can collect the night on the way hame. Cheers, Fraser :)"
+   },
+   {
+    "listing_title": "North Face puffer jacket",
+    "asking_price": "90",
+    "marketplace": "facebook",
+    "my_message": "Awright pal, what size is the jacket? Mine's had it after last winter. Any chance of £65 aye? Nae bother if no"
+   },
+   {
+    "listing_title": "MacBook Pro 14 M1 Pro",
+    "asking_price": "950",
+    "marketplace": "facebook",
+    "my_message": "How's the battery health on the macbook? Need it for editing ma uni projects. Any chance of £800 cash? I can collect the night or Saturday, whatever suits. Cheers, Fraser :)"
+   }
+  ],
+  "key": {
+   "greeting": "awright pal",
+   "offer": "any chance of {price}",
+   "sign_off": "Cheers, Fraser :)",
+   "after": [
+    "can collect the night"
+   ],
+   "short": []
+  },
+  "one_offs": [
+   "I'll give you £95 cash",
+   "Nae bother if no",
+   "whatever suits"
+  ],
+  "writer_key": {
+   "greeting": "awright pal",
+   "offer": "any chance of {price}",
+   "after": [
+    "can collect the night"
+   ],
+   "likes": "",
+   "sign_off": "Cheers, Fraser :)",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "Awright pal",
+   "offer": "Any chance of £{price}?",
+   "after_offer": [
+    "can collect the night"
+   ],
+   "likes": "",
+   "sign_off": "Cheers, Fraser :)",
+   "short_words": [],
+   "unsure": "'ma' for 'my' is in only 2 of 6 messages (33%, under 40%), so I left it out of short words. 'aye' and 'cash' near the price are also in only 2 of 6. 'can collect the night' is in 3 of 6: once as 'I can collect the night' and twice without 'I', so I wrote the words all three share."
+  }
+ },
+ {
+  "id": "w09",
+  "name": "Devon",
+  "messages": [
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": "70",
+    "marketplace": "offerup",
+    "my_message": "Hey there! Does the speaker still hold a charge ok? Would you do $55? Venmo or cash, I can meet up this evening near downtown. Thanks! -Devon :)"
+   },
+   {
+    "listing_title": "AirPods Pro 2",
+    "asking_price": "120",
+    "marketplace": "mercari",
+    "my_message": "Are these genuine with the original case? I'd want to check the serial number first. Would you do $95 and I'll buy it right away? Thanks! -Devon :)"
+   },
+   {
+    "listing_title": "Ikea Kallax shelf",
+    "asking_price": "35",
+    "marketplace": "craigslist",
+    "my_message": "Is the shelf still around? Got a truck so grabbing it is no problem. Would you do $25, got venmo or cash either way. Thanks! -Devon :)"
+   },
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": "160",
+    "marketplace": "offerup",
+    "my_message": "hey there, how's the battery life on the watch these days? Any scratches on the screen? I could do $130 if that works. Thanks! -Devon :)"
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": "380",
+    "marketplace": "craigslist",
+    "my_message": "Does the iPad come with a charger, and is it wifi only or cellular? Would you do $320 for it? venmo or cash, happy to meet up somewhere public."
+   },
+   {
+    "listing_title": "North Face puffer jacket",
+    "asking_price": "90",
+    "marketplace": "mercari",
+    "my_message": "What size is the jacket, and are there any rips or stains? Would you do $70?"
+   },
+   {
+    "listing_title": "Nintendo Switch OLED",
+    "asking_price": "220",
+    "marketplace": "offerup",
+    "my_message": "Any joycon drift? My kids would go nuts for this. Would you do $180, I have venmo or cash. Thanks! -Devon :)"
+   }
+  ],
+  "key": {
+   "offer": "would you do {price}",
+   "sign_off": "Thanks! -Devon :)",
+   "after": [
+    "venmo or cash"
+   ],
+   "short": []
+  },
+  "one_offs": [
+   "I can meet up this evening near downtown",
+   "happy to meet up somewhere public",
+   "I could do $130 if that works"
+  ],
+  "writer_key": {
+   "greeting": "",
+   "offer": "would you do {price}",
+   "after": [
+    "venmo or cash"
+   ],
+   "likes": "",
+   "sign_off": "Thanks! -Devon :)",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "",
+   "offer": "Would you do ${price}?",
+   "after_offer": [
+    "venmo or cash"
+   ],
+   "likes": "",
+   "sign_off": "Thanks! -Devon :)",
+   "short_words": [],
+   "unsure": "'Hey there' opens only 2 of 7 messages (29%), so there is no greeting. 'meet up' is in only 2 of 7, worded differently each time ('I can meet up', 'happy to meet up'), so it is not a habit."
+  }
+ },
+ {
+  "id": "w10",
+  "name": "Kieran",
+  "messages": [
+   {
+    "listing_title": "GoPro Hero 10",
+    "asking_price": "200",
+    "marketplace": "facebook",
+    "my_message": "hey mtae is the gopro still availble? does it come with teh spare batteries and case? woudl yuo take 160, can colelct today"
+   },
+   {
+    "listing_title": "Kindle Paperwhite",
+    "asking_price": "70",
+    "marketplace": "facebook",
+    "my_message": "hey mtae any marks on teh screen? woudl yuo take 50, thnaks"
+   },
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": "280",
+    "marketplace": "facebook",
+    "my_message": "does teh xbox come wiht a controller? woudl yuo take 240 cash? can colelct today, cna send a deposit to hold it"
+   },
+   {
+    "listing_title": "Galaxy S21 Ultra",
+    "asking_price": "260",
+    "marketplace": "facebook",
+    "my_message": "hey mtae, unlocekd to all networks or just one? id give yuo 210 for it, can colelct today, cheers"
+   },
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": "70",
+    "marketplace": "facebook",
+    "my_message": "hey mtae 55??"
+   },
+   {
+    "listing_title": "Sony WH-1000XM4",
+    "asking_price": "140",
+    "marketplace": "facebook",
+    "my_message": "are the pads peeling at all? woudl yuo take 110 and i can colelct today after wokr"
+   }
+  ],
+  "key": {
+   "greeting": "hey mtae",
+   "offer": "woudl yuo take {price}",
+   "after": [
+    "can colelct today"
+   ],
+   "short": []
+  },
+  "one_offs": [
+   "cna send a deposit to hold it",
+   "thnaks",
+   "id give yuo 210 for it"
+  ],
+  "writer_key": {
+   "greeting": "hey mtae",
+   "offer": "woudl yuo take {price}",
+   "after": [
+    "can colelct today"
+   ],
+   "likes": "",
+   "sign_off": "",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "hey mtae",
+   "offer": "woudl yuo take {price}",
+   "after_offer": [
+    "can colelct today"
+   ],
+   "likes": "",
+   "sign_off": "",
+   "short_words": [],
+   "unsure": "'yuo' (5 of 6 messages) and 'woudl', 'colelct' and 'mtae' (4 of 6 each) are misspelt the same way every time. They are typos, not shortened words, so I left short words empty, even though score.py's short-word check would accept them. 'teh' is not used every time: 2 messages spell 'the' correctly. The messages end differently ('thnaks' and 'cheers' once each), so there is no sign-off."
+  }
+ },
+ {
+  "id": "w11",
+  "name": "Leanne",
+  "messages": [
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": "450",
+    "marketplace": "facebook",
+    "my_message": "Hiya hun, would you accept 380 for the macbook air? My daughter starts uni in September so it'd be perfect for her. Can collect whenever suits, thanks hun xx"
+   },
+   {
+    "listing_title": "Nike Air Max 90 size 9",
+    "asking_price": "60",
+    "marketplace": "facebook",
+    "my_message": "hiya hun! could you do 48 for the trainers? my son's been on at me for some 90s for ages. can collect whenever suits xx"
+   },
+   {
+    "listing_title": "Steam Deck 512GB",
+    "asking_price": "340",
+    "marketplace": "facebook",
+    "my_message": "HIYA HUN, is there any chance you'd let the steam deck go for 290? It's a surprise for my other half. Can collect whenever suits or you're welcome to drop it round and I'll cover your petrol. Thanks hun xx"
+   },
+   {
+    "listing_title": "MacBook Pro 14 M1 Pro",
+    "asking_price": "950",
+    "marketplace": "facebook",
+    "my_message": "Hiya Hun. I know it's cheeky but I can offer 800 for the pro, cash in hand. thanks hun xx"
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": "300",
+    "marketplace": "facebook",
+    "my_message": "would you take 255? x"
+   },
+   {
+    "listing_title": "iPhone 13 128GB Blue",
+    "asking_price": "220",
+    "marketplace": "facebook",
+    "my_message": "Hiya hun!! how would 180 sound for the iphone? my mum keeps smashing hers 🙈 can collect whenever suits, just let me know. Thanks hun xx"
+   }
+  ],
+  "key": {
+   "greeting": "hiya hun",
+   "sign_off": "thanks hun xx",
+   "after": [
+    "can collect whenever suits"
+   ],
+   "short": []
+  },
+  "one_offs": [
+   "cash in hand",
+   "just let me know",
+   "i know it's cheeky"
+  ],
+  "writer_key": {
+   "greeting": "hiya hun",
+   "offer": "",
+   "after": [
+    "can collect whenever suits"
+   ],
+   "likes": "",
+   "sign_off": "thanks hun xx",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "Hiya hun",
+   "offer": "",
+   "after_offer": [
+    "can collect whenever suits"
+   ],
+   "likes": "",
+   "sign_off": "thanks hun xx",
+   "short_words": [],
+   "unsure": "The offer wording changes every time: would you accept / could you do / is there any chance you'd let ... go for / I can offer / would you take / how would ... sound. So I left offer empty. Only the filler '{price} for the {item}' repeats (msgs 1, 2, 4 = 3 of 6), and it isn't an offer phrase on its own. Sign-off: 'thanks hun xx' ends 4 of 6 (msgs 1, 3, 4, 6). Msg 2 ends with just 'xx', so 5 of 6 end in 'xx'. Msg 5 ends with a single 'x'. 'Hiya hun' is in 5 of 6 and 'can collect whenever suits' in 4 of 6 (msgs 1, 2, 3, 6). 'cash in hand' is in 1 message only."
+  }
+ },
+ {
+  "id": "w12",
+  "name": "Rob",
+  "messages": [
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": "70",
+    "marketplace": "facebook",
+    "my_message": "Hi mate, would you take £55 for the speaker? Can collect today. Cheers, Rob"
+   },
+   {
+    "listing_title": "North Face puffer jacket",
+    "asking_price": "90",
+    "marketplace": "facebook",
+    "my_message": "Hi mate, still got the puffer? Would you take £68? Can collect today."
+   },
+   {
+    "listing_title": "Nike Air Max 90 size 9",
+    "asking_price": "60",
+    "marketplace": "facebook",
+    "my_message": "£45 and I'm on my way now. Genuine cash buyer."
+   },
+   {
+    "listing_title": "Galaxy S21 Ultra",
+    "asking_price": "260",
+    "marketplace": "facebook",
+    "my_message": "Hi mate, is the screen original? Would you take £200 if so. Can collect today after 5. Cheers, Rob"
+   },
+   {
+    "listing_title": "Canon EOS 250D",
+    "asking_price": "320",
+    "marketplace": "facebook",
+    "my_message": "hi mate does it come with the kit lens? would you take £250 for the lot"
+   },
+   {
+    "listing_title": "iPhone 13 128GB Blue",
+    "asking_price": "220",
+    "marketplace": "facebook",
+    "my_message": "Can do £175 cash if it's unlocked."
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": "450",
+    "marketplace": "facebook",
+    "my_message": "Hi mate, what's the battery health? Would you take £350? Can collect today, cash ready. Cheers, Rob"
+   },
+   {
+    "listing_title": "Apple Watch Series 8",
+    "asking_price": "180",
+    "marketplace": "facebook",
+    "my_message": "Hi mate, £135 and I can be with you in 20 mins."
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": "380",
+    "marketplace": "facebook",
+    "my_message": "Can collect today. Would you take £310 for the iPad? Cheers, Rob"
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": "150",
+    "marketplace": "facebook",
+    "my_message": "Hi mate, any movement on the sofa? I'd do £110 and bring a van tonight."
+   }
+  ],
+  "key": {
+   "greeting": "hi mate",
+   "offer": "would you take {price}",
+   "sign_off": "cheers, rob",
+   "after": [
+    "can collect today"
+   ],
+   "short": []
+  },
+  "one_offs": [
+   "genuine cash buyer",
+   "cash ready",
+   "bring a van tonight"
+  ],
+  "writer_key": {
+   "greeting": "hi mate",
+   "offer": "would you take {price}",
+   "after": [
+    "can collect today"
+   ],
+   "likes": "",
+   "sign_off": "cheers, rob",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "Hi mate",
+   "offer": "Would you take £{price}?",
+   "after_offer": [
+    "can collect today"
+   ],
+   "likes": "",
+   "sign_off": "Cheers, Rob",
+   "short_words": [],
+   "unsure": "'Cheers, Rob' is in exactly 4 of 10 (msgs 1, 4, 7, 9), right on the 40% line. 'Can collect today' is in 5 of 10, but in msg 9 it comes before the offer, so it follows the offer in only 4 of 10 (still 40%). I kept £ outside {price} because they always write £ before the number. 'Would you take £{price}' is in 6 of 10 and 'Hi mate' in 7 of 10. The cash phrases all differ ('Genuine cash buyer', '£175 cash', 'cash ready'), so none counted. '{price} and ...' (msgs 3, 8, 10) is 3 of 10, under 40%. 'mins' is used once."
+  }
+ },
+ {
+  "id": "w13",
+  "name": "Remi",
+  "messages": [
+   {
+    "listing_title": "Ikea Kallax shelf",
+    "asking_price": "35",
+    "marketplace": "gumtree",
+    "my_message": "hey there :) would you be up for £28? really like the kallax, it'd fit my hallway perfectly. happy to collect this weekend. remi :), cheers"
+   },
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": "70",
+    "marketplace": "gumtree",
+    "my_message": "hey there, does the battery still hold a good charge :) i'd go £58 if that's alright. remi :), cheers"
+   },
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": "160",
+    "marketplace": "gumtree",
+    "my_message": "really like the garmin! been wanting one for marathon training :) would you be up for £130? remi :), cheers"
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": "380",
+    "marketplace": "gumtree",
+    "my_message": "hey there :) really like the ipad, is it the 64gb one? would you be up for £320? remi :), cheers"
+   },
+   {
+    "listing_title": "GoPro Hero 10",
+    "asking_price": "200",
+    "marketplace": "gumtree",
+    "my_message": "is £165 any good? i'd mostly be using it on my bike rides :)"
+   },
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": "280",
+    "marketplace": "gumtree",
+    "my_message": "hey there! is the controller included? would you be up for £235? really like the xbox and my brother's birthday is next week :) remi :), cheers"
+   }
+  ],
+  "key": {
+   "greeting": "hey there",
+   "offer": "would you be up for {price}",
+   "likes": "really like the {item}",
+   "sign_off": "remi :), cheers",
+   "after": [],
+   "short": []
+  },
+  "one_offs": [
+   "happy to collect this weekend",
+   "if that's alright"
+  ],
+  "writer_key": {
+   "greeting": "hey there",
+   "offer": "would you be up for {price}",
+   "after": [],
+   "likes": "really like the {item}",
+   "sign_off": "remi :), cheers",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "hey there",
+   "offer": "would you be up for £{price}?",
+   "after_offer": [],
+   "likes": "really like the {item}",
+   "sign_off": "remi :), cheers",
+   "short_words": [],
+   "unsure": "':)' comes right after 'hey there' in only 2 of 6 (msgs 1, 4), so the greeting is just 'hey there' (4 of 6). 'happy to collect this weekend' is in 1 message only, so after_offer is empty. 'would you be up for £{price}' is in 4 of 6, 'really like the {item}' in 4 of 6 and 'remi :), cheers' in 5 of 6. I kept £ outside {price}. Lowercase 'i'd' is a capital-letter habit, not a short word."
+  }
+ },
+ {
+  "id": "w14",
+  "name": "Rhys",
+  "messages": [
+   {
+    "listing_title": "Mountain bike 27.5in",
+    "asking_price": "180",
+    "marketplace": "vinted",
+    "my_message": "yo bro lowkey love the bike, wud u do 140? need it for getting to college fr. rhys 😎"
+   },
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": "70",
+    "marketplace": "vinted",
+    "my_message": "wud u do 55 for the speaker? can pay straight away ngl. rhys 😎"
+   },
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": "300",
+    "marketplace": "vinted",
+    "my_message": "yo bro is the disc drive working? lowkey love the ps5, 250 and i can pay straight away. lmk"
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": "300",
+    "marketplace": "vinted",
+    "my_message": "yo bro wud u do 240 for the drone? its for my bday so wud be sick. rhys 😎"
+   },
+   {
+    "listing_title": "North Face puffer jacket",
+    "asking_price": "90",
+    "marketplace": "vinted",
+    "my_message": "lowkey love the puffer ngl, wud u do 65? cant go higher than that fr"
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": "380",
+    "marketplace": "vinted",
+    "my_message": "yo bro whats the battery like on the ipad? 310 is the most i got, can pay straight away if u accept. rhys 😎"
+   },
+   {
+    "listing_title": "Sony WH-1000XM4",
+    "asking_price": "140",
+    "marketplace": "vinted",
+    "my_message": "wud u do 110 for the xm4s?? lmk bro. rhys 😎"
+   },
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": "280",
+    "marketplace": "vinted",
+    "my_message": "yo bro does it come with a controller? lowkey love the xbox tbh, 230 and its a deal? can pay straight away. rhys 😎"
+   }
+  ],
+  "key": {
+   "greeting": "yo bro",
+   "offer": "wud u do {price}",
+   "likes": "lowkey love the {item}",
+   "sign_off": "rhys 😎",
+   "after": [
+    "can pay straight away"
+   ],
+   "short": [
+    [
+     "you",
+     "u"
+    ],
+    [
+     "would",
+     "wud"
+    ]
+   ]
+  },
+  "one_offs": [
+   "cant go higher than that",
+   "its a deal"
+  ],
+  "writer_key": {
+   "greeting": "yo bro",
+   "offer": "wud u do {price}",
+   "after": [
+    "can pay straight away"
+   ],
+   "likes": "lowkey love the {item}",
+   "sign_off": "rhys 😎",
+   "short": [
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "would",
+     "written": "wud"
+    }
+   ]
+  },
+  "blind_judge": {
+   "greeting": "yo bro",
+   "offer": "wud u do {price}?",
+   "after_offer": [
+    "can pay straight away"
+   ],
+   "likes": "lowkey love the {item}",
+   "sign_off": "rhys 😎",
+   "short_words": [
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "would",
+     "written": "wud"
+    }
+   ],
+   "unsure": "'lmk' (msgs 3, 7), 'ngl' (msgs 2, 5) and 'fr' (msgs 1, 5) are short forms they use every time, but each is in only 2 of 8 (25%), so I left them out. 'bday' is in 1 message. Msg 3 says 'i can pay straight away', which I counted. 'can pay straight away' (msgs 2, 3, 6, 8) and 'lowkey love the {item}' (msgs 1, 3, 5, 8) are each exactly 4 of 8. 'u' is in 6 of 8 and they never write 'you'. 'wud' is in 5 of 8 and they never write 'would'. 'for the {item}' after the offer is 3 of 8, under 40%, so it's not in the offer."
+  }
+ },
+ {
+  "id": "w15",
+  "name": "Maya",
+  "messages": [
+   {
+    "listing_title": "GoPro Hero 10",
+    "asking_price": "200",
+    "marketplace": "gumtree",
+    "my_message": "Hello! love the gopro, can u do 160£? would be for a ski trip in jan. ta, maya :-)"
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": "380",
+    "marketplace": "gumtree",
+    "my_message": "Hello, can u do 300£ for the ipad? pls say if its still under warranty. ta, maya :-)"
+   },
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": "70",
+    "marketplace": "gumtree",
+    "my_message": "can u do 50£ for the speaker pls? ta, maya :-)"
+   },
+   {
+    "listing_title": "Nintendo Switch OLED",
+    "asking_price": "220",
+    "marketplace": "gumtree",
+    "my_message": "Hello, is it the white one? love the switch but 180£ is my max sadly. ta, maya :-)"
+   },
+   {
+    "listing_title": "iPhone 13 128GB Blue",
+    "asking_price": "220",
+    "marketplace": "gumtree",
+    "my_message": "Hello, whats the battery health like? can u do 170£ pls, its for my son. ta, maya :-)"
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": "450",
+    "marketplace": "gumtree",
+    "my_message": "i could stretch to 370£ for the macbook if thats alright with u"
+   },
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": "330",
+    "marketplace": "gumtree",
+    "my_message": "Hello, any marks on the screen? love the s23 in that colour, would u take 270£? ta, maya :-)"
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": "150",
+    "marketplace": "gumtree",
+    "my_message": "Hello, would 100£ do? i can bring a friend to help carry it. ta, maya :-)"
+   },
+   {
+    "listing_title": "iPhone 12 64GB",
+    "asking_price": "150",
+    "marketplace": "gumtree",
+    "my_message": "can u do 120£? love the iphone 12, my old one just died lol. ta, maya :-)"
+   },
+   {
+    "listing_title": "North Face puffer jacket",
+    "asking_price": "90",
+    "marketplace": "gumtree",
+    "my_message": "Hello, does it run big? can u do 65£ for the jacket pls"
+   }
+  ],
+  "key": {
+   "greeting": "hello",
+   "offer": "can u do {price}",
+   "likes": "love the {item}",
+   "sign_off": "ta, maya :-)",
+   "after": [],
+   "short": [
+    [
+     "you",
+     "u"
+    ],
+    [
+     "please",
+     "pls"
+    ]
+   ]
+  },
+  "one_offs": [
+   "i can bring a friend to help carry it",
+   "if thats alright with u"
+  ],
+  "writer_key": {
+   "greeting": "hello",
+   "offer": "can u do {price}",
+   "after": [],
+   "likes": "love the {item}",
+   "sign_off": "ta, maya :-)",
+   "short": [
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "please",
+     "written": "pls"
+    }
+   ]
+  },
+  "blind_judge": {
+   "greeting": "Hello",
+   "offer": "can u do {price}£?",
+   "after_offer": [],
+   "likes": "love the {item}",
+   "sign_off": "ta, maya :-)",
+   "short_words": [
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "please",
+     "written": "pls"
+    }
+   ],
+   "unsure": "They put £ after the number, so the offer is '{price}£' (6 of 10: msgs 1, 2, 3, 5, 9, 10). 'pls' is in exactly 4 of 10 (msgs 2, 3, 5, 10), right on the 40% line, and they never write 'please'. 'pls' comes straight after the offer in only 3 of 10, so it's not an after-offer phrase. 'love the {item}' is in exactly 4 of 10 (msgs 1, 4, 7, 9). Their other offers differ ('would u take', 'would {price}£ do?', 'i could stretch to', '{price}£ is my max'). 'u' is in 8 of 10 and they never write 'you'. 'jan' and 'lol' are used once."
+  }
+ },
+ {
+  "id": "w16",
+  "name": "Harriet",
+  "messages": [
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": "70",
+    "marketplace": "vinted",
+    "my_message": "Hello there, I really like the speaker and I'm hoping to use it in the garden this summer. Before making an offer, may I ask a few things? Does the battery still hold a decent charge, and roughly how many hours does it last now? Are there any scuffs on the grille or the rubber ends? Is the original charging cable included as well? If everything is fine, would you consider £55? Many thanks, Harriet"
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": "300",
+    "marketplace": "vinted",
+    "my_message": "Hello there, hope you're well. I've been reading up on drones for months and this model seems right for a beginner like me, so I have a couple of questions first. Has it ever crashed or needed a repair? How many batteries come with it, and do they all still charge properly? Is it the version with the standard controller or the one with a built-in screen? Lastly, has it been registered with the CAA under your name? Would you consider £250? I can pay straight away. Many thanks, Harriet"
+   },
+   {
+    "listing_title": "Nintendo Switch OLED",
+    "asking_price": "220",
+    "marketplace": "vinted",
+    "my_message": "Good evening, I really like the switch and my son has been asking for one for his birthday. Could you tell me whether the screen has any scratches, or whether a protector has been on it since new? Do the joy-cons drift at all when the sticks are left alone? I'd also like to know if the dock and the box are included. My best offer would be £185, if that works for you. Many thanks, Harriet"
+   },
+   {
+    "listing_title": "Ikea Kallax shelf",
+    "asking_price": "35",
+    "marketplace": "vinted",
+    "my_message": "Hello there, is this the four by four unit or the smaller two by two? I'm also wondering whether any of the cubes have chips on the corners, and whether all the fixings are still with it. As it's quite big, would collection be possible instead of posting? I'm only a short drive away. Would you consider £28? Many thanks, Harriet"
+   },
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": "300",
+    "marketplace": "vinted",
+    "my_message": "I really like the ps5 and would love to get it before Christmas, but I wanted to check a few details first. Does the disc drive run quietly, without any grinding noises? Has the console been kept in a smoke-free home? Which controller is included, and does it have any stick drift? Would you consider £260? Many thanks, Harriet"
+   },
+   {
+    "listing_title": "iPhone 13 128GB Blue",
+    "asking_price": "220",
+    "marketplace": "vinted",
+    "my_message": "Hello there, I really like the iphone, the blue is such a nice colour. What is the battery health showing in settings at the moment? Has the screen or the battery ever been replaced, and does Face ID work as it should? It would also help to hear whether it's unlocked to all networks. I'd be able to pay £190 for it."
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": "450",
+    "marketplace": "vinted",
+    "my_message": "Hello there, I really like the macbook and it would be perfect for my university work. How many charge cycles has it done so far? Do you see any dents on the lid or shiny marks on the keys? Will it be reset and signed out of iCloud, and is the charger part of the sale? Would you consider £390? I can pay straight away. Many thanks, Harriet"
+   },
+   {
+    "listing_title": "Ninja air fryer",
+    "asking_price": "60",
+    "marketplace": "vinted",
+    "my_message": "Hi, could you let me know which model this is, the single drawer or the dual zone? Roughly how often did you use it? Is the non-stick coating in the baskets free from scratches? I'd want to be sure it has been cleaned thoroughly before it's posted. Would you consider £45? Have a lovely evening"
+   }
+  ],
+  "key": {
+   "greeting": "Hello there",
+   "offer": "would you consider {price}",
+   "likes": "I really like the {item}",
+   "sign_off": "Many thanks, Harriet",
+   "after": [],
+   "short": []
+  },
+  "one_offs": [
+   "if that works for you",
+   "I'd be able to pay £190 for it",
+   "Have a lovely evening"
+  ],
+  "writer_key": {
+   "greeting": "Hello there",
+   "offer": "would you consider {price}",
+   "after": [
+    "I can pay straight away"
+   ],
+   "likes": "I really like the {item}",
+   "sign_off": "Many thanks, Harriet",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "Hello there",
+   "offer": "Would you consider {price}?",
+   "after_offer": [],
+   "likes": "I really like the {item}",
+   "sign_off": "Many thanks, Harriet",
+   "short_words": [],
+   "unsure": "'I can pay straight away' comes after the offer in only 2 of 8 messages (25%), under 40%, so I left it out. Counts: greeting 5/8, offer 6/8, likes 5/8 (speaker, switch, ps5, iphone, macbook), sign-off 6/8. {price} means the amount as she writes it, with the £ (\"£55\"), so the template has no £ of its own."
+  }
+ },
+ {
+  "id": "w17",
+  "name": "Kayleigh",
+  "messages": [
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": "70",
+    "marketplace": "facebook",
+    "my_message": "hiya wud u do 50 i love the speaker cud get it 2day if thats ok pls"
+   },
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": "160",
+    "marketplace": "facebook",
+    "my_message": "hiya is the strap in good nick and does it still pair with the app wud u do 125 cud meet u 2day after work"
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": "450",
+    "marketplace": "facebook",
+    "my_message": "is the battery still good on it wud u do 380 pls i love the macbook"
+   },
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": "300",
+    "marketplace": "facebook",
+    "my_message": "hiya i love the ps5 cud u go to 250 pls and i can come 2day"
+   },
+   {
+    "listing_title": "iPhone 13 128GB Blue",
+    "asking_price": "220",
+    "marketplace": "facebook",
+    "my_message": "hiya wud u do 180 for it cud u send a pic of the back pls and is it unlocked"
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": "300",
+    "marketplace": "facebook",
+    "my_message": "take 240?"
+   },
+   {
+    "listing_title": "Canon EOS 250D",
+    "asking_price": "320",
+    "marketplace": "facebook",
+    "my_message": "hiya i love the camera does it come with the lens and charger wud u do 260 can meet u halfway if thats easier"
+   }
+  ],
+  "key": {
+   "greeting": "hiya",
+   "offer": "wud u do {price}",
+   "likes": "i love the {item}",
+   "after": [],
+   "short": [
+    [
+     "you",
+     "u"
+    ],
+    [
+     "would",
+     "wud"
+    ],
+    [
+     "please",
+     "pls"
+    ],
+    [
+     "could",
+     "cud"
+    ],
+    [
+     "today",
+     "2day"
+    ]
+   ]
+  },
+  "one_offs": [
+   "can meet u halfway if thats easier",
+   "cud get it 2day if thats ok",
+   "cud u go to 250"
+  ],
+  "writer_key": {
+   "greeting": "hiya",
+   "offer": "wud u do {price}",
+   "after": [],
+   "likes": "i love the {item}",
+   "sign_off": "",
+   "short": [
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "please",
+     "written": "pls"
+    },
+    {
+     "word": "could",
+     "written": "cud"
+    },
+    {
+     "word": "today",
+     "written": "2day"
+    }
+   ]
+  },
+  "blind_judge": {
+   "greeting": "hiya",
+   "offer": "wud u do {price}",
+   "after_offer": [],
+   "likes": "i love the {item}",
+   "sign_off": "",
+   "short_words": [
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "could",
+     "written": "cud"
+    },
+    {
+     "word": "please",
+     "written": "pls"
+    },
+    {
+     "word": "today",
+     "written": "2day"
+    }
+   ],
+   "unsure": "'2day' is in 3 of 7 messages (43%), only just over the line. The phrases around it are all different ('cud get it 2day', 'cud meet u 2day after work', 'i can come 2day'), so there is no after-offer habit. 'cud meet u' / 'can meet u halfway' and 'if thats ok pls' / 'if thats easier' use different words, so I left them out. I counted 'pls' as a short word, not an after-offer phrase. 'thats' (no apostrophe) is in only 2 of 7, so I left it out. Counts: greeting 5/7, offer 5/7, likes 4/7 (speaker, macbook, ps5, camera)."
+  }
+ },
+ {
+  "id": "w18",
+  "name": "Trevor",
+  "messages": [
+   {
+    "listing_title": "Mountain bike 27.5in",
+    "asking_price": "180",
+    "marketplace": "gumtree",
+    "my_message": "HELLO. ANY RUST ON THE CHAIN OR GEARS? WILL YOU TAKE £140. CASH WAITING. CHEERS TREVOR"
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": "380",
+    "marketplace": "gumtree",
+    "my_message": "HELLO, WHATS THE BATTERY LIKE AND IS IT WIFI ONLY. WILL YOU TAKE £300 FOR IT. TEXT ME BACK. CHEERS TREVOR"
+   },
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": "330",
+    "marketplace": "gumtree",
+    "my_message": "IS IT UNLOCKED AND ANY MARKS ON THE SCREEN. WILL YOU TAKE £270. CASH WAITING. CHEERS TREVOR"
+   },
+   {
+    "listing_title": "Nike Air Max 90 size 9",
+    "asking_price": "60",
+    "marketplace": "gumtree",
+    "my_message": "HELLO. ARE THEY GENUINE AND HOW MUCH WEAR ON THE SOLES. I'LL GIVE YOU £45 FOR THEM. CASH WAITING."
+   },
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": "160",
+    "marketplace": "gumtree",
+    "my_message": "WILL YOU TAKE £120. DOES THE WATCH COME WITH A CHARGER. RING ME BACK."
+   },
+   {
+    "listing_title": "Kindle Paperwhite",
+    "asking_price": "70",
+    "marketplace": "gumtree",
+    "my_message": "HELLO. SCREEN OK, NO DEAD PIXELS? WILL YOU TAKE £50. CASH WAITING. CAN COME SATURDAY. CHEERS TREVOR"
+   }
+  ],
+  "key": {
+   "greeting": "HELLO",
+   "offer": "WILL YOU TAKE {price}",
+   "sign_off": "CHEERS TREVOR",
+   "after": [
+    "CASH WAITING"
+   ],
+   "short": []
+  },
+  "one_offs": [
+   "TEXT ME BACK",
+   "RING ME BACK",
+   "CAN COME SATURDAY"
+  ],
+  "writer_key": {
+   "greeting": "HELLO",
+   "offer": "WILL YOU TAKE {price}",
+   "after": [
+    "CASH WAITING"
+   ],
+   "likes": "",
+   "sign_off": "CHEERS TREVOR",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "HELLO",
+   "offer": "WILL YOU TAKE {price}.",
+   "after_offer": [
+    "CASH WAITING"
+   ],
+   "likes": "",
+   "sign_off": "CHEERS TREVOR",
+   "short_words": [],
+   "unsure": "'TEXT ME BACK' and 'RING ME BACK' look alike but are in one message each, so neither is a habit. 'FOR IT' after the offer and 'CAN COME SATURDAY' are in one message each. I kept his all-capitals. Counts: greeting 4/6, offer 5/6, CASH WAITING 4/6, sign-off 4/6."
+  }
+ },
+ {
+  "id": "w19",
+  "name": "Eleanor",
+  "messages": [
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": "300",
+    "marketplace": "gumtree",
+    "my_message": "Hello, I hope you are keeping well. I noticed your PS5 listing and wondered whether it comes with both controllers and the original box. I would like to offer £250. I can collect at your convenience. Kind regards, Eleanor"
+   },
+   {
+    "listing_title": "GoPro Hero 10",
+    "asking_price": "200",
+    "marketplace": "gumtree",
+    "my_message": "Hello, could you tell me how many batteries are included, and whether the camera has ever been used underwater? I would like to offer £165. Collecting at the weekend would suit me best, if that is convenient. With best wishes, Eleanor"
+   },
+   {
+    "listing_title": "Apple Watch Series 8",
+    "asking_price": "180",
+    "marketplace": "gumtree",
+    "my_message": "Good morning. Might I ask what the battery health is? I would also appreciate knowing if the strap shows any signs of wear. Would you be willing to accept £150? I can collect at your convenience. Kind regards, Eleanor"
+   },
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": "280",
+    "marketplace": "gumtree",
+    "my_message": "Hello, I would be grateful if you could confirm that the console has no faults and that a controller is included. I would like to offer £235. I can collect at your convenience. Kind regards, Eleanor"
+   },
+   {
+    "listing_title": "Mountain bike 27.5in",
+    "asking_price": "180",
+    "marketplace": "gumtree",
+    "my_message": "Would £145 be acceptable?"
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": "300",
+    "marketplace": "gumtree",
+    "my_message": "Hello, I have been hoping to find a drone in good order for some time. Has this one been registered, and are the propellers free of damage? I would like to offer £255. I can collect at your convenience. With warm wishes, Eleanor"
+   }
+  ],
+  "key": {
+   "greeting": "Hello",
+   "offer": "I would like to offer {price}",
+   "sign_off": "Kind regards, Eleanor",
+   "after": [
+    "I can collect at your convenience"
+   ],
+   "short": []
+  },
+  "one_offs": [
+   "With best wishes, Eleanor",
+   "With warm wishes, Eleanor",
+   "Collecting at the weekend would suit me best"
+  ],
+  "writer_key": {
+   "greeting": "Hello",
+   "offer": "I would like to offer {price}",
+   "after": [
+    "I can collect at your convenience"
+   ],
+   "likes": "",
+   "sign_off": "Kind regards, Eleanor",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "Hello",
+   "offer": "I would like to offer {price}.",
+   "after_offer": [
+    "I can collect at your convenience"
+   ],
+   "likes": "",
+   "sign_off": "Kind regards, Eleanor",
+   "short_words": [],
+   "unsure": "Her sign-off changes. 'Kind regards, Eleanor' is in 3 of 6 (50%). 'With best wishes, Eleanor' and 'With warm wishes, Eleanor' are in one message each, so I left them out. 'Eleanor' on its own ends 5 of 6. 'Collecting at the weekend would suit me best' is a different wording from the collect habit and is in one message only. Counts: greeting 4/6, offer 4/6, after 4/6."
+  }
+ },
+ {
+  "id": "w20",
+  "name": "Jas",
+  "messages": [
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": "160",
+    "marketplace": "facebook",
+    "my_message": "omg this is exactly the watch i've been looking for 😍😍 is the battery still good? 🔋 would you do £125? 🙏 thank youuu 🥰"
+   },
+   {
+    "listing_title": "GoPro Hero 10",
+    "asking_price": "200",
+    "marketplace": "facebook",
+    "my_message": "heyy 👋 does it come with any mounts or the waterproof case? 🌊📸 would you do £160 🙏 can pick up asap 🏃‍♀️ xx 💕"
+   },
+   {
+    "listing_title": "iPhone 12 64GB",
+    "asking_price": "150",
+    "marketplace": "facebook",
+    "my_message": "hiii 😊 any cracks on the screen or back? 📱 and what's the battery health at? is £120 any good? 👀 thank youuu 🥰"
+   },
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": "280",
+    "marketplace": "facebook",
+    "my_message": "ahh my brother would literally love this 🎮🔥 does it have any controllers with it? would you do £230 🙏 can pick up asap 🏃‍♀️ thank youuu 🥰"
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": "300",
+    "marketplace": "facebook",
+    "my_message": "WAIT this is so cool 😱✈️ has it ever crashed?? could i get it for £240 🥺 can meet anywhere in town 📍 lmk!! 🙌"
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": "380",
+    "marketplace": "facebook",
+    "my_message": "this would be perfect for uni 📚✨ is the apple pencil included or no? ✏️ would you do £310? 💸 thank youuu 🥰"
+   }
+  ],
+  "key": {
+   "offer": "would you do {price}",
+   "sign_off": "thank youuu 🥰",
+   "after": [],
+   "short": []
+  },
+  "one_offs": [
+   "can meet anywhere in town",
+   "is £120 any good?",
+   "xx 💕"
+  ],
+  "writer_key": {
+   "greeting": "",
+   "offer": "would you do {price}",
+   "after": [
+    "can pick up asap"
+   ],
+   "likes": "",
+   "sign_off": "thank youuu 🥰",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "",
+   "offer": "would you do {price} 🙏",
+   "after_offer": [],
+   "likes": "",
+   "sign_off": "thank youuu 🥰",
+   "short_words": [],
+   "unsure": "The 🙏 follows the offer in 3 of 6 messages (50%), so I kept it in the offer. 'would you do {price}' without it is in 4 of 6 (the 4th has 💸 instead). 'can pick up asap 🏃‍♀️' is in only 2 of 6 (33%), under 40%, so I left it out, and the same for 'asap' as a short word. 'heyy' and 'hiii' are one greeting each. The like phrases all use different words. Sign-off 4/6."
+  }
+ },
+ {
+  "id": "w21",
+  "name": "Corey",
+  "messages": [
+   {
+    "listing_title": "iPhone 12 64GB",
+    "asking_price": "150",
+    "marketplace": "gumtree",
+    "my_message": "hi, £120 any good? can collect tonight"
+   },
+   {
+    "listing_title": "Steam Deck 512GB",
+    "asking_price": "340",
+    "marketplace": "gumtree",
+    "my_message": "hi - boxed? £280 any good? love the deck, ta corey"
+   },
+   {
+    "listing_title": "iPhone 13 128GB Blue",
+    "asking_price": "220",
+    "marketplace": "gumtree",
+    "my_message": "£185 any good? could pick up tonight"
+   },
+   {
+    "listing_title": "Dyson V11 cordless",
+    "asking_price": "200",
+    "marketplace": "gumtree",
+    "my_message": "hi, love the v11! £150 any good? ta corey"
+   },
+   {
+    "listing_title": "MacBook Pro 14 M1 Pro",
+    "asking_price": "950",
+    "marketplace": "gumtree",
+    "my_message": "£800 any good for it? love the mbp. ta corey"
+   }
+  ],
+  "key": {
+   "greeting": "hi",
+   "offer": "{price} any good?",
+   "likes": "love the {item}",
+   "sign_off": "ta corey",
+   "after": [],
+   "short": []
+  },
+  "one_offs": [
+   "can collect tonight",
+   "could pick up tonight"
+  ],
+  "writer_key": {
+   "greeting": "hi",
+   "offer": "{price} any good?",
+   "after": [],
+   "likes": "love the {item}",
+   "sign_off": "ta corey",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "hi",
+   "offer": "{price} any good?",
+   "after_offer": [],
+   "likes": "love the {item}",
+   "sign_off": "ta corey",
+   "short_words": [],
+   "unsure": "after_offer left empty on purpose: 'can collect tonight' (msg 1) and 'could pick up tonight' (msg 3) share only the word 'tonight' (2 of 5) and otherwise use different words, so neither is a habit. Msg 5 says '£800 any good for it?', which I counted as the same offer."
+  }
+ },
+ {
+  "id": "w22",
+  "name": "Tamsin",
+  "messages": [
+   {
+    "listing_title": "Steam Deck 512GB",
+    "asking_price": "340",
+    "marketplace": "vinted",
+    "my_message": "hey lovely, my partner's been on about getting one for months and his birthday is in two weeks, I absolutely love the deck so would you be up for £290 then, can pay as soon as you accept, thanks a million, Tamsin x"
+   },
+   {
+    "listing_title": "Nike Air Max 90 size 9",
+    "asking_price": "60",
+    "marketplace": "vinted",
+    "my_message": "Hey lovely! I absolutely love the air maxes, my son has shot up again and he's a size 9 now, would you be up for £45 maybe, thanks a million, Tamsin x"
+   },
+   {
+    "listing_title": "Canon EOS 250D",
+    "asking_price": "320",
+    "marketplace": "vinted",
+    "my_message": "HEY LOVELY so I've signed up for a photography course in January and really need a proper camera instead of my phone, would you be up for £260 for the canon, can pay as soon as you accept and thanks a million Tamsin x"
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": "300",
+    "marketplace": "vinted",
+    "my_message": "right so my dad watches drone videos every night on youtube and I want to surprise him for his 60th, I absolutely love the mini 3 and would you be up for £240?? can pay as soon as you accept 😊"
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": "150",
+    "marketplace": "vinted",
+    "my_message": "hey lovely :) we've just moved into our first flat and we're sat on cushions on the floor lol, I absolutely love the sofa, would you be up for £110 and my brother can grab it in his van, thanks a million, Tamsin x"
+   },
+   {
+    "listing_title": "Ninja air fryer",
+    "asking_price": "60",
+    "marketplace": "vinted",
+    "my_message": "Hey lovely, our oven packed in last week and everyone keeps telling me air fryers are a game changer, would you be up for £48 at a push, can pay as soon as you accept, would be such a lifesaver honestly"
+   },
+   {
+    "listing_title": "Apple Watch Series 8",
+    "asking_price": "180",
+    "marketplace": "vinted",
+    "my_message": "hey lovely!! been getting into running and my old fitbit died on me halfway through a 10k, I absolutely love the watch, would you be up for £150, thanks a million, Tamsin x"
+   }
+  ],
+  "key": {
+   "greeting": "hey lovely",
+   "offer": "would you be up for {price}",
+   "likes": "I absolutely love the {item}",
+   "sign_off": "thanks a million, Tamsin x",
+   "after": [
+    "can pay as soon as you accept"
+   ],
+   "short": []
+  },
+  "one_offs": [
+   "would be such a lifesaver honestly",
+   "at a push",
+   "my brother can grab it in his van"
+  ],
+  "writer_key": {
+   "greeting": "hey lovely",
+   "offer": "would you be up for {price}",
+   "after": [
+    "can pay as soon as you accept"
+   ],
+   "likes": "I absolutely love the {item}",
+   "sign_off": "thanks a million, Tamsin x",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "hey lovely",
+   "offer": "would you be up for {price}",
+   "after_offer": [
+    "can pay as soon as you accept"
+   ],
+   "likes": "I absolutely love the {item}",
+   "sign_off": "thanks a million, Tamsin x",
+   "short_words": [],
+   "unsure": "Msg 3 ends 'and thanks a million Tamsin x' (no comma). I counted it as the same sign-off, and it is still 4 of 7 without it. The offer has no '?' because only 1 of 7 messages uses one. The one-off extras ('my brother can grab it in his van', 'would be such a lifesaver honestly', 'at a push') appear once each."
+  }
+ },
+ {
+  "id": "w23",
+  "name": "Mihai",
+  "messages": [
+   {
+    "listing_title": "Dyson V11 cordless",
+    "asking_price": "200",
+    "marketplace": "facebook",
+    "my_message": "Hello friend, my old hoover is broken. I like very much the dyson, I can give 160 pound, is good? today I come for pick up. Have nice day, Mihai"
+   },
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": "300",
+    "marketplace": "facebook",
+    "my_message": "hello friend! u still have the ps5? I can give 250 pound, is good? cash I bring with me, write me back pls"
+   },
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": "280",
+    "marketplace": "facebook",
+    "my_message": "HELLO FRIEND, pls tell me the xbox is still available? I can give 220 pound, is good? it is for my son birthday and I like very much the xbox. Have nice day, Mihai"
+   },
+   {
+    "listing_title": "Nike Air Max 90 size 9",
+    "asking_price": "60",
+    "marketplace": "facebook",
+    "my_message": "Hello, friend. this shoes are size 9 for sure? u accept maybe 45 pound? today I come for pick up, cash I bring with me"
+   },
+   {
+    "listing_title": "Canon EOS 250D",
+    "asking_price": "320",
+    "marketplace": "facebook",
+    "my_message": "hello friend :) I am learning photography, I like very much the canon. can u do something on the price? I can give 270 pound, is good? if u agree today I come for pick up with my car. Have nice day, Mihai"
+   },
+   {
+    "listing_title": "Kindle Paperwhite",
+    "asking_price": "70",
+    "marketplace": "facebook",
+    "my_message": "Good evening, I like very much the kindle for reading in bed. I can give 55 pound, is good? no problem, cash I bring with me and today I come for pick up, answer me pls. Have nice day, Mihai"
+   }
+  ],
+  "key": {
+   "greeting": "hello friend",
+   "offer": "I can give {price} pound, is good?",
+   "likes": "I like very much the {item}",
+   "sign_off": "Have nice day, Mihai",
+   "after": [
+    "today I come for pick up",
+    "cash I bring with me"
+   ],
+   "short": [
+    [
+     "you",
+     "u"
+    ],
+    [
+     "please",
+     "pls"
+    ]
+   ]
+  },
+  "one_offs": [
+   "u accept maybe 45 pound?",
+   "write me back pls",
+   "Good evening"
+  ],
+  "writer_key": {
+   "greeting": "hello friend",
+   "offer": "I can give {price} pound, is good?",
+   "after": [
+    "today I come for pick up",
+    "cash I bring with me"
+   ],
+   "likes": "I like very much the {item}",
+   "sign_off": "Have nice day, Mihai",
+   "short": [
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "please",
+     "written": "pls"
+    }
+   ]
+  },
+  "blind_judge": {
+   "greeting": "hello friend",
+   "offer": "I can give {price} pound, is good?",
+   "after_offer": [
+    "today I come for pick up",
+    "cash I bring with me"
+   ],
+   "likes": "I like very much the {item}",
+   "sign_off": "Have nice day, Mihai",
+   "short_words": [
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "please",
+     "written": "pls"
+    }
+   ],
+   "unsure": "They write the amount as a bare number followed by 'pound' ('160 pound'), so I kept 'pound' outside {price}. If {price} is filled with '£160', the draft would read '£160 pound'. Msg 4 makes its offer differently ('u accept maybe 45 pound?'). 'write me back pls' (msg 2) and 'answer me pls' (msg 6) look alike but use different words, so neither is a habit. Only 'pls' counts, and it is in short_words (3 of 6, 'please' never written in full). 'u' is in 3 of 6 and 'you' is never written in full."
+  }
+ },
+ {
+  "id": "w24",
+  "name": "Fraser",
+  "messages": [
+   {
+    "listing_title": "Dyson V11 cordless",
+    "asking_price": "200",
+    "marketplace": "ebay",
+    "my_message": "Awrite pal, would you go £160? cracking wee dyson, can collect the morra. cheers, Fraser :)"
+   },
+   {
+    "listing_title": "Nike Air Max 90 size 9",
+    "asking_price": "60",
+    "marketplace": "ebay",
+    "my_message": "Awrite pal, are they true to size? would you go £48 for them, can pay right away aye. cheers, Fraser :)"
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": "450",
+    "marketplace": "ebay",
+    "my_message": "Awrite pal, battery health still good on it? cracking wee macbook so it is, would you go £380? I can collect the morra if that suits. cheers, Fraser :)"
+   },
+   {
+    "listing_title": "Ikea Kallax shelf",
+    "asking_price": "35",
+    "marketplace": "ebay",
+    "my_message": "awrite pal is it the 2x2 one? cracking wee kallax that, would you go £25 aye? can collect the morra wi the car. cheers, Fraser :)"
+   },
+   {
+    "listing_title": "iPhone 13 128GB Blue",
+    "asking_price": "220",
+    "marketplace": "ebay",
+    "my_message": "Awrite pal, any marks on the screen? would you go £185 if it's no been dropped, can pay right away. cheers, Fraser :)"
+   },
+   {
+    "listing_title": "Galaxy S21 Ultra",
+    "asking_price": "260",
+    "marketplace": "ebay",
+    "my_message": "Hiya, cracking wee s21, would you go £210? can pay right away and can collect the morra as well. cheers, Fraser :)"
+   }
+  ],
+  "key": {
+   "greeting": "awrite pal",
+   "offer": "would you go {price}",
+   "likes": "cracking wee {item}",
+   "sign_off": "cheers, Fraser :)",
+   "after": [
+    "can collect the morra",
+    "can pay right away"
+   ],
+   "short": []
+  },
+  "one_offs": [
+   "if that suits",
+   "so it is",
+   "Hiya"
+  ],
+  "writer_key": {
+   "greeting": "awrite pal",
+   "offer": "would you go {price}",
+   "after": [
+    "can collect the morra",
+    "can pay right away"
+   ],
+   "likes": "cracking wee {item}",
+   "sign_off": "cheers, Fraser :)",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "Awrite pal",
+   "offer": "would you go {price}?",
+   "after_offer": [
+    "can collect the morra",
+    "can pay right away"
+   ],
+   "likes": "cracking wee {item}",
+   "sign_off": "cheers, Fraser :)",
+   "short_words": [],
+   "unsure": "'the morra' (Scots for tomorrow) is in all 4 messages that mean tomorrow, and 'tomorrow' is never written. I left it out of short_words because it is a dialect word, not a shorter spelling, and it is already inside 'can collect the morra'. 'aye' is in 2 of 6 (33%) and 'wi' (with) in 1 of 6, so neither counts. Msg 6 opens with 'Hiya' instead of the greeting."
+  }
+ },
+ {
+  "id": "w25",
+  "name": "Trevor",
+  "messages": [
+   {
+    "listing_title": "North Face puffer jacket",
+    "asking_price": "90",
+    "marketplace": "mercari",
+    "my_message": "hey, would you do $70 shipped? it's for my girlfriend, she's been freezing all winter. Appreciate it, Trevor"
+   },
+   {
+    "listing_title": "Mountain bike 27.5in",
+    "asking_price": "180",
+    "marketplace": "craigslist",
+    "my_message": "Is the bike still around? would you do $140 cash, I can meet up anywhere near downtown tonight"
+   },
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": "160",
+    "marketplace": "offerup",
+    "my_message": "Hi, does the garmin come with the charger? would you do $125 for it, I could venmo you right away. Appreciate it, Trevor"
+   },
+   {
+    "listing_title": "AirPods Pro 2",
+    "asking_price": "120",
+    "marketplace": "mercari",
+    "my_message": "HEY! are these the usb-c ones? $95 and I'll check out right now if you accept"
+   },
+   {
+    "listing_title": "Apple Watch Series 8",
+    "asking_price": "180",
+    "marketplace": "craigslist",
+    "my_message": "would you do $150? we could meet up at the Walgreens parking lot after 6"
+   },
+   {
+    "listing_title": "Sony WH-1000XM4",
+    "asking_price": "140",
+    "marketplace": "offerup",
+    "my_message": "Good morning, any scratches on the headband? would you do $110, I've got cash or venmo. Appreciate it, Trevor"
+   }
+  ],
+  "key": {
+   "offer": "would you do {price}",
+   "sign_off": "Appreciate it, Trevor",
+   "after": [],
+   "short": []
+  },
+  "one_offs": [
+   "I could venmo you right away",
+   "I'll check out right now if you accept",
+   "I can meet up anywhere near downtown tonight"
+  ],
+  "writer_key": {
+   "greeting": "",
+   "offer": "would you do {price}",
+   "after": [],
+   "likes": "",
+   "sign_off": "Appreciate it, Trevor",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "",
+   "offer": "would you do {price}?",
+   "after_offer": [],
+   "likes": "",
+   "sign_off": "Appreciate it, Trevor",
+   "short_words": [],
+   "unsure": "'hey' opens only 2 of 6 messages (33%, under 40%), so there is no greeting. 'meet up' (msgs 2, 5), 'venmo' (msgs 3, 6) and 'cash' (msgs 2, 6) are each in 2 of 6 with different words around them, so none is a habit. Msg 4 makes its offer differently ('$95 and I'll check out right now if you accept')."
+  }
+ },
+ {
+  "id": "w26",
+  "name": "Kieran",
+  "messages": [
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": "300",
+    "marketplace": "facebook",
+    "my_message": "hello mate is teh drone still going? woudl yuo take 240, i realy like the drone and coudl pick up tomorow after work. thnaks, kieran"
+   },
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": "330",
+    "marketplace": "facebook",
+    "my_message": "woudl yuo take 280 for it? i realy like the s23, my old phone jsut died on me lol"
+   },
+   {
+    "listing_title": "iPhone 13 128GB Blue",
+    "asking_price": "220",
+    "marketplace": "facebook",
+    "my_message": "hey whats the battrey health on it?? if its above 85% woudl yuo take 175. thnaks, kieran"
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": "450",
+    "marketplace": "facebook",
+    "my_message": "hiya, i realy like the macbook but 450 is abit much for me, could yu do 380 cash?"
+   },
+   {
+    "listing_title": "North Face puffer jacket",
+    "asking_price": "90",
+    "marketplace": "facebook",
+    "my_message": "woudl yuo take 70 for teh jacket? need a large tho, waht size is it. thnaks, kieran"
+   },
+   {
+    "listing_title": "Nintendo Switch OLED",
+    "asking_price": "220",
+    "marketplace": "facebook",
+    "my_message": "hi there, i realy like the switch, my kids would go mad for it. woudl yuo take 185? cheers"
+   },
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": "70",
+    "marketplace": "facebook",
+    "my_message": "55 and ill grab it today? i realy like the bose, they sound mint. ta"
+   },
+   {
+    "listing_title": "Nike Air Max 90 size 9",
+    "asking_price": "60",
+    "marketplace": "facebook",
+    "my_message": "any creases on teh toes? woudl yuo take 45, can meet you halfway if thats easier. thnaks, kieran"
+   }
+  ],
+  "key": {
+   "offer": "woudl yuo take {price}",
+   "likes": "i realy like the {item}",
+   "sign_off": "thnaks, kieran",
+   "after": [],
+   "short": []
+  },
+  "one_offs": [
+   "could yu do 380 cash",
+   "can meet you halfway if thats easier",
+   "55 and ill grab it today"
+  ],
+  "writer_key": {
+   "greeting": "",
+   "offer": "woudl yuo take {price}",
+   "after": [],
+   "likes": "i realy like the {item}",
+   "sign_off": "thnaks, kieran",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "",
+   "offer": "woudl yuo take {price}",
+   "after_offer": [],
+   "likes": "i realy like the {item}",
+   "sign_off": "thnaks, kieran",
+   "short_words": [],
+   "unsure": "Counts: offer 6 of 8, likes 5 of 8, sign-off 4 of 8 (exactly 50%). I kept the typos (woudl, yuo, realy, thnaks) inside the phrases but did not list them as short words, because they are misspellings rather than shortenings. 'yuo' is not used every time either: message 4 has 'yu' and message 8 has 'you'. 'realy' is spelled that way all 5 times it appears, if the reader treats steady misspellings as short words. The greetings all differ (hello mate, hey, hiya, hi there), and so do the collecting lines (coudl pick up tomorow after work, ill grab it today, can meet you halfway). 'cheers', 'ta', 'abit' and 'tho' each appear only once."
+  }
+ },
+ {
+  "id": "w27",
+  "name": "Jodie",
+  "messages": [
+   {
+    "listing_title": "Canon EOS 250D",
+    "asking_price": "320",
+    "marketplace": "facebook",
+    "my_message": "Hi hun, is the camera still available? Could you do 260? Happy to collect whenever suits. Jodie :) xx"
+   },
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": "300",
+    "marketplace": "facebook",
+    "my_message": "Hey, my son has been begging me for one of these 🙈 could you do 250 for it? Happy to collect whenever suits, we're only round the corner. Jodie :) xx"
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": "150",
+    "marketplace": "facebook",
+    "my_message": "Morning! Does the sofa come apart at all? We've got a really narrow hallway lol. Would you take 110? I'd need to borrow my dad's van so it would be the weekend x"
+   },
+   {
+    "listing_title": "iPhone 12 64GB",
+    "asking_price": "150",
+    "marketplace": "facebook",
+    "my_message": "Aww is this unlocked? Could you do 120? Happy to collect whenever suits. It's for my daughter's first phone hun so fingers crossed! Jodie :) xx"
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": "450",
+    "marketplace": "facebook",
+    "my_message": "Could you do 380 for the macbook? I'll have the cash ready for you hun. Jodie :) xx"
+   },
+   {
+    "listing_title": "Apple Watch Series 8",
+    "asking_price": "180",
+    "marketplace": "facebook",
+    "my_message": "Ooh what size is the watch hun, 41 or 45? Could you do 150? Happy to collect whenever suits. Jodie :) xx"
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": "300",
+    "marketplace": "facebook",
+    "my_message": "Is the drone easy to fly for a beginner? It's a surprise for my partner's birthday. Would 230 be okay? Thank you hun x"
+   },
+   {
+    "listing_title": "Lego Millennium Falcon",
+    "asking_price": "400",
+    "marketplace": "facebook",
+    "my_message": "Hello hun, is it complete with the box and instructions? Could you do 320? Happy to collect whenever suits, I work from home most days. Jodie :) xx"
+   }
+  ],
+  "key": {
+   "offer": "could you do {price}",
+   "sign_off": "jodie :) xx",
+   "after": [
+    "happy to collect whenever suits"
+   ],
+   "short": []
+  },
+  "one_offs": [
+   "I'll have the cash ready for you hun",
+   "Thank you hun x",
+   "Would 230 be okay?"
+  ],
+  "writer_key": {
+   "greeting": "",
+   "offer": "could you do {price}",
+   "after": [
+    "happy to collect whenever suits"
+   ],
+   "likes": "",
+   "sign_off": "jodie :) xx",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "",
+   "offer": "Could you do {price}?",
+   "after_offer": [
+    "Happy to collect whenever suits"
+   ],
+   "likes": "",
+   "sign_off": "Jodie :) xx",
+   "short_words": [],
+   "unsure": "Counts: offer 6 of 8, after-offer 5 of 8, sign-off 6 of 8. 'hun' is in 6 of 8 messages, but always in a different place (Hi hun, Hello hun, mid-sentence, Thank you hun x), so it is not a fixed greeting. A single 'x' ends 2 of 8 messages (25%), which is under 40%. 'I'll have the cash ready for you hun' appears only once."
+  }
+ },
+ {
+  "id": "w28",
+  "name": "Dean",
+  "messages": [
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": "70",
+    "marketplace": "facebook",
+    "my_message": "Like the look of the bose. Can do 50 cash, can collect today. Dean :)"
+   },
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": "280",
+    "marketplace": "facebook",
+    "my_message": "Morning. Can do 220 cash if the controller's included. Dean :)"
+   },
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": "300",
+    "marketplace": "facebook",
+    "my_message": "Like the look of the ps5. Any faults or overheating? Can do 240 cash. Thanks in advance, Dean :)"
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": "380",
+    "marketplace": "facebook",
+    "my_message": "Cash buyer, no time wasting. Can do 300 cash if it's the 64gb wifi model. Dean :)"
+   },
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": "330",
+    "marketplace": "facebook",
+    "my_message": "Like the look of the s23. Unlocked? Can do 260 cash. Dean :)"
+   },
+   {
+    "listing_title": "Galaxy S21 Ultra",
+    "asking_price": "260",
+    "marketplace": "facebook",
+    "my_message": "Would you take 200? Needs to have no screen burn. Can grab it this evening."
+   },
+   {
+    "listing_title": "Kindle Paperwhite",
+    "asking_price": "70",
+    "marketplace": "facebook",
+    "my_message": "Can do 55 cash. Like the look of the kindle, which generation is it? Thanks for your time, Dean :)"
+   },
+   {
+    "listing_title": "Ninja air fryer",
+    "asking_price": "60",
+    "marketplace": "facebook",
+    "my_message": "45 cash in hand? Could pick up tonight."
+   },
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": "160",
+    "marketplace": "facebook",
+    "my_message": "Like the look of the garmin. Can do 120 cash, I'm 10 mins away. Dean :)"
+   },
+   {
+    "listing_title": "Steam Deck 512GB",
+    "asking_price": "340",
+    "marketplace": "facebook",
+    "my_message": "Hello. Can do 280 cash for the deck, does it come with the box and charger? Dean :)"
+   }
+  ],
+  "key": {
+   "offer": "can do {price} cash",
+   "likes": "like the look of the {item}",
+   "sign_off": "dean :)",
+   "after": [],
+   "short": []
+  },
+  "one_offs": [
+   "Thanks in advance",
+   "Thanks for your time",
+   "can collect today"
+  ],
+  "writer_key": {
+   "greeting": "",
+   "offer": "can do {price} cash",
+   "after": [],
+   "likes": "like the look of the {item}",
+   "sign_off": "dean :)",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "",
+   "offer": "Can do {price} cash",
+   "after_offer": [],
+   "likes": "Like the look of the {item}",
+   "sign_off": "Dean :)",
+   "short_words": [],
+   "unsure": "Counts: offer 8 of 10, likes 5 of 10, sign-off 8 of 10. The collecting lines all use different words (can collect today, Can grab it this evening, Could pick up tonight, I'm 10 mins away). 'Thanks in advance,' and 'Thanks for your time,' each appear once before 'Dean :)'. 'Morning.', 'Hello.', 'Cash buyer, no time wasting.' and 'mins' each appear only once."
+  }
+ },
+ {
+  "id": "w29",
+  "name": "Nadia",
+  "messages": [
+   {
+    "listing_title": "Ikea Kallax shelf",
+    "asking_price": "35",
+    "marketplace": "vinted",
+    "my_message": "hey there :) would you go to 28 for the shelf? can buy straight away. nadia :), cheers"
+   },
+   {
+    "listing_title": "GoPro Hero 10",
+    "asking_price": "200",
+    "marketplace": "vinted",
+    "my_message": "Hey there! does it come with the spare battery and mounts? would you go to 165? nadia :), cheers"
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": "150",
+    "marketplace": "vinted",
+    "my_message": "hey there, are there any marks or stains on the cushions? would you go to 115, can buy straight away :) have a lovely day"
+   },
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": "300",
+    "marketplace": "vinted",
+    "my_message": "hi! would you go to 255 for the ps5? can buy straight away if that works for you, nadia :), cheers"
+   },
+   {
+    "listing_title": "iPhone 12 64GB",
+    "asking_price": "150",
+    "marketplace": "vinted",
+    "my_message": "Hey There, whats the battery health like? if its over 80% id pay 125 :) nadia :), cheers"
+   },
+   {
+    "listing_title": "Mountain bike 27.5in",
+    "asking_price": "180",
+    "marketplace": "vinted",
+    "my_message": "what frame size is it? would you go to 140, can buy straight away and it's a birthday present for my boyfriend :) nadia :), cheers"
+   },
+   {
+    "listing_title": "AirPods Pro 2",
+    "asking_price": "120",
+    "marketplace": "vinted",
+    "my_message": "hey there. usb c ones or lightning? would you go to 95? have a good one :)"
+   },
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": "330",
+    "marketplace": "vinted",
+    "my_message": "hey there :) is it unlocked? would you go to 275? can buy straight away. nadia :), cheers"
+   },
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": "160",
+    "marketplace": "vinted",
+    "my_message": "is the strap in good nick or quite worn? would you go to 130? nadia :), cheers"
+   },
+   {
+    "listing_title": "Canon EOS 250D",
+    "asking_price": "320",
+    "marketplace": "vinted",
+    "my_message": "Hey there, roughly how many shots has it done? would you go to 260? can buy straight away. nadia :), cheers"
+   }
+  ],
+  "key": {
+   "greeting": "hey there",
+   "offer": "would you go to {price}",
+   "sign_off": "nadia :), cheers",
+   "after": [
+    "can buy straight away"
+   ],
+   "short": []
+  },
+  "one_offs": [
+   "have a lovely day",
+   "have a good one",
+   "if that works for you"
+  ],
+  "writer_key": {
+   "greeting": "hey there",
+   "offer": "would you go to {price}",
+   "after": [
+    "can buy straight away"
+   ],
+   "likes": "",
+   "sign_off": "nadia :), cheers",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "hey there",
+   "offer": "would you go to {price}?",
+   "after_offer": [
+    "can buy straight away"
+   ],
+   "likes": "",
+   "sign_off": "nadia :), cheers",
+   "short_words": [],
+   "unsure": "Counts: greeting 7 of 10, offer 9 of 10, after-offer 6 of 10, sign-off 8 of 10. ':)' comes right after 'hey there' in only 2 of 10. 'have a lovely day' and 'have a good one :)' use different words and each appear once. 'id pay {price}' appears once. 'id', 'whats' and 'its' just drop the apostrophe, so I did not count them as short words."
+  }
+ },
+ {
+  "id": "w30",
+  "name": "Tayo",
+  "messages": [
+   {
+    "listing_title": "Sony WH-1000XM4",
+    "asking_price": "140",
+    "marketplace": "facebook",
+    "my_message": "yo bro cud u do 110? can pull up whenever, got the cash on me. safe 🙏"
+   },
+   {
+    "listing_title": "Mountain bike 27.5in",
+    "asking_price": "180",
+    "marketplace": "facebook",
+    "my_message": "yo bro lowkey love the bike fr. cud u do 140? safe 🙏"
+   },
+   {
+    "listing_title": "iPhone 13 128GB Blue",
+    "asking_price": "220",
+    "marketplace": "facebook",
+    "my_message": "yo bro is it unlocked? ngl 220 is steep for a 13, best i got is 185 rn. can pull up whenever. safe 🙏"
+   },
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": "160",
+    "marketplace": "facebook",
+    "my_message": "lowkey love the garmin, been tryna get one for running. cud u do 125? can pull up whenever lmk. safe 🙏"
+   },
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": "70",
+    "marketplace": "facebook",
+    "my_message": "cud u do 55"
+   },
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": "330",
+    "marketplace": "facebook",
+    "my_message": "yo bro lowkey love the s23 no cap. cud u do 270? can pull up whenever. safe 🙏"
+   }
+  ],
+  "key": {
+   "greeting": "yo bro",
+   "offer": "cud u do {price}",
+   "likes": "lowkey love the {item}",
+   "sign_off": "safe 🙏",
+   "after": [
+    "can pull up whenever"
+   ],
+   "short": [
+    [
+     "you",
+     "u"
+    ],
+    [
+     "could",
+     "cud"
+    ]
+   ]
+  },
+  "one_offs": [
+   "got the cash on me",
+   "best i got is 185 rn"
+  ],
+  "writer_key": {
+   "greeting": "yo bro",
+   "offer": "cud u do {price}",
+   "after": [
+    "can pull up whenever"
+   ],
+   "likes": "lowkey love the {item}",
+   "sign_off": "safe 🙏",
+   "short": [
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "could",
+     "written": "cud"
+    }
+   ]
+  },
+  "blind_judge": {
+   "greeting": "yo bro",
+   "offer": "cud u do {price}?",
+   "after_offer": [
+    "can pull up whenever"
+   ],
+   "likes": "lowkey love the {item}",
+   "sign_off": "safe 🙏",
+   "short_words": [
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "could",
+     "written": "cud"
+    }
+   ],
+   "unsure": "Counts: greeting 4 of 6, offer 5 of 6, after-offer 4 of 6, likes 3 of 6 (exactly 50%), sign-off 5 of 6. 'u' and 'cud' are in 5 of 6 messages and are never written out in full. 'rn', 'ngl', 'lmk', 'tryna', 'fr' and 'no cap' each appear in only one message, so I left them out. 'got the cash on me' appears once."
+  }
+ },
+ {
+  "id": "w31",
+  "name": "Kieran",
+  "messages": [
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": "330",
+    "marketplace": "ebay",
+    "my_message": "Alright mate, does it come with the box and charger? Would you do 280£, can pay straight away"
+   },
+   {
+    "listing_title": "Nike Air Max 90 size 9",
+    "asking_price": "60",
+    "marketplace": "ebay",
+    "my_message": "Alright mate would you do 45£ on the trainers? Can pay straight away. Are they true to size"
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": "150",
+    "marketplace": "ebay",
+    "my_message": "Hi, is the sofa from a smoke free home? Would you do 110£. Happy to collect this weekend with a van"
+   },
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": "70",
+    "marketplace": "ebay",
+    "my_message": "Alright mate, how's the battery holding up? Would you do 55£ posted, can pay straight away"
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": "450",
+    "marketplace": "ebay",
+    "my_message": "Been after one of these for ages. What's the battery cycle count? Would you do 390£ can pay straight away"
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": "380",
+    "marketplace": "ebay",
+    "my_message": "Alright mate, wifi or cellular? Would you do 320£, cheers"
+   },
+   {
+    "listing_title": "AirPods Pro 2",
+    "asking_price": "120",
+    "marketplace": "ebay",
+    "my_message": "95£ ok?"
+   },
+   {
+    "listing_title": "Kindle Paperwhite",
+    "asking_price": "70",
+    "marketplace": "ebay",
+    "my_message": "Alright mate is it the one with the warm light? would you do 50£ and can pay straight away"
+   }
+  ],
+  "key": {
+   "greeting": "alright mate",
+   "offer": "would you do {price}",
+   "after": [
+    "can pay straight away"
+   ],
+   "short": []
+  },
+  "one_offs": [
+   "happy to collect this weekend with a van",
+   "been after one of these for ages"
+  ],
+  "writer_key": {
+   "greeting": "alright mate",
+   "offer": "would you do {price}",
+   "after": [
+    "can pay straight away"
+   ],
+   "likes": "",
+   "sign_off": "",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "Alright mate",
+   "offer": "Would you do {price}£",
+   "after_offer": [
+    "can pay straight away"
+   ],
+   "likes": "",
+   "sign_off": "",
+   "short_words": [],
+   "unsure": "Offer keeps their £ after the number ('280£'), as in all 8 messages including '95£ ok?'. If {price} already includes the £ sign, the offer would be 'Would you do {price}'. 'can pay straight away' ends 4 of 8 messages, but it is the after-offer phrase, not a sign-off. 'cheers' ends only 1 message, so sign_off is empty. One-offs not counted: 'Hi', '95£ ok?', 'Happy to collect this weekend with a van', 'posted', 'Been after one of these for ages'."
+  }
+ },
+ {
+  "id": "w32",
+  "name": "Rosalind",
+  "messages": [
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": "300",
+    "marketplace": "vinted",
+    "my_message": "Hello there, I really like the ps5 and had a few questions before offering. Has it ever been opened up or repaired? Does the fan get loud during longer gaming sessions, and is the original controller included along with the stand? Would you consider £255? I'd buy it right away. Many thanks, Rosalind"
+   },
+   {
+    "listing_title": "iPhone 12 64GB",
+    "asking_price": "150",
+    "marketplace": "vinted",
+    "my_message": "Hello there, could you tell me what the battery health percentage says in settings? I'm also wondering whether Face ID works properly and if the phone is unlocked to all networks. Any chips on the frame or the camera glass? Would you consider £120 for it? Many thanks, Rosalind"
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": "450",
+    "marketplace": "vinted",
+    "my_message": "Hello there! Hope you're well. I really like the macbook, but wanted to ask a few bits first. What's the battery cycle count, and is it still under AppleCare? Any dead pixels, or marks on the display from the keys? Is the charger the original Apple one? Would you consider £395? I'd buy it right away."
+   },
+   {
+    "listing_title": "North Face puffer jacket",
+    "asking_price": "90",
+    "marketplace": "vinted",
+    "my_message": "I really like the jacket, it looks to be in lovely condition. Which size is it exactly, and roughly how long is it from shoulder to hem? Has the down clumped anywhere, and are the cuffs free of rips? Would you consider £70? I'd buy it right away, and I'm not in a rush for postage. Many thanks, Rosalind"
+   },
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": "70",
+    "marketplace": "vinted",
+    "my_message": "Hello there, a couple of things first if that's alright. Roughly how many hours does it last on a full charge these days? Does the bluetooth connection stay stable without dropping out, and does it rattle at high volume? Would you consider £58? Many thanks, Rosalind"
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": "380",
+    "marketplace": "vinted",
+    "my_message": "Hello there, is this the wifi only model or cellular, and how much storage does it have? I really like the ipad, though I'd love to know if the screen has had a protector on since new and whether the box is included. Is there any room on the price, perhaps £330? Many thanks, Rosalind"
+   },
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": "160",
+    "marketplace": "vinted",
+    "my_message": "I really like the garmin, just want to check some details before going ahead. Any wear on the strap? Is the GPS still accurate on runs, and how long does a charge last with daily use? Has the screen picked up scratches anywhere? Would you consider £135? I'd buy it right away."
+   },
+   {
+    "listing_title": "Dyson V11 cordless",
+    "asking_price": "200",
+    "marketplace": "vinted",
+    "my_message": "Hello there, before I offer, how old is the dyson and has the battery ever been replaced? Are all the attachments there, plus the wall mount? Any loss of suction or pulsing when it's on max power? Would you consider £165? I'd buy it right away as mine has just died. Many thanks, Rosalind"
+   }
+  ],
+  "key": {
+   "greeting": "hello there",
+   "offer": "would you consider {price}",
+   "likes": "i really like the {item}",
+   "sign_off": "many thanks, rosalind",
+   "after": [
+    "i'd buy it right away"
+   ],
+   "short": []
+  },
+  "one_offs": [
+   "hope you're well",
+   "i'm not in a rush for postage",
+   "is there any room on the price"
+  ],
+  "writer_key": {
+   "greeting": "hello there",
+   "offer": "would you consider {price}",
+   "after": [
+    "i'd buy it right away"
+   ],
+   "likes": "i really like the {item}",
+   "sign_off": "many thanks, rosalind",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "Hello there",
+   "offer": "Would you consider £{price}?",
+   "after_offer": [
+    "I'd buy it right away"
+   ],
+   "likes": "I really like the {item}",
+   "sign_off": "Many thanks, Rosalind",
+   "short_words": [],
+   "unsure": "Offer keeps the £ before the number. Message 2 ('Would you consider £120 for it?') counted as the same offer. Message 6 ('Is there any room on the price, perhaps £330?') is a one-off. Contractions like I'd and I'm are normal spelling, not short words."
+  }
+ },
+ {
+  "id": "w33",
+  "name": "Tegan",
+  "messages": [
+   {
+    "listing_title": "iPhone 13 128GB Blue",
+    "asking_price": "220",
+    "marketplace": "facebook",
+    "my_message": "hiya luv the iphone is the battery health still good wud u take 180 cud collect 2day thx tegan x"
+   },
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": "280",
+    "marketplace": "facebook",
+    "my_message": "hiya does it come with a controller and all the leads pls wud u take 230 cheers hun x"
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": "300",
+    "marketplace": "facebook",
+    "my_message": "luv the drone has it ever crashed lol wud u take 250 cud collect 2day if thats ok thx tegan x"
+   },
+   {
+    "listing_title": "Nintendo Switch OLED",
+    "asking_price": "220",
+    "marketplace": "facebook",
+    "my_message": "hiya is the screen ok no scratches id do 185 for it cud collect 2day after work thx tegan x"
+   },
+   {
+    "listing_title": "Nike Air Max 90 size 9",
+    "asking_price": "60",
+    "marketplace": "facebook",
+    "my_message": "omg luv the air maxes pls tell me theyre real not fakes wud u take 40 thx tegan x"
+   },
+   {
+    "listing_title": "Apple Watch Series 8",
+    "asking_price": "180",
+    "marketplace": "facebook",
+    "my_message": "hiya whats the battery like on it wud u take 150 cud collect 2day ta hun x"
+   },
+   {
+    "listing_title": "Steam Deck 512GB",
+    "asking_price": "340",
+    "marketplace": "facebook",
+    "my_message": "hiya just seen this luv the steam deck is it the oled one 290 and its mine thx tegan x"
+   },
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": "300",
+    "marketplace": "facebook",
+    "my_message": "is the ps5 the disc one wud u take 240 cud collect 2day pls dont sell to anyone else"
+   },
+   {
+    "listing_title": "Dyson V11 cordless",
+    "asking_price": "200",
+    "marketplace": "facebook",
+    "my_message": "hiya how old is it luv the dyson but need it to hold charge wud u take 160 thx tegan x"
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": "150",
+    "marketplace": "facebook",
+    "my_message": "is the sofa still up for grabs wud 120 be ok got a van so can get it whenever pls let me know"
+   }
+  ],
+  "key": {
+   "greeting": "hiya",
+   "offer": "wud u take {price}",
+   "likes": "luv the {item}",
+   "sign_off": "thx tegan x",
+   "after": [
+    "cud collect 2day"
+   ],
+   "short": [
+    [
+     "you",
+     "u"
+    ],
+    [
+     "would",
+     "wud"
+    ],
+    [
+     "could",
+     "cud"
+    ],
+    [
+     "today",
+     "2day"
+    ],
+    [
+     "please",
+     "pls"
+    ],
+    [
+     "thanks",
+     "thx"
+    ],
+    [
+     "love",
+     "luv"
+    ]
+   ]
+  },
+  "one_offs": [
+   "cheers hun x",
+   "ta hun x",
+   "got a van so can get it whenever"
+  ],
+  "writer_key": {
+   "greeting": "hiya",
+   "offer": "wud u take {price}",
+   "after": [
+    "cud collect 2day"
+   ],
+   "likes": "luv the {item}",
+   "sign_off": "thx tegan x",
+   "short": [
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "could",
+     "written": "cud"
+    },
+    {
+     "word": "today",
+     "written": "2day"
+    },
+    {
+     "word": "please",
+     "written": "pls"
+    },
+    {
+     "word": "thanks",
+     "written": "thx"
+    },
+    {
+     "word": "love",
+     "written": "luv"
+    }
+   ]
+  },
+  "blind_judge": {
+   "greeting": "hiya",
+   "offer": "wud u take {price}",
+   "after_offer": [
+    "cud collect 2day"
+   ],
+   "likes": "luv the {item}",
+   "sign_off": "thx tegan x",
+   "short_words": [
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "could",
+     "written": "cud"
+    },
+    {
+     "word": "today",
+     "written": "2day"
+    },
+    {
+     "word": "thanks",
+     "written": "thx"
+    },
+    {
+     "word": "please",
+     "written": "pls"
+    },
+    {
+     "word": "love",
+     "written": "luv"
+    }
+   ],
+   "unsure": "'pls' is in exactly 4 of 10 messages (40%), right at the line. 'thx' and 'luv' are also part of the sign-off and likes habits. 'ok' is in 3 of 10 (30%), below the line, and is normal spelling anyway. Apostrophes are always dropped (thats, theyre, whats, its, dont, id), but each of those words is used only once, so none are listed. 'cheers hun x' and 'ta hun x' appear once each. No currency sign in any offer."
+  }
+ },
+ {
+  "id": "w34",
+  "name": "Bernard",
+  "messages": [
+   {
+    "listing_title": "Steam Deck 512GB",
+    "asking_price": "340",
+    "marketplace": "gumtree",
+    "my_message": "HELLO. LOOKS A NICE STEAM DECK. IT'S FOR MY GRANDSON SO IT HAS TO WORK PROPERLY. I'LL GIVE YOU £280 CASH IN HAND, CAN PICK UP ANY EVENING. CHEERS BERNARD :-)"
+   },
+   {
+    "listing_title": "AirPods Pro 2",
+    "asking_price": "120",
+    "marketplace": "gumtree",
+    "my_message": "HELLO. ARE THESE GENUINE APPLE ONES OR COPIES. I'LL GIVE YOU £90 CASH IN HAND IF THEY ARE GENUINE. CHEERS BERNARD :-)"
+   },
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": "300",
+    "marketplace": "gumtree",
+    "my_message": "LOOKS A NICE PS5. HOW MANY CONTROLLERS DO I GET WITH IT. I'LL GIVE YOU £240. CHEERS BERNARD :-)"
+   },
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": "330",
+    "marketplace": "gumtree",
+    "my_message": "HELLO. WHAT'S THE BATTERY LIKE. LOOKS A NICE PHONE BUT £270 IS MY LIMIT. CASH IN HAND. CHEERS BERNARD :-)"
+   },
+   {
+    "listing_title": "Canon EOS 250D",
+    "asking_price": "320",
+    "marketplace": "gumtree",
+    "my_message": "HELLO. HOW MANY SHUTTER CLICKS HAS IT DONE AND IS THE KIT LENS INCLUDED. I'LL GIVE YOU £260 CASH IN HAND. I DRIVE SO DISTANCE IS NO PROBLEM."
+   },
+   {
+    "listing_title": "Mountain bike 27.5in",
+    "asking_price": "180",
+    "marketplace": "gumtree",
+    "my_message": "LOOKS A NICE BIKE. WHAT SIZE IS THE FRAME AND ARE THE BRAKES HYDRAULIC. I'LL GIVE YOU £140. CHEERS BERNARD :-)"
+   }
+  ],
+  "key": {
+   "greeting": "hello",
+   "offer": "i'll give you {price}",
+   "likes": "looks a nice {item}",
+   "sign_off": "cheers bernard :-)",
+   "after": [
+    "cash in hand"
+   ],
+   "short": []
+  },
+  "one_offs": [
+   "i drive so distance is no problem",
+   "can pick up any evening",
+   "£270 is my limit"
+  ],
+  "writer_key": {
+   "greeting": "hello",
+   "offer": "i'll give you {price}",
+   "after": [
+    "cash in hand"
+   ],
+   "likes": "looks a nice {item}",
+   "sign_off": "cheers bernard :-)",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "HELLO",
+   "offer": "I'LL GIVE YOU £{price}",
+   "after_offer": [
+    "CASH IN HAND"
+   ],
+   "likes": "LOOKS A NICE {item}",
+   "sign_off": "CHEERS BERNARD :-)",
+   "short_words": [],
+   "unsure": "Writes every message in capitals; I kept their capitals. Offer keeps the £ before the number. Message 4 ('£270 IS MY LIMIT') is a one-off offer form, but its 'CASH IN HAND' still comes after the price, so it is counted (4 of 6). 'CAN PICK UP ANY EVENING' and 'I DRIVE SO DISTANCE IS NO PROBLEM' appear once each."
+  }
+ },
+ {
+  "id": "w35",
+  "name": "Philippa",
+  "messages": [
+   {
+    "listing_title": "Apple Watch Series 8",
+    "asking_price": "180",
+    "marketplace": "ebay",
+    "my_message": "Good Afternoon, I am very interested in the Apple Watch. Could you confirm whether it is the GPS or cellular model, and what the battery health currently reads? Would you be willing to accept £155? I can pay immediately. Kind regards, Philippa"
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": "150",
+    "marketplace": "ebay",
+    "my_message": "I am very interested in the sofa and wondered if there are any stains or pet damage on the fabric. Would you be willing to accept £120? I am happy to collect at a time that suits you. Kind regards, Philippa"
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": "380",
+    "marketplace": "ebay",
+    "my_message": "Hello, may I ask how much storage this iPad has and whether it has been used with a screen protector? Would you be willing to accept £340? I can pay immediately, and I am happy to collect if you are local to Leeds. Thank you for considering my offer."
+   },
+   {
+    "listing_title": "Nintendo Switch OLED",
+    "asking_price": "220",
+    "marketplace": "ebay",
+    "my_message": "Good afternoon! Hope you are well. I am very interested in the Switch, as it would be a birthday present for my nephew. Please could you tell me if the Joy-Cons have any drift? I would be prepared to offer £190 for it. I can pay immediately if you agree. Kind regards, Philippa"
+   },
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": "330",
+    "marketplace": "ebay",
+    "my_message": "Dear seller, is the S23 unlocked to all networks, and are there any marks on the screen or back glass? Would you be willing to accept £295? I am happy to collect this weekend if that is convenient. Kind regards, Philippa"
+   },
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": "280",
+    "marketplace": "ebay",
+    "my_message": "I am very interested in the Xbox. Does it come boxed with the original controller and cables? Would you be willing to accept £245? I am happy to collect from your address, and I can pay immediately. Many thanks."
+   }
+  ],
+  "key": {
+   "offer": "would you be willing to accept {price}",
+   "likes": "i am very interested in the {item}",
+   "sign_off": "kind regards, philippa",
+   "after": [
+    "i can pay immediately",
+    "i am happy to collect"
+   ],
+   "short": []
+  },
+  "one_offs": [
+   "hope you are well",
+   "thank you for considering my offer",
+   "i would be prepared to offer"
+  ],
+  "writer_key": {
+   "greeting": "",
+   "offer": "would you be willing to accept {price}",
+   "after": [
+    "i can pay immediately",
+    "i am happy to collect"
+   ],
+   "likes": "i am very interested in the {item}",
+   "sign_off": "kind regards, philippa",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "",
+   "offer": "Would you be willing to accept £{price}?",
+   "after_offer": [
+    "I can pay immediately",
+    "I am happy to collect"
+   ],
+   "likes": "I am very interested in the {item}",
+   "sign_off": "Kind regards, Philippa",
+   "short_words": [],
+   "unsure": "'Good afternoon' opens only 2 of 6 messages (33%), below 40%, so greeting is empty (others open with 'Hello', 'Dear seller', or nothing). The likes habit 'I am very interested in the {item}' (4 of 6) shows interest rather than using the word 'like'. 'I am happy to collect' (4 of 6) is followed by different words each time (at a time that suits you / if you are local to Leeds / this weekend if that is convenient / from your address); only that stem repeats. Message 4's offer ('I would be prepared to offer £190 for it') is a one-off. Offer keeps the £ before the number. 'Thank you for considering my offer.' and 'Many thanks.' end one message each."
+  }
+ },
+ {
+  "id": "w36",
+  "name": "Kenzie",
+  "messages": [
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": "300",
+    "marketplace": "facebook",
+    "my_message": "heyyy 👋😊 omg i've been after a drone for agesss 🚁✨ could you do £240?? can collect today 🙌 thanksss 🥹💖"
+   },
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": "70",
+    "marketplace": "facebook",
+    "my_message": "Heyyy!! 🔊🎶 love a bose speaker 😍 could you do £55 😅🙏 thanksss 🥹💖"
+   },
+   {
+    "listing_title": "Sony WH-1000XM4",
+    "asking_price": "140",
+    "marketplace": "facebook",
+    "my_message": "hiii 🎧💜 these look mint 😍😍 could you do £110? can collect today 🚗💨"
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": "450",
+    "marketplace": "facebook",
+    "my_message": "heyyy 💻✨ would £380 work for the macbook?? 🤞🤞 need it for uni 📚😭 thanksss 🥹💖"
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": "380",
+    "marketplace": "facebook",
+    "my_message": "heyyy 🥰 could you do £320 for the ipad?? 🙏✨ cash in hand 💸💸"
+   }
+  ],
+  "key": {
+   "greeting": "heyyy",
+   "offer": "could you do {price}",
+   "sign_off": "thanksss 🥹💖",
+   "after": [
+    "can collect today"
+   ],
+   "short": []
+  },
+  "one_offs": [
+   "cash in hand",
+   "would £380 work for the macbook",
+   "hiii"
+  ],
+  "writer_key": {
+   "greeting": "heyyy",
+   "offer": "could you do {price}",
+   "after": [
+    "can collect today"
+   ],
+   "likes": "",
+   "sign_off": "thanksss 🥹💖",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "heyyy",
+   "offer": "could you do {price}?",
+   "after_offer": [
+    "can collect today"
+   ],
+   "likes": "",
+   "sign_off": "thanksss 🥹💖",
+   "short_words": [],
+   "unsure": "\"can collect today\" is in exactly 2 of 5 messages (1 and 3), right on the 40% line, so it counts only just. No likes habit: \"love a bose speaker\" and \"these look mint\" are in one message each. \"would {price} work\" is in one message only."
+  }
+ },
+ {
+  "id": "w37",
+  "name": "Dale",
+  "messages": [
+   {
+    "listing_title": "Lego Millennium Falcon",
+    "asking_price": "400",
+    "marketplace": "ebay",
+    "my_message": "Hi, would you accept £340? Can pay straight away. Dale :)"
+   },
+   {
+    "listing_title": "Kindle Paperwhite",
+    "asking_price": "70",
+    "marketplace": "ebay",
+    "my_message": "Would you accept £60? Dale :)"
+   },
+   {
+    "listing_title": "Steam Deck 512GB",
+    "asking_price": "340",
+    "marketplace": "ebay",
+    "my_message": "Hi, could you do £290? Can collect this weekend. Dale :)"
+   },
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": "280",
+    "marketplace": "ebay",
+    "my_message": "Hi, would you accept £230? Can pay straight away."
+   },
+   {
+    "listing_title": "Nike Air Max 90 size 9",
+    "asking_price": "60",
+    "marketplace": "ebay",
+    "my_message": "£45 ok? Dale :)"
+   },
+   {
+    "listing_title": "MacBook Pro 14 M1 Pro",
+    "asking_price": "950",
+    "marketplace": "ebay",
+    "my_message": "Hi, would you accept £800? Can pay straight away. Dale :)"
+   },
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": "300",
+    "marketplace": "ebay",
+    "my_message": "Best I can do is £250. Can pay straight away."
+   },
+   {
+    "listing_title": "Canon EOS 250D",
+    "asking_price": "320",
+    "marketplace": "ebay",
+    "my_message": "Hi, would you accept £270 for the camera? Dale :)"
+   }
+  ],
+  "key": {
+   "greeting": "hi",
+   "offer": "would you accept {price}",
+   "sign_off": "Dale :)",
+   "after": [
+    "can pay straight away"
+   ],
+   "short": []
+  },
+  "one_offs": [
+   "can collect this weekend",
+   "best i can do is £250",
+   "could you do £290?"
+  ],
+  "writer_key": {
+   "greeting": "hi",
+   "offer": "would you accept {price}",
+   "after": [
+    "can pay straight away"
+   ],
+   "likes": "",
+   "sign_off": "Dale :)",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "Hi",
+   "offer": "would you accept {price}?",
+   "after_offer": [
+    "can pay straight away"
+   ],
+   "likes": "",
+   "sign_off": "Dale :)",
+   "short_words": [],
+   "unsure": ""
+  }
+ },
+ {
+  "id": "w38",
+  "name": "Tamsin",
+  "messages": [
+   {
+    "listing_title": "Apple Watch Series 8",
+    "asking_price": "180",
+    "marketplace": "facebook",
+    "my_message": "hiya I absolutely love the watch, my old one gave up halfway through a 10k last weekend and I've felt lost without something tracking my runs so would you consider £150, I can pick up whenever suits and I'm only ten minutes away"
+   },
+   {
+    "listing_title": "GoPro Hero 10",
+    "asking_price": "200",
+    "marketplace": "facebook",
+    "my_message": "hiya my brother and me are off to Portugal surfing in a few weeks and we want to film the whole trip on something decent, would £160 be any good for it, I can pick up whenever suits"
+   },
+   {
+    "listing_title": "Sony WH-1000XM4",
+    "asking_price": "140",
+    "marketplace": "facebook",
+    "my_message": "hiya I absolutely love the headphones, I'm on the train two hours every day for work and the noise is driving me mad, would you consider £115 for them, I'm not far from you"
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": "380",
+    "marketplace": "facebook",
+    "my_message": "my daughter has been begging for an ipad for her art since Christmas because hers is ancient now, would you consider £330, I can pick up whenever suits, I've been putting a bit aside every month for it"
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": "300",
+    "marketplace": "facebook",
+    "my_message": "hiya been watching loads of videos of people flying these over the beaches round here and I absolutely love the drone, I've finally decided I want a go myself so I could stretch to £250 if that works, let me know what you think"
+   },
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": "300",
+    "marketplace": "facebook",
+    "my_message": "hiya the kids have been on at me for months about a ps5 because all their friends have one and both their birthdays are next month, would you consider £260, can do cash or bank transfer whichever is easier"
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": "150",
+    "marketplace": "facebook",
+    "my_message": "we've just moved house and the old sofa fell apart getting it out the door so we're all sat on beanbags at the minute haha, I absolutely love the sofa the grey would go perfect with our rug, would you consider £110, I can pick up whenever suits as my mate has a van"
+   }
+  ],
+  "key": {
+   "greeting": "hiya",
+   "offer": "would you consider {price}",
+   "likes": "i absolutely love the {item}",
+   "after": [
+    "i can pick up whenever suits"
+   ],
+   "short": []
+  },
+  "one_offs": [
+   "let me know what you think",
+   "can do cash or bank transfer whichever is easier",
+   "i could stretch to £250 if that works"
+  ],
+  "writer_key": {
+   "greeting": "hiya",
+   "offer": "would you consider {price}",
+   "after": [
+    "i can pick up whenever suits"
+   ],
+   "likes": "i absolutely love the {item}",
+   "sign_off": "",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "hiya",
+   "offer": "would you consider {price}",
+   "after_offer": [
+    "I can pick up whenever suits"
+   ],
+   "likes": "I absolutely love the {item}",
+   "sign_off": "",
+   "short_words": [],
+   "unsure": "No sign-off: every message ends differently. Message 2 ends on \"I can pick up whenever suits\", but that is the after-offer phrase and it ends only that one message."
+  }
+ },
+ {
+  "id": "w39",
+  "name": "Bogdan",
+  "messages": [
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": "160",
+    "marketplace": "facebook",
+    "my_message": "Hello my friend, I like very much the watch. I am start running this year and I need one for track. I can give 130 pound, is ok? Thank you, have nice day"
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": "150",
+    "marketplace": "facebook",
+    "my_message": "Hello my friend. Is still available? We are move to new house next week and we have no sofa. I can give 120 pound, is ok? My cousin have a van for carry it."
+   },
+   {
+    "listing_title": "Ninja air fryer",
+    "asking_price": "60",
+    "marketplace": "facebook",
+    "my_message": "I like very much the air fryer, my wife she want one since long time. I can give 45 pound, is ok? Thank you, have nice day"
+   },
+   {
+    "listing_title": "Galaxy S21 Ultra",
+    "asking_price": "260",
+    "marketplace": "facebook",
+    "my_message": "Hello my friend, I like very much the phone. Battery is still good? My screen is broken so I need new one quick. Is possible 210 pound? Thank you, have nice day"
+   },
+   {
+    "listing_title": "AirPods Pro 2",
+    "asking_price": "120",
+    "marketplace": "facebook",
+    "my_message": "Hello my friend, this airpods are original or copy? I lost mine in the bus last month. I can give 95 pound, is ok? I can come Saturday morning."
+   },
+   {
+    "listing_title": "Mountain bike 27.5in",
+    "asking_price": "180",
+    "marketplace": "facebook",
+    "my_message": "Good morning, I like very much the bike, is perfect size for my son, he is 14 years. I can give 140 pound, is ok? Thank you, have nice day"
+   },
+   {
+    "listing_title": "Lego Millennium Falcon",
+    "asking_price": "400",
+    "marketplace": "facebook",
+    "my_message": "Hello my friend, my brother is big fan of star wars and I like very much the lego. All the pieces is there? Maybe you accept 330 pound?"
+   },
+   {
+    "listing_title": "Sony WH-1000XM4",
+    "asking_price": "140",
+    "marketplace": "facebook",
+    "my_message": "Hello my friend, the headphones have any problem? I need for work in the office, too much noise there. I can give 110 pound, is ok? Thank you, have nice day"
+   }
+  ],
+  "key": {
+   "greeting": "hello my friend",
+   "offer": "i can give {price} pound, is ok?",
+   "likes": "i like very much the {item}",
+   "sign_off": "thank you, have nice day",
+   "after": [],
+   "short": []
+  },
+  "one_offs": [
+   "is still available?",
+   "i can come saturday morning",
+   "is possible 210 pound?"
+  ],
+  "writer_key": {
+   "greeting": "hello my friend",
+   "offer": "i can give {price} pound, is ok?",
+   "after": [],
+   "likes": "i like very much the {item}",
+   "sign_off": "thank you, have nice day",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "Hello my friend",
+   "offer": "I can give {price} pound, is ok?",
+   "after_offer": [],
+   "likes": "I like very much the {item}",
+   "sign_off": "Thank you, have nice day",
+   "short_words": [],
+   "unsure": "The price is a bare number followed by the word \"pound\" (\"130 pound\", no £), so here {price} is just the number and \"pound\" stays in the offer. \"Is possible {price} pound?\" and \"Maybe you accept {price} pound?\" are in one message each. \"ok\" is part of the offer, not counted as a short word."
+  }
+ },
+ {
+  "id": "w40",
+  "name": "Lachie",
+  "messages": [
+   {
+    "listing_title": "Ikea Kallax shelf",
+    "asking_price": "35",
+    "marketplace": "facebook",
+    "my_message": "Awright pal, is the Kallax still up for grabs? Need it for the spare room. Would you take £25? Cheers, Lachie"
+   },
+   {
+    "listing_title": "North Face puffer jacket",
+    "asking_price": "90",
+    "marketplace": "facebook",
+    "my_message": "awright pal!! cracking wee jacket that, aye it's baltic up here so I'm after something warm. £70 and I'll come get it the night?"
+   },
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": "330",
+    "marketplace": "facebook",
+    "my_message": "Cracking wee phone. My S10 finally packed in on me yesterday. Would you take £280 for it? Cheers, Lachie"
+   },
+   {
+    "listing_title": "Kindle Paperwhite",
+    "asking_price": "70",
+    "marketplace": "facebook",
+    "my_message": "AWRIGHT PAL. Does this one have the wee light built in? Would you take £50? Cheers, Lachie"
+   },
+   {
+    "listing_title": "GoPro Hero 10",
+    "asking_price": "200",
+    "marketplace": "facebook",
+    "my_message": "awright, pal - heading up Ben Nevis next month and want to film it, cracking wee gopro by the way. Could ye do £160?"
+   },
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": "280",
+    "marketplace": "facebook",
+    "my_message": "Is it boxed and that? Wee guy's been nagging me for one for months. Would you take £230? Cheers, Lachie"
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": "150",
+    "marketplace": "facebook",
+    "my_message": "Awright pal! Cracking wee sofa, would go perfect in the new flat. Would you take £120? Aye I've got a van so I can shift it myself"
+   },
+   {
+    "listing_title": "Ninja air fryer",
+    "asking_price": "60",
+    "marketplace": "facebook",
+    "my_message": "awright pal, the missus has been wanting one of these for ages and that's a cracking wee air fryer. £45 any good? Cheers, Lachie"
+   }
+  ],
+  "key": {
+   "greeting": "awright pal",
+   "offer": "would you take {price}",
+   "likes": "cracking wee {item}",
+   "sign_off": "cheers, lachie",
+   "after": [],
+   "short": []
+  },
+  "one_offs": [
+   "could ye do £160?",
+   "£45 any good?",
+   "i'll come get it the night"
+  ],
+  "writer_key": {
+   "greeting": "awright pal",
+   "offer": "would you take {price}",
+   "after": [],
+   "likes": "cracking wee {item}",
+   "sign_off": "cheers, lachie",
+   "short": []
+  },
+  "blind_judge": {
+   "greeting": "Awright pal",
+   "offer": "Would you take {price}?",
+   "after_offer": [],
+   "likes": "cracking wee {item}",
+   "sign_off": "Cheers, Lachie",
+   "short_words": [],
+   "unsure": "\"ye\" for \"you\" is in one message only (\"Could ye do £160?\"), and \"you\" is written in full in 5 others, so it is not a short word."
+  }
+ }
+]

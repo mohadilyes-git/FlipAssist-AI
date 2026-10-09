@@ -1,0 +1,1355 @@
+{
+ "w01": {
+  "proposals": {
+   "greeting": "hiya",
+   "offer": "wud u take {price}",
+   "sign_off": "cheers pal",
+   "after_offer": [
+    "can collect 2day",
+    "cash ready when u are",
+    "pls"
+   ],
+   "short_words": [
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "today",
+     "written": "2day"
+    },
+    {
+     "word": "like",
+     "written": "cud"
+    },
+    {
+     "word": "please",
+     "written": "pls"
+    }
+   ]
+  },
+  "secs": 66.18
+ },
+ "w02": {
+  "proposals": {
+   "greeting": "hello",
+   "offer": "i'll give you {price}",
+   "sign_off": "cheers clive :)",
+   "after_offer": [
+    "i have a van",
+    "cash today"
+   ],
+   "short_words": [
+    {
+     "word": "i",
+     "written": "i"
+    },
+    {
+     "word": "give",
+     "written": "ll"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "today",
+     "written": "2day"
+    }
+   ]
+  },
+  "secs": 0.72
+ },
+ "w03": {
+  "proposals": {
+   "greeting": "good afternoon",
+   "offer": "would you be willing to accept {price}",
+   "sign_off": "kind regards, harriet",
+   "after_offer": [
+    "i can pay straight away",
+    "would appreciate it being sent tracked",
+    "i can pay straight away",
+    "would you be willing to accept {price}",
+    "i can pay straight away"
+   ],
+   "short_words": [
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "appreciate",
+     "written": "appreciat"
+    },
+    {
+     "word": "being",
+     "written": "it"
+    },
+    {
+     "word": "straight",
+     "written": "straight"
+    }
+   ]
+  },
+  "secs": 0.98
+ },
+ "w04": {
+  "proposals": {
+   "greeting": "heyyy",
+   "offer": "would you do {price}",
+   "sign_off": "kayla 😊",
+   "after_offer": [
+    "can grab it today",
+    "lmk"
+   ],
+   "short_words": [
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "today",
+     "written": "2day"
+    },
+    {
+     "word": "grab",
+     "written": "grab"
+    },
+    {
+     "word": "chance",
+     "written": "any"
+    }
+   ]
+  },
+  "secs": 0.83
+ },
+ "w05": {
+  "proposals": {
+   "greeting": "hi mate",
+   "offer": "can u do {price}",
+   "sign_off": "rory",
+   "after_offer": [
+    "collect tmrw",
+    "cash waiting",
+    "happy to pick up",
+    "is it boxed",
+    "collect tmrw"
+   ],
+   "short_words": [
+    {
+     "word": "can",
+     "written": "u"
+    },
+    {
+     "word": "do",
+     "written": "wud"
+    },
+    {
+     "word": "its",
+     "written": "is"
+    }
+   ]
+  },
+  "secs": 0.78
+ },
+ "w06": {
+  "proposals": {
+   "greeting": "hiya",
+   "offer": "would you be ok with {price}",
+   "sign_off": "Tamsin x",
+   "after_offer": [
+    "I can pay straight away",
+    "thanks so much"
+   ],
+   "short_words": [
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "it",
+     "written": "the"
+    },
+    {
+     "word": "need",
+     "written": "nead"
+    },
+    {
+     "word": "forever",
+     "written": "ever"
+    }
+   ]
+  },
+  "secs": 0.76
+ },
+ "w07": {
+  "proposals": {
+   "greeting": "hello",
+   "offer": "I can give {price}",
+   "sign_off": "Thank you, Radek",
+   "after_offer": [
+    "I can come tmrw for collect",
+    "I pay cash"
+   ],
+   "short_words": [
+    {
+     "word": "you",
+     "written": "my"
+    },
+    {
+     "word": "friend",
+     "written": "my"
+    },
+    {
+     "word": "is",
+     "written": "is"
+    },
+    {
+     "word": "ok",
+     "written": "ok"
+    },
+    {
+     "word": "pls",
+     "written": "pls"
+    },
+    {
+     "word": "when",
+     "written": "when"
+    }
+   ]
+  },
+  "secs": 0.91
+ },
+ "w08": {
+  "proposals": {
+   "greeting": "awright pal",
+   "offer": "Any chance of {price} aye?",
+   "sign_off": "Cheers, Fraser :)",
+   "after_offer": [
+    "can collect the night",
+    "on the way hame",
+    "Saturday, whatever suits"
+   ],
+   "short_words": [
+    {
+     "word": "are",
+     "written": "any"
+    },
+    {
+     "word": "chance",
+     "written": "aye"
+    },
+    {
+     "word": "suits",
+     "written": "whatever"
+    }
+   ]
+  },
+  "secs": 0.75
+ },
+ "w09": {
+  "proposals": {
+   "greeting": "hey there",
+   "offer": "Would you do {price}",
+   "sign_off": "Thanks! -Devon :)",
+   "after_offer": [
+    "I can meet up this evening",
+    "got venmo or cash either way",
+    "I have venmo or cash"
+   ],
+   "short_words": [
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "do",
+     "written": "doe"
+    },
+    {
+     "word": "price",
+     "written": "price"
+    },
+    {
+     "word": "cash",
+     "written": "cash"
+    },
+    {
+     "word": "there",
+     "written": "ther"
+    }
+   ]
+  },
+  "secs": 0.98
+ },
+ "w10": {
+  "proposals": {
+   "greeting": "hey mtae",
+   "offer": "woudl yuo take {price}",
+   "sign_off": "ta jo x",
+   "after_offer": [
+    "can colelct today",
+    "can colelct today, cna send a deposit to hold it",
+    "can colelct today, cheers"
+   ],
+   "short_words": [
+    {
+     "word": "would",
+     "written": "woudl"
+    },
+    {
+     "word": "you",
+     "written": "yuo"
+    },
+    {
+     "word": "take",
+     "written": "tako"
+    },
+    {
+     "word": "today",
+     "written": "2day"
+    },
+    {
+     "word": "collect",
+     "written": "colelct"
+    }
+   ]
+  },
+  "secs": 0.96
+ },
+ "w11": {
+  "proposals": {
+   "greeting": "hiya hun",
+   "offer": "would you take {price}",
+   "sign_off": "thanks hun xx",
+   "after_offer": [
+    "can collect whenever suits",
+    "just let me know"
+   ],
+   "short_words": [
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "lets",
+     "written": "let"
+    },
+    {
+     "word": "lets",
+     "written": "lets"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    }
+   ]
+  },
+  "secs": 0.81
+ },
+ "w12": {
+  "proposals": {
+   "greeting": "hi mate",
+   "offer": "would you take {price}",
+   "sign_off": "Cheers, Rob",
+   "after_offer": [
+    "can collect today",
+    "cash ready",
+    "can collect today",
+    "can collect today",
+    "can collect today"
+   ],
+   "short_words": [
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "today",
+     "written": "2day"
+    },
+    {
+     "word": "take",
+     "written": "tak"
+    },
+    {
+     "word": "cash",
+     "written": "cash"
+    },
+    {
+     "word": "ready",
+     "written": "read"
+    },
+    {
+     "word": "take",
+     "written": "tak"
+    },
+    {
+     "word": "take",
+     "written": "tak"
+    },
+    {
+     "word": "take",
+     "written": "tak"
+    },
+    {
+     "word": "collect",
+     "written": "coll"
+    }
+   ]
+  },
+  "secs": 1.34
+ },
+ "w13": {
+  "proposals": {
+   "greeting": "hey there",
+   "offer": "would you be up for {price}",
+   "sign_off": "remi :), cheers",
+   "after_offer": [
+    "remi :), cheers"
+   ],
+   "short_words": [
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "be",
+     "written": "up"
+    },
+    {
+     "word": "for",
+     "written": "for"
+    },
+    {
+     "word": "price",
+     "written": "price"
+    }
+   ]
+  },
+  "secs": 0.83
+ },
+ "w14": {
+  "proposals": {
+   "greeting": "yo bro",
+   "offer": "wud u do {price}",
+   "sign_off": "rhys 😎",
+   "after_offer": [
+    "can pay straight away",
+    "lmk"
+   ],
+   "short_words": [
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "bro",
+     "written": "bro"
+    },
+    {
+     "word": "like",
+     "written": "lowkey"
+    },
+    {
+     "word": "like",
+     "written": "love"
+    },
+    {
+     "word": "for",
+     "written": "fr"
+    }
+   ]
+  },
+  "secs": 0.9
+ },
+ "w15": {
+  "proposals": {
+   "greeting": "hello",
+   "offer": "can u do {price}",
+   "likes": "love the {item}",
+   "sign_off": "ta, maya :-)",
+   "after_offer": [
+    "pls",
+    "ta"
+   ],
+   "short_words": [
+    {
+     "word": "u",
+     "written": "u"
+    },
+    {
+     "word": "its",
+     "written": "pls"
+    },
+    {
+     "word": "its",
+     "written": "ta"
+    }
+   ]
+  },
+  "secs": 0.74
+ },
+ "w16": {
+  "proposals": {
+   "greeting": "hello there",
+   "offer": "would you consider {price}",
+   "likes": "i really like the {item}",
+   "sign_off": "harriet",
+   "after_offer": [
+    "many thanks"
+   ],
+   "short_words": [
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "it",
+     "written": "the"
+    },
+    {
+     "word": "is",
+     "written": "does"
+    },
+    {
+     "word": "have",
+     "written": "has"
+    }
+   ]
+  },
+  "secs": 0.87
+ },
+ "w17": {
+  "proposals": {
+   "greeting": "hiya",
+   "offer": "wud u do {price}",
+   "likes": "I love the {item}",
+   "sign_off": "ta :)",
+   "after_offer": [
+    "cud get it 2day",
+    "cud meet u 2day",
+    "cud u go to {price} pls",
+    "cud u come 2day",
+    "cud u send a pic of the back pls"
+   ],
+   "short_words": [
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "its",
+     "written": "is"
+    },
+    {
+     "word": "its",
+     "written": "it"
+    },
+    {
+     "word": "do",
+     "written": "do"
+    },
+    {
+     "word": "its",
+     "written": "is"
+    },
+    {
+     "word": "its",
+     "written": "it"
+    },
+    {
+     "word": "thats",
+     "written": "theres"
+    }
+   ]
+  },
+  "secs": 1.37
+ },
+ "w18": {
+  "proposals": {
+   "greeting": "hello",
+   "offer": "will you take {price}",
+   "sign_off": "cheers trevor",
+   "after_offer": [
+    "cash waiting",
+    "text me back",
+    "ring me back",
+    "can come saturday"
+   ],
+   "short_words": [
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "take",
+     "written": "wud"
+    },
+    {
+     "word": "waiting",
+     "written": "waiting"
+    },
+    {
+     "word": "come",
+     "written": "come"
+    }
+   ]
+  },
+  "secs": 0.75
+ },
+ "w19": {
+  "proposals": {
+   "greeting": "hello",
+   "offer": "i would like to offer {price}",
+   "sign_off": "kind regards, eleanor",
+   "after_offer": [
+    "i can collect at your convenience",
+    "if that is convenient"
+   ],
+   "short_words": [
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "convenient",
+     "written": "convenience"
+    }
+   ]
+  },
+  "secs": 0.7
+ },
+ "w20": {
+  "proposals": {
+   "greeting": "hiii",
+   "offer": "would you do {price}",
+   "sign_off": "🥰",
+   "after_offer": [
+    "can pick up asap",
+    "could i get it for {price}",
+    "can meet anywhere in town"
+   ],
+   "short_words": [
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "any",
+     "written": "2"
+    },
+    {
+     "word": "it",
+     "written": "has"
+    },
+    {
+     "word": "the",
+     "written": "it"
+    },
+    {
+     "word": "any",
+     "written": "2"
+    },
+    {
+     "word": "it",
+     "written": "has"
+    },
+    {
+     "word": "it",
+     "written": "it"
+    },
+    {
+     "word": "for",
+     "written": "for"
+    }
+   ]
+  },
+  "secs": 1.15
+ },
+ "w21": {
+  "proposals": {
+   "greeting": "hi",
+   "offer": "£{price} any good?",
+   "sign_off": "ta corey",
+   "after_offer": [
+    "can collect tonight",
+    "love the {item}"
+   ],
+   "short_words": [
+    {
+     "word": "any",
+     "written": "any"
+    },
+    {
+     "word": "good",
+     "written": "good"
+    }
+   ]
+  },
+  "secs": 0.63
+ },
+ "w22": {
+  "proposals": {
+   "greeting": "hey lovely",
+   "offer": "would you be up for {price}",
+   "likes": "I absolutely love the {item}",
+   "sign_off": "Tamsin x",
+   "after_offer": [
+    "can pay as soon as you accept"
+   ],
+   "short_words": [
+    {
+     "word": "lovely",
+     "written": "lovely"
+    },
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "accept",
+     "written": "accept"
+    },
+    {
+     "word": "honestly",
+     "written": "honestly"
+    }
+   ]
+  },
+  "secs": 0.86
+ },
+ "w23": {
+  "proposals": {
+   "greeting": "hello friend",
+   "offer": "I can give {price} pound",
+   "likes": "I like very much the {item}",
+   "sign_off": "Have nice day, Mihai",
+   "after_offer": [
+    "today I come for pick up",
+    "cash I bring with me",
+    "answer me pls"
+   ],
+   "short_words": [
+    {
+     "word": "I",
+     "written": "u"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "is",
+     "written": "2day"
+    },
+    {
+     "word": "good",
+     "written": "2day"
+    }
+   ]
+  },
+  "secs": 0.9
+ },
+ "w24": {
+  "proposals": {
+   "greeting": "hiya",
+   "offer": "would you go {price}",
+   "sign_off": "cheers, Fraser :)",
+   "after_offer": [
+    "can pay right away",
+    "can collect the morra"
+   ],
+   "short_words": [
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "right",
+     "written": "aye"
+    },
+    {
+     "word": "it",
+     "written": "it"
+    },
+    {
+     "word": "that",
+     "written": "that"
+    },
+    {
+     "word": "the",
+     "written": "morra"
+    }
+   ]
+  },
+  "secs": 0.9
+ },
+ "w25": {
+  "proposals": {
+   "greeting": "hey",
+   "offer": "would you do ${}",
+   "sign_off": "Trevor",
+   "after_offer": [
+    "I could venmo you right away",
+    "we could meet up at the Walgreens parking lot after 6"
+   ],
+   "short_words": [
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "right",
+     "written": "check"
+    }
+   ]
+  },
+  "secs": 0.69
+ },
+ "w26": {
+  "proposals": {
+   "greeting": "hello mate",
+   "offer": "woudl yuo take {price}",
+   "likes": "drone, s23, switch, macbook, jacket, bose, air max 90",
+   "sign_off": "thnaks, kieran",
+   "after_offer": [
+    "i realy like the {item}",
+    "couldl pick up",
+    "could yu do",
+    "woudl yuo take",
+    "need a large tho, waht size is it"
+   ],
+   "short_words": [
+    {
+     "word": "would",
+     "written": "woudl"
+    },
+    {
+     "word": "you",
+     "written": "yuo"
+    },
+    {
+     "word": "realy",
+     "written": "real"
+    },
+    {
+     "word": "like",
+     "written": "like"
+    },
+    {
+     "word": "the",
+     "written": "teh"
+    },
+    {
+     "word": "is",
+     "written": "js"
+    },
+    {
+     "word": "for",
+     "written": "for"
+    },
+    {
+     "word": "me",
+     "written": "yu"
+    },
+    {
+     "word": "tho",
+     "written": "tho"
+    },
+    {
+     "word": "easier",
+     "written": "easit"
+    }
+   ]
+  },
+  "secs": 1.64
+ },
+ "w27": {
+  "proposals": {
+   "greeting": "Hi",
+   "offer": "Could you do {price}",
+   "sign_off": "Jodie :) xx",
+   "after_offer": [
+    "Happy to collect whenever suits",
+    "I'll have the cash ready for you hun"
+   ],
+   "short_words": [
+    {
+     "word": "you",
+     "written": "hun"
+    }
+   ]
+  },
+  "secs": 0.59
+ },
+ "w28": {
+  "proposals": {
+   "greeting": "Morning",
+   "offer": "Can do {price} cash",
+   "likes": "I like the {item}",
+   "sign_off": "Dean :)",
+   "after_offer": [
+    "can collect today",
+    "needs to have no screen burn",
+    "could pick up tonight",
+    "I'm 10 mins away"
+   ],
+   "short_words": [
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "time",
+     "written": "time"
+    }
+   ]
+  },
+  "secs": 0.83
+ },
+ "w29": {
+  "proposals": {
+   "greeting": "hey there",
+   "offer": "would you go to {price}",
+   "sign_off": "nadia :)”, “cheers”,",
+   "after_offer": [
+    "can buy straight away",
+    "have a good one"
+   ],
+   "short_words": [
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "straight",
+     "written": "straight"
+    },
+    {
+     "word": "away",
+     "written": "2day"
+    }
+   ]
+  },
+  "secs": 0.82
+ },
+ "w30": {
+  "proposals": {
+   "greeting": "yo bro",
+   "offer": "cud u do {price}",
+   "sign_off": "safe 🙏",
+   "after_offer": [
+    "can pull up whenever",
+    "safe 🙏"
+   ],
+   "short_words": [
+    {
+     "word": "bro",
+     "written": "yo"
+    },
+    {
+     "word": "love",
+     "written": "lowkey"
+    },
+    {
+     "word": "fr",
+     "written": ""
+    }
+   ]
+  },
+  "secs": 0.67
+ },
+ "w31": {
+  "proposals": {
+   "greeting": "Alright mate",
+   "offer": "Would you do {price}",
+   "sign_off": "ta",
+   "after_offer": [
+    "can pay straight away"
+   ],
+   "short_words": [
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "straight",
+     "written": "straight"
+    }
+   ]
+  },
+  "secs": 0.67
+ },
+ "w32": {
+  "proposals": {
+   "greeting": "hello there",
+   "offer": "would you consider {price}",
+   "likes": "i really like the {item}",
+   "sign_off": "many thanks, rosalind",
+   "after_offer": [
+    "many thanks, rosalind"
+   ],
+   "short_words": [
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "consider",
+     "written": "cons"
+    }
+   ]
+  },
+  "secs": 0.74
+ },
+ "w33": {
+  "proposals": {
+   "greeting": "hiya",
+   "offer": "wud u take {price}",
+   "likes": "luv the {item}",
+   "sign_off": "thx tegan x",
+   "after_offer": [
+    "cud collect 2day",
+    "pls dont sell to anyone else",
+    "got a van so can get it whenever"
+   ],
+   "short_words": [
+    {
+     "word": "wud",
+     "written": "wud"
+    },
+    {
+     "word": "u",
+     "written": "u"
+    },
+    {
+     "word": "its",
+     "written": "its"
+    },
+    {
+     "word": "pls",
+     "written": "pls"
+    },
+    {
+     "word": "lets",
+     "written": "let"
+    }
+   ]
+  },
+  "secs": 0.98
+ },
+ "w34": {
+  "proposals": {
+   "greeting": "hello",
+   "offer": "i'll give you {price}",
+   "sign_off": "cheers bernard :-)",
+   "after_offer": [
+    "can pick up any evening",
+    "cash in hand",
+    "distance is no problem"
+   ],
+   "short_words": [
+    {
+     "word": "i'll",
+     "written": "i"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "it",
+     "written": "its"
+    }
+   ]
+  },
+  "secs": 0.76
+ },
+ "w35": {
+  "proposals": {
+   "greeting": "Good Afternoon",
+   "offer": "Would you be willing to accept {price}",
+   "sign_off": "Kind regards, Philippa",
+   "after_offer": [
+    "I can pay immediately",
+    "I am happy to collect",
+    "I can pay immediately",
+    "I am happy to collect",
+    "I can pay immediately"
+   ],
+   "short_words": [
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "accept",
+     "written": "take"
+    },
+    {
+     "word": "immediately",
+     "written": "immediately"
+    },
+    {
+     "word": "collect",
+     "written": "collect"
+    },
+    {
+     "word": "convenient",
+     "written": "convenient"
+    }
+   ]
+  },
+  "secs": 1.06
+ },
+ "w36": {
+  "proposals": {
+   "greeting": "heyyy",
+   "offer": "could you do {price}",
+   "sign_off": "thanksss 🥹💖",
+   "after_offer": [
+    "can collect today",
+    "cash in hand"
+   ],
+   "short_words": [
+    {
+     "word": "could",
+     "written": "could"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "today",
+     "written": "2day"
+    },
+    {
+     "word": "need",
+     "written": "need"
+    }
+   ]
+  },
+  "secs": 0.77
+ },
+ "w37": {
+  "proposals": {
+   "greeting": "hi",
+   "offer": "would you accept {price}",
+   "sign_off": "dale :)",
+   "after_offer": [
+    "can pay straight away",
+    "can collect this weekend"
+   ],
+   "short_words": [
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    }
+   ]
+  },
+  "secs": 0.56
+ },
+ "w38": {
+  "proposals": {
+   "greeting": "hiya",
+   "offer": "would you consider {price}",
+   "likes": "I absolutely love the {item}",
+   "sign_off": "ta :)",
+   "after_offer": [
+    "I can pick up whenever suits",
+    "let me know what you think",
+    "can do cash or bank transfer whichever is easier"
+   ],
+   "short_words": [
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "it",
+     "written": "the"
+    },
+    {
+     "word": "think",
+     "written": "think"
+    },
+    {
+     "word": "is",
+     "written": "it"
+    },
+    {
+     "word": "any",
+     "written": "any"
+    }
+   ]
+  },
+  "secs": 1.03
+ },
+ "w39": {
+  "proposals": {
+   "greeting": "hello my friend",
+   "offer": "I can give {price} pound, is ok?",
+   "likes": "I like very much the {item}",
+   "sign_off": "thank you, have nice day",
+   "after_offer": [
+    "is ok?",
+    "thank you, have nice day"
+   ],
+   "short_words": [
+    {
+     "word": "friend",
+     "written": "my"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "like",
+     "written": "like"
+    },
+    {
+     "word": "very",
+     "written": "very"
+    },
+    {
+     "word": "much",
+     "written": "much"
+    },
+    {
+     "word": "there",
+     "written": "there"
+    }
+   ]
+  },
+  "secs": 1.01
+ },
+ "w40": {
+  "proposals": {
+   "greeting": "awright pal",
+   "offer": "Would you take {price}",
+   "sign_off": "Cheers, Lachie",
+   "after_offer": [
+    "I'll come get it",
+    "Could ye do {price}"
+   ],
+   "short_words": [
+    {
+     "word": "would",
+     "written": "wud"
+    },
+    {
+     "word": "you",
+     "written": "u"
+    },
+    {
+     "word": "it",
+     "written": "that"
+    },
+    {
+     "word": "one",
+     "written": "ye"
+    },
+    {
+     "word": "ages",
+     "written": "ages"
+    },
+    {
+     "word": "pal",
+     "written": "pal"
+    }
+   ]
+  },
+  "secs": 0.99
+ }
+}

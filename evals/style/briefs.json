@@ -1,0 +1,1881 @@
+[
+ {
+  "id": "w01",
+  "voice": "texts in lowercase with shortcuts (u, pls, cud, wud, 2day, 2nite, thx), hardly any punctuation",
+  "messages": 6,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "after": 1,
+   "short": true
+  },
+  "hard": [
+   "one sentence appears in only ONE message but sounds like a habit (it is not one)",
+   "two closings that look alike but use different words (neither is a habit)"
+  ],
+  "items": [
+   {
+    "listing_title": "Lego Millennium Falcon",
+    "asking_price": 400
+   },
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": 280
+   },
+   {
+    "listing_title": "Sony WH-1000XM4",
+    "asking_price": 140
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": 380
+   },
+   {
+    "listing_title": "MacBook Pro 14 M1 Pro",
+    "asking_price": 950
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": 300
+   }
+  ],
+  "marketplace": "gumtree"
+ },
+ {
+  "id": "w02",
+  "voice": "WRITES EVERYTHING IN CAPITALS, older man, blunt",
+  "messages": 7,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "sign_off": true
+  },
+  "hard": [
+   "the sign-off has their name and a smiley, written the same way each time",
+   "some messages skip some of the habits"
+  ],
+  "items": [
+   {
+    "listing_title": "Galaxy S21 Ultra",
+    "asking_price": 260
+   },
+   {
+    "listing_title": "Apple Watch Series 8",
+    "asking_price": 180
+   },
+   {
+    "listing_title": "Ninja air fryer",
+    "asking_price": 60
+   },
+   {
+    "listing_title": "Nike Air Max 90 size 9",
+    "asking_price": 60
+   },
+   {
+    "listing_title": "iPhone 13 128GB Blue",
+    "asking_price": 220
+   },
+   {
+    "listing_title": "Steam Deck 512GB",
+    "asking_price": 340
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": 150
+   }
+  ],
+  "marketplace": "facebook"
+ },
+ {
+  "id": "w03",
+  "voice": "polite and formal, full sentences, signs off with regards and their name",
+  "messages": 7,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "after": 1,
+   "sign_off": true
+  },
+  "hard": [
+   "two closings that look alike but use different words (neither is a habit)",
+   "the greeting changes capital letters and punctuation between messages but is the same word(s)"
+  ],
+  "items": [
+   {
+    "listing_title": "MacBook Pro 14 M1 Pro",
+    "asking_price": 950
+   },
+   {
+    "listing_title": "Sony WH-1000XM4",
+    "asking_price": 140
+   },
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": 330
+   },
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": 160
+   },
+   {
+    "listing_title": "Ninja air fryer",
+    "asking_price": 60
+   },
+   {
+    "listing_title": "Nike Air Max 90 size 9",
+    "asking_price": 60
+   }
+  ],
+  "marketplace": "ebay"
+ },
+ {
+  "id": "w04",
+  "voice": "emoji-heavy young buyer, several emojis per message",
+  "messages": 7,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "after": 1,
+   "sign_off": true
+  },
+  "hard": [
+   "some messages skip some of the habits",
+   "the sign-off has their name and a smiley, written the same way each time"
+  ],
+  "items": [
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": 280
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": 150
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "Canon EOS 250D",
+    "asking_price": 320
+   },
+   {
+    "listing_title": "GoPro Hero 10",
+    "asking_price": 200
+   },
+   {
+    "listing_title": "Mountain bike 27.5in",
+    "asking_price": 180
+   },
+   {
+    "listing_title": "iPhone 12 64GB",
+    "asking_price": 150
+   }
+  ],
+  "marketplace": "facebook"
+ },
+ {
+  "id": "w05",
+  "voice": "eBay-style one-liners: very short, just the price and a few words",
+  "messages": 10,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "after": 2,
+   "likes": true,
+   "sign_off": true,
+   "short": true
+  },
+  "hard": [
+   "the greeting changes capital letters and punctuation between messages but is the same word(s)",
+   "some messages skip some of the habits"
+  ],
+  "items": [
+   {
+    "listing_title": "Steam Deck 512GB",
+    "asking_price": 340
+   },
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": 160
+   },
+   {
+    "listing_title": "Kindle Paperwhite",
+    "asking_price": 70
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "Ninja air fryer",
+    "asking_price": 60
+   },
+   {
+    "listing_title": "MacBook Pro 14 M1 Pro",
+    "asking_price": 950
+   },
+   {
+    "listing_title": "North Face puffer jacket",
+    "asking_price": 90
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": 450
+   },
+   {
+    "listing_title": "Galaxy S21 Ultra",
+    "asking_price": 260
+   },
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": 330
+   }
+  ],
+  "marketplace": "facebook"
+ },
+ {
+  "id": "w06",
+  "voice": "chatty run-on sentences with no full stops, explains why they want it",
+  "messages": 6,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "after": 1,
+   "likes": true,
+   "sign_off": true
+  },
+  "hard": [
+   "two closings that look alike but use different words (neither is a habit)",
+   "some messages skip some of the habits"
+  ],
+  "items": [
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": 280
+   },
+   {
+    "listing_title": "Kindle Paperwhite",
+    "asking_price": 70
+   },
+   {
+    "listing_title": "North Face puffer jacket",
+    "asking_price": 90
+   },
+   {
+    "listing_title": "Mountain bike 27.5in",
+    "asking_price": 180
+   },
+   {
+    "listing_title": "iPhone 12 64GB",
+    "asking_price": 150
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": 450
+   }
+  ],
+  "marketplace": "vinted"
+ },
+ {
+  "id": "w07",
+  "voice": "non-native English speaker: simple grammar mistakes ('I can give 150 pound, is ok?'), polite",
+  "messages": 7,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "after": 2,
+   "sign_off": true,
+   "short": true
+  },
+  "hard": [
+   "one sentence appears in only ONE message but sounds like a habit (it is not one)",
+   "the greeting changes capital letters and punctuation between messages but is the same word(s)"
+  ],
+  "items": [
+   {
+    "listing_title": "Mountain bike 27.5in",
+    "asking_price": 180
+   },
+   {
+    "listing_title": "Lego Millennium Falcon",
+    "asking_price": 400
+   },
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": 330
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": 450
+   },
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": 160
+   },
+   {
+    "listing_title": "iPhone 13 128GB Blue",
+    "asking_price": 220
+   }
+  ],
+  "marketplace": "gumtree"
+ },
+ {
+  "id": "w08",
+  "voice": "Scottish, uses 'aye', 'wee', 'pal', 'cheers'",
+  "messages": 6,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "after": 1,
+   "sign_off": true
+  },
+  "hard": [
+   "one habit appears in exactly 2 of the messages (still a habit)",
+   "the sign-off has their name and a smiley, written the same way each time"
+  ],
+  "items": [
+   {
+    "listing_title": "Ikea Kallax shelf",
+    "asking_price": 35
+   },
+   {
+    "listing_title": "Lego Millennium Falcon",
+    "asking_price": 400
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "AirPods Pro 2",
+    "asking_price": 120
+   },
+   {
+    "listing_title": "North Face puffer jacket",
+    "asking_price": 90
+   },
+   {
+    "listing_title": "MacBook Pro 14 M1 Pro",
+    "asking_price": 950
+   }
+  ],
+  "marketplace": "facebook"
+ },
+ {
+  "id": "w09",
+  "voice": "American buyer on Mercari/OfferUp/Craigslist, dollars, 'meet up', 'Venmo/cash'",
+  "messages": 7,
+  "habits": {
+   "offer": true,
+   "after": 1,
+   "sign_off": true
+  },
+  "hard": [
+   "the sign-off has their name and a smiley, written the same way each time",
+   "the greeting changes capital letters and punctuation between messages but is the same word(s)"
+  ],
+  "items": [
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": 70
+   },
+   {
+    "listing_title": "AirPods Pro 2",
+    "asking_price": 120
+   },
+   {
+    "listing_title": "Ikea Kallax shelf",
+    "asking_price": 35
+   },
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": 160
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": 380
+   },
+   {
+    "listing_title": "North Face puffer jacket",
+    "asking_price": 90
+   },
+   {
+    "listing_title": "Nintendo Switch OLED",
+    "asking_price": 220
+   }
+  ],
+  "marketplace": "craigslist/offerup/mercari"
+ },
+ {
+  "id": "w10",
+  "voice": "fast typer who makes typos ('yuo', 'thnaks', 'woudl'), but the SAME typo in their repeated habits",
+  "messages": 6,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "after": 1
+  },
+  "hard": [
+   "one message is very short and has almost no habits",
+   "one sentence appears in only ONE message but sounds like a habit (it is not one)"
+  ],
+  "items": [
+   {
+    "listing_title": "GoPro Hero 10",
+    "asking_price": 200
+   },
+   {
+    "listing_title": "Kindle Paperwhite",
+    "asking_price": 70
+   },
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": 280
+   },
+   {
+    "listing_title": "Galaxy S21 Ultra",
+    "asking_price": 260
+   },
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": 70
+   },
+   {
+    "listing_title": "Sony WH-1000XM4",
+    "asking_price": 140
+   }
+  ],
+  "marketplace": "facebook"
+ },
+ {
+  "id": "w11",
+  "voice": "says 'hun' and ends with kisses (x, xx)",
+  "messages": 6,
+  "habits": {
+   "greeting": true,
+   "after": 1,
+   "sign_off": true
+  },
+  "hard": [
+   "one message is very short and has almost no habits",
+   "the greeting changes capital letters and punctuation between messages but is the same word(s)"
+  ],
+  "items": [
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": 450
+   },
+   {
+    "listing_title": "Nike Air Max 90 size 9",
+    "asking_price": 60
+   },
+   {
+    "listing_title": "Steam Deck 512GB",
+    "asking_price": 340
+   },
+   {
+    "listing_title": "MacBook Pro 14 M1 Pro",
+    "asking_price": 950
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "iPhone 13 128GB Blue",
+    "asking_price": 220
+   }
+  ],
+  "marketplace": "facebook"
+ },
+ {
+  "id": "w12",
+  "voice": "trader / reseller: businesslike, 'cash buyer', 'can collect today', short",
+  "messages": 10,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "after": 1,
+   "sign_off": true
+  },
+  "hard": [
+   "one sentence appears in only ONE message but sounds like a habit (it is not one)",
+   "one habit appears in exactly 2 of the messages (still a habit)"
+  ],
+  "items": [
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": 70
+   },
+   {
+    "listing_title": "North Face puffer jacket",
+    "asking_price": 90
+   },
+   {
+    "listing_title": "Nike Air Max 90 size 9",
+    "asking_price": 60
+   },
+   {
+    "listing_title": "Galaxy S21 Ultra",
+    "asking_price": 260
+   },
+   {
+    "listing_title": "Canon EOS 250D",
+    "asking_price": 320
+   },
+   {
+    "listing_title": "iPhone 13 128GB Blue",
+    "asking_price": 220
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": 450
+   },
+   {
+    "listing_title": "Apple Watch Series 8",
+    "asking_price": 180
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": 380
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": 150
+   }
+  ],
+  "marketplace": "facebook"
+ },
+ {
+  "id": "w13",
+  "voice": "lowercase with ':)' smileys, signs off with their name and a smiley then 'cheers' (like 'sam :), cheers')",
+  "messages": 6,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "likes": true,
+   "sign_off": true
+  },
+  "hard": [
+   "the sign-off has their name and a smiley, written the same way each time",
+   "one sentence appears in only ONE message but sounds like a habit (it is not one)"
+  ],
+  "items": [
+   {
+    "listing_title": "Ikea Kallax shelf",
+    "asking_price": 35
+   },
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": 70
+   },
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": 160
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": 380
+   },
+   {
+    "listing_title": "GoPro Hero 10",
+    "asking_price": 200
+   },
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": 280
+   }
+  ],
+  "marketplace": "gumtree"
+ },
+ {
+  "id": "w14",
+  "voice": "teenager with slang ('bro', 'fr', 'ngl', 'lmk')",
+  "messages": 8,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "after": 1,
+   "likes": true,
+   "short": true,
+   "sign_off": true
+  },
+  "hard": [
+   "some messages skip some of the habits",
+   "the sign-off has their name and a smiley, written the same way each time"
+  ],
+  "items": [
+   {
+    "listing_title": "Mountain bike 27.5in",
+    "asking_price": 180
+   },
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": 70
+   },
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "North Face puffer jacket",
+    "asking_price": 90
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": 380
+   },
+   {
+    "listing_title": "Sony WH-1000XM4",
+    "asking_price": 140
+   },
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": 280
+   }
+  ],
+  "marketplace": "vinted"
+ },
+ {
+  "id": "w15",
+  "voice": "puts the price in odd formats ('150£', '150 quid', '£150.00', '150 pounds') but each writer keeps ONE format",
+  "messages": 10,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "likes": true,
+   "short": true,
+   "sign_off": true
+  },
+  "hard": [
+   "the sign-off has their name and a smiley, written the same way each time",
+   "one habit appears in exactly 2 of the messages (still a habit)"
+  ],
+  "items": [
+   {
+    "listing_title": "GoPro Hero 10",
+    "asking_price": 200
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": 380
+   },
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": 70
+   },
+   {
+    "listing_title": "Nintendo Switch OLED",
+    "asking_price": 220
+   },
+   {
+    "listing_title": "iPhone 13 128GB Blue",
+    "asking_price": 220
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": 450
+   },
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": 330
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": 150
+   },
+   {
+    "listing_title": "iPhone 12 64GB",
+    "asking_price": 150
+   },
+   {
+    "listing_title": "North Face puffer jacket",
+    "asking_price": 90
+   }
+  ],
+  "marketplace": "gumtree"
+ },
+ {
+  "id": "w16",
+  "voice": "very long, careful messages asking questions about the item before offering",
+  "messages": 8,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "after": 1,
+   "likes": true,
+   "sign_off": true
+  },
+  "hard": [
+   "some messages skip some of the habits",
+   "one habit appears in exactly 2 of the messages (still a habit)"
+  ],
+  "items": [
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": 70
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "Nintendo Switch OLED",
+    "asking_price": 220
+   },
+   {
+    "listing_title": "Ikea Kallax shelf",
+    "asking_price": 35
+   },
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "iPhone 13 128GB Blue",
+    "asking_price": 220
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": 450
+   },
+   {
+    "listing_title": "Ninja air fryer",
+    "asking_price": 60
+   }
+  ],
+  "marketplace": "vinted"
+ },
+ {
+  "id": "w17",
+  "voice": "texts in lowercase with shortcuts (u, pls, cud, wud, 2day, 2nite, thx), hardly any punctuation",
+  "messages": 7,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "likes": true,
+   "short": true
+  },
+  "hard": [
+   "one message is very short and has almost no habits",
+   "one sentence appears in only ONE message but sounds like a habit (it is not one)"
+  ],
+  "items": [
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": 70
+   },
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": 160
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": 450
+   },
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "iPhone 13 128GB Blue",
+    "asking_price": 220
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "Canon EOS 250D",
+    "asking_price": 320
+   }
+  ],
+  "marketplace": "facebook"
+ },
+ {
+  "id": "w18",
+  "voice": "WRITES EVERYTHING IN CAPITALS, older man, blunt",
+  "messages": 6,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "after": 1,
+   "sign_off": true
+  },
+  "hard": [
+   "some messages skip some of the habits",
+   "two closings that look alike but use different words (neither is a habit)"
+  ],
+  "items": [
+   {
+    "listing_title": "Mountain bike 27.5in",
+    "asking_price": 180
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": 380
+   },
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": 330
+   },
+   {
+    "listing_title": "Nike Air Max 90 size 9",
+    "asking_price": 60
+   },
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": 160
+   },
+   {
+    "listing_title": "Kindle Paperwhite",
+    "asking_price": 70
+   }
+  ],
+  "marketplace": "gumtree"
+ },
+ {
+  "id": "w19",
+  "voice": "polite and formal, full sentences, signs off with regards and their name",
+  "messages": 6,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "after": 1,
+   "sign_off": true
+  },
+  "hard": [
+   "two closings that look alike but use different words (neither is a habit)",
+   "one message is very short and has almost no habits"
+  ],
+  "items": [
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "GoPro Hero 10",
+    "asking_price": 200
+   },
+   {
+    "listing_title": "Apple Watch Series 8",
+    "asking_price": 180
+   },
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": 280
+   },
+   {
+    "listing_title": "Mountain bike 27.5in",
+    "asking_price": 180
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": 300
+   }
+  ],
+  "marketplace": "gumtree"
+ },
+ {
+  "id": "w20",
+  "voice": "emoji-heavy young buyer, several emojis per message",
+  "messages": 6,
+  "habits": {
+   "offer": true,
+   "after": 1,
+   "sign_off": true
+  },
+  "hard": [
+   "one habit appears in exactly 2 of the messages (still a habit)",
+   "one sentence appears in only ONE message but sounds like a habit (it is not one)"
+  ],
+  "items": [
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": 160
+   },
+   {
+    "listing_title": "GoPro Hero 10",
+    "asking_price": 200
+   },
+   {
+    "listing_title": "iPhone 12 64GB",
+    "asking_price": 150
+   },
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": 280
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": 380
+   }
+  ],
+  "marketplace": "facebook"
+ },
+ {
+  "id": "w21",
+  "voice": "eBay-style one-liners: very short, just the price and a few words",
+  "messages": 5,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "likes": true,
+   "sign_off": true
+  },
+  "hard": [
+   "two closings that look alike but use different words (neither is a habit)",
+   "the 'I like the item' habit names each item differently (its own short name each time)"
+  ],
+  "items": [
+   {
+    "listing_title": "iPhone 12 64GB",
+    "asking_price": 150
+   },
+   {
+    "listing_title": "Steam Deck 512GB",
+    "asking_price": 340
+   },
+   {
+    "listing_title": "iPhone 13 128GB Blue",
+    "asking_price": 220
+   },
+   {
+    "listing_title": "Dyson V11 cordless",
+    "asking_price": 200
+   },
+   {
+    "listing_title": "MacBook Pro 14 M1 Pro",
+    "asking_price": 950
+   }
+  ],
+  "marketplace": "gumtree"
+ },
+ {
+  "id": "w22",
+  "voice": "chatty run-on sentences with no full stops, explains why they want it",
+  "messages": 7,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "after": 1,
+   "likes": true,
+   "sign_off": true
+  },
+  "hard": [
+   "the greeting changes capital letters and punctuation between messages but is the same word(s)",
+   "the 'I like the item' habit names each item differently (its own short name each time)"
+  ],
+  "items": [
+   {
+    "listing_title": "Steam Deck 512GB",
+    "asking_price": 340
+   },
+   {
+    "listing_title": "Nike Air Max 90 size 9",
+    "asking_price": 60
+   },
+   {
+    "listing_title": "Canon EOS 250D",
+    "asking_price": 320
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": 150
+   },
+   {
+    "listing_title": "Ninja air fryer",
+    "asking_price": 60
+   },
+   {
+    "listing_title": "Apple Watch Series 8",
+    "asking_price": 180
+   }
+  ],
+  "marketplace": "vinted"
+ },
+ {
+  "id": "w23",
+  "voice": "non-native English speaker: simple grammar mistakes ('I can give 150 pound, is ok?'), polite",
+  "messages": 6,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "after": 2,
+   "likes": true,
+   "sign_off": true,
+   "short": true
+  },
+  "hard": [
+   "one habit appears in exactly 2 of the messages (still a habit)",
+   "the greeting changes capital letters and punctuation between messages but is the same word(s)"
+  ],
+  "items": [
+   {
+    "listing_title": "Dyson V11 cordless",
+    "asking_price": 200
+   },
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": 280
+   },
+   {
+    "listing_title": "Nike Air Max 90 size 9",
+    "asking_price": 60
+   },
+   {
+    "listing_title": "Canon EOS 250D",
+    "asking_price": 320
+   },
+   {
+    "listing_title": "Kindle Paperwhite",
+    "asking_price": 70
+   }
+  ],
+  "marketplace": "facebook"
+ },
+ {
+  "id": "w24",
+  "voice": "Scottish, uses 'aye', 'wee', 'pal', 'cheers'",
+  "messages": 6,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "after": 2,
+   "likes": true,
+   "sign_off": true
+  },
+  "hard": [
+   "the sign-off has their name and a smiley, written the same way each time",
+   "the 'I like the item' habit names each item differently (its own short name each time)"
+  ],
+  "items": [
+   {
+    "listing_title": "Dyson V11 cordless",
+    "asking_price": 200
+   },
+   {
+    "listing_title": "Nike Air Max 90 size 9",
+    "asking_price": 60
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": 450
+   },
+   {
+    "listing_title": "Ikea Kallax shelf",
+    "asking_price": 35
+   },
+   {
+    "listing_title": "iPhone 13 128GB Blue",
+    "asking_price": 220
+   },
+   {
+    "listing_title": "Galaxy S21 Ultra",
+    "asking_price": 260
+   }
+  ],
+  "marketplace": "ebay"
+ },
+ {
+  "id": "w25",
+  "voice": "American buyer on Mercari/OfferUp/Craigslist, dollars, 'meet up', 'Venmo/cash'",
+  "messages": 6,
+  "habits": {
+   "offer": true,
+   "sign_off": true
+  },
+  "hard": [
+   "one habit appears in exactly 2 of the messages (still a habit)",
+   "the greeting changes capital letters and punctuation between messages but is the same word(s)"
+  ],
+  "items": [
+   {
+    "listing_title": "North Face puffer jacket",
+    "asking_price": 90
+   },
+   {
+    "listing_title": "Mountain bike 27.5in",
+    "asking_price": 180
+   },
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": 160
+   },
+   {
+    "listing_title": "AirPods Pro 2",
+    "asking_price": 120
+   },
+   {
+    "listing_title": "Apple Watch Series 8",
+    "asking_price": 180
+   },
+   {
+    "listing_title": "Sony WH-1000XM4",
+    "asking_price": 140
+   }
+  ],
+  "marketplace": "craigslist/offerup/mercari"
+ },
+ {
+  "id": "w26",
+  "voice": "fast typer who makes typos ('yuo', 'thnaks', 'woudl'), but the SAME typo in their repeated habits",
+  "messages": 8,
+  "habits": {
+   "offer": true,
+   "likes": true,
+   "sign_off": true
+  },
+  "hard": [
+   "one habit appears in exactly 2 of the messages (still a habit)",
+   "the 'I like the item' habit names each item differently (its own short name each time)"
+  ],
+  "items": [
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": 330
+   },
+   {
+    "listing_title": "iPhone 13 128GB Blue",
+    "asking_price": 220
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": 450
+   },
+   {
+    "listing_title": "North Face puffer jacket",
+    "asking_price": 90
+   },
+   {
+    "listing_title": "Nintendo Switch OLED",
+    "asking_price": 220
+   },
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": 70
+   },
+   {
+    "listing_title": "Nike Air Max 90 size 9",
+    "asking_price": 60
+   }
+  ],
+  "marketplace": "facebook"
+ },
+ {
+  "id": "w27",
+  "voice": "says 'hun' and ends with kisses (x, xx)",
+  "messages": 8,
+  "habits": {
+   "offer": true,
+   "after": 1,
+   "sign_off": true
+  },
+  "hard": [
+   "one sentence appears in only ONE message but sounds like a habit (it is not one)",
+   "the sign-off has their name and a smiley, written the same way each time"
+  ],
+  "items": [
+   {
+    "listing_title": "Canon EOS 250D",
+    "asking_price": 320
+   },
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": 150
+   },
+   {
+    "listing_title": "iPhone 12 64GB",
+    "asking_price": 150
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": 450
+   },
+   {
+    "listing_title": "Apple Watch Series 8",
+    "asking_price": 180
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "Lego Millennium Falcon",
+    "asking_price": 400
+   }
+  ],
+  "marketplace": "facebook"
+ },
+ {
+  "id": "w28",
+  "voice": "trader / reseller: businesslike, 'cash buyer', 'can collect today', short",
+  "messages": 10,
+  "habits": {
+   "offer": true,
+   "likes": true,
+   "sign_off": true
+  },
+  "hard": [
+   "two closings that look alike but use different words (neither is a habit)",
+   "the sign-off has their name and a smiley, written the same way each time"
+  ],
+  "items": [
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": 70
+   },
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": 280
+   },
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": 380
+   },
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": 330
+   },
+   {
+    "listing_title": "Galaxy S21 Ultra",
+    "asking_price": 260
+   },
+   {
+    "listing_title": "Kindle Paperwhite",
+    "asking_price": 70
+   },
+   {
+    "listing_title": "Ninja air fryer",
+    "asking_price": 60
+   },
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": 160
+   },
+   {
+    "listing_title": "Steam Deck 512GB",
+    "asking_price": 340
+   }
+  ],
+  "marketplace": "facebook"
+ },
+ {
+  "id": "w29",
+  "voice": "lowercase with ':)' smileys, signs off with their name and a smiley then 'cheers' (like 'sam :), cheers')",
+  "messages": 10,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "after": 1,
+   "sign_off": true
+  },
+  "hard": [
+   "two closings that look alike but use different words (neither is a habit)",
+   "the greeting changes capital letters and punctuation between messages but is the same word(s)"
+  ],
+  "items": [
+   {
+    "listing_title": "Ikea Kallax shelf",
+    "asking_price": 35
+   },
+   {
+    "listing_title": "GoPro Hero 10",
+    "asking_price": 200
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": 150
+   },
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "iPhone 12 64GB",
+    "asking_price": 150
+   },
+   {
+    "listing_title": "Mountain bike 27.5in",
+    "asking_price": 180
+   },
+   {
+    "listing_title": "AirPods Pro 2",
+    "asking_price": 120
+   },
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": 330
+   },
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": 160
+   },
+   {
+    "listing_title": "Canon EOS 250D",
+    "asking_price": 320
+   }
+  ],
+  "marketplace": "vinted"
+ },
+ {
+  "id": "w30",
+  "voice": "teenager with slang ('bro', 'fr', 'ngl', 'lmk')",
+  "messages": 6,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "after": 1,
+   "likes": true,
+   "sign_off": true,
+   "short": true
+  },
+  "hard": [
+   "some messages skip some of the habits",
+   "one message is very short and has almost no habits"
+  ],
+  "items": [
+   {
+    "listing_title": "Sony WH-1000XM4",
+    "asking_price": 140
+   },
+   {
+    "listing_title": "Mountain bike 27.5in",
+    "asking_price": 180
+   },
+   {
+    "listing_title": "iPhone 13 128GB Blue",
+    "asking_price": 220
+   },
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": 160
+   },
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": 70
+   },
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": 330
+   }
+  ],
+  "marketplace": "facebook"
+ },
+ {
+  "id": "w31",
+  "voice": "puts the price in odd formats ('150£', '150 quid', '£150.00', '150 pounds') but each writer keeps ONE format",
+  "messages": 8,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "after": 1
+  },
+  "hard": [
+   "one message is very short and has almost no habits",
+   "one sentence appears in only ONE message but sounds like a habit (it is not one)"
+  ],
+  "items": [
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": 330
+   },
+   {
+    "listing_title": "Nike Air Max 90 size 9",
+    "asking_price": 60
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": 150
+   },
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": 70
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": 450
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": 380
+   },
+   {
+    "listing_title": "AirPods Pro 2",
+    "asking_price": 120
+   },
+   {
+    "listing_title": "Kindle Paperwhite",
+    "asking_price": 70
+   }
+  ],
+  "marketplace": "ebay"
+ },
+ {
+  "id": "w32",
+  "voice": "very long, careful messages asking questions about the item before offering",
+  "messages": 8,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "after": 1,
+   "sign_off": true,
+   "likes": true
+  },
+  "hard": [
+   "the 'I like the item' habit names each item differently (its own short name each time)",
+   "some messages skip some of the habits"
+  ],
+  "items": [
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "iPhone 12 64GB",
+    "asking_price": 150
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": 450
+   },
+   {
+    "listing_title": "North Face puffer jacket",
+    "asking_price": 90
+   },
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": 70
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": 380
+   },
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": 160
+   },
+   {
+    "listing_title": "Dyson V11 cordless",
+    "asking_price": 200
+   }
+  ],
+  "marketplace": "vinted"
+ },
+ {
+  "id": "w33",
+  "voice": "texts in lowercase with shortcuts (u, pls, cud, wud, 2day, 2nite, thx), hardly any punctuation",
+  "messages": 10,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "after": 1,
+   "sign_off": true,
+   "short": true,
+   "likes": true
+  },
+  "hard": [
+   "the 'I like the item' habit names each item differently (its own short name each time)",
+   "two closings that look alike but use different words (neither is a habit)"
+  ],
+  "items": [
+   {
+    "listing_title": "iPhone 13 128GB Blue",
+    "asking_price": 220
+   },
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": 280
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "Nintendo Switch OLED",
+    "asking_price": 220
+   },
+   {
+    "listing_title": "Nike Air Max 90 size 9",
+    "asking_price": 60
+   },
+   {
+    "listing_title": "Apple Watch Series 8",
+    "asking_price": 180
+   },
+   {
+    "listing_title": "Steam Deck 512GB",
+    "asking_price": 340
+   },
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "Dyson V11 cordless",
+    "asking_price": 200
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": 150
+   }
+  ],
+  "marketplace": "facebook"
+ },
+ {
+  "id": "w34",
+  "voice": "WRITES EVERYTHING IN CAPITALS, older man, blunt",
+  "messages": 6,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "after": 1,
+   "likes": true,
+   "sign_off": true
+  },
+  "hard": [
+   "the sign-off has their name and a smiley, written the same way each time",
+   "one sentence appears in only ONE message but sounds like a habit (it is not one)"
+  ],
+  "items": [
+   {
+    "listing_title": "Steam Deck 512GB",
+    "asking_price": 340
+   },
+   {
+    "listing_title": "AirPods Pro 2",
+    "asking_price": 120
+   },
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": 330
+   },
+   {
+    "listing_title": "Canon EOS 250D",
+    "asking_price": 320
+   },
+   {
+    "listing_title": "Mountain bike 27.5in",
+    "asking_price": 180
+   }
+  ],
+  "marketplace": "gumtree"
+ },
+ {
+  "id": "w35",
+  "voice": "polite and formal, full sentences, signs off with regards and their name",
+  "messages": 6,
+  "habits": {
+   "offer": true,
+   "after": 2,
+   "likes": true,
+   "sign_off": true
+  },
+  "hard": [
+   "some messages skip some of the habits",
+   "the greeting changes capital letters and punctuation between messages but is the same word(s)"
+  ],
+  "items": [
+   {
+    "listing_title": "Apple Watch Series 8",
+    "asking_price": 180
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": 150
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": 380
+   },
+   {
+    "listing_title": "Nintendo Switch OLED",
+    "asking_price": 220
+   },
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": 330
+   },
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": 280
+   }
+  ],
+  "marketplace": "ebay"
+ },
+ {
+  "id": "w36",
+  "voice": "emoji-heavy young buyer, several emojis per message",
+  "messages": 5,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "after": 1,
+   "sign_off": true
+  },
+  "hard": [
+   "one habit appears in exactly 2 of the messages (still a habit)",
+   "some messages skip some of the habits"
+  ],
+  "items": [
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "Bose SoundLink speaker",
+    "asking_price": 70
+   },
+   {
+    "listing_title": "Sony WH-1000XM4",
+    "asking_price": 140
+   },
+   {
+    "listing_title": "MacBook Air M1 8GB 256GB",
+    "asking_price": 450
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": 380
+   }
+  ],
+  "marketplace": "facebook"
+ },
+ {
+  "id": "w37",
+  "voice": "eBay-style one-liners: very short, just the price and a few words",
+  "messages": 8,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "after": 1,
+   "sign_off": true
+  },
+  "hard": [
+   "the sign-off has their name and a smiley, written the same way each time",
+   "one sentence appears in only ONE message but sounds like a habit (it is not one)"
+  ],
+  "items": [
+   {
+    "listing_title": "Lego Millennium Falcon",
+    "asking_price": 400
+   },
+   {
+    "listing_title": "Kindle Paperwhite",
+    "asking_price": 70
+   },
+   {
+    "listing_title": "Steam Deck 512GB",
+    "asking_price": 340
+   },
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": 280
+   },
+   {
+    "listing_title": "Nike Air Max 90 size 9",
+    "asking_price": 60
+   },
+   {
+    "listing_title": "MacBook Pro 14 M1 Pro",
+    "asking_price": 950
+   },
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "Canon EOS 250D",
+    "asking_price": 320
+   }
+  ],
+  "marketplace": "ebay"
+ },
+ {
+  "id": "w38",
+  "voice": "chatty run-on sentences with no full stops, explains why they want it",
+  "messages": 7,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "after": 1,
+   "likes": true
+  },
+  "hard": [
+   "the 'I like the item' habit names each item differently (its own short name each time)",
+   "one sentence appears in only ONE message but sounds like a habit (it is not one)"
+  ],
+  "items": [
+   {
+    "listing_title": "Apple Watch Series 8",
+    "asking_price": 180
+   },
+   {
+    "listing_title": "GoPro Hero 10",
+    "asking_price": 200
+   },
+   {
+    "listing_title": "Sony WH-1000XM4",
+    "asking_price": 140
+   },
+   {
+    "listing_title": "iPad Air 5th gen",
+    "asking_price": 380
+   },
+   {
+    "listing_title": "DJI Mini 3",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "PS5 Disc Edition",
+    "asking_price": 300
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": 150
+   }
+  ],
+  "marketplace": "facebook"
+ },
+ {
+  "id": "w39",
+  "voice": "non-native English speaker: simple grammar mistakes ('I can give 150 pound, is ok?'), polite",
+  "messages": 8,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "likes": true,
+   "sign_off": true
+  },
+  "hard": [
+   "one sentence appears in only ONE message but sounds like a habit (it is not one)",
+   "the 'I like the item' habit names each item differently (its own short name each time)"
+  ],
+  "items": [
+   {
+    "listing_title": "Garmin Forerunner 255",
+    "asking_price": 160
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": 150
+   },
+   {
+    "listing_title": "Ninja air fryer",
+    "asking_price": 60
+   },
+   {
+    "listing_title": "Galaxy S21 Ultra",
+    "asking_price": 260
+   },
+   {
+    "listing_title": "AirPods Pro 2",
+    "asking_price": 120
+   },
+   {
+    "listing_title": "Mountain bike 27.5in",
+    "asking_price": 180
+   },
+   {
+    "listing_title": "Lego Millennium Falcon",
+    "asking_price": 400
+   },
+   {
+    "listing_title": "Sony WH-1000XM4",
+    "asking_price": 140
+   }
+  ],
+  "marketplace": "facebook"
+ },
+ {
+  "id": "w40",
+  "voice": "Scottish, uses 'aye', 'wee', 'pal', 'cheers'",
+  "messages": 8,
+  "habits": {
+   "greeting": true,
+   "offer": true,
+   "likes": true,
+   "sign_off": true
+  },
+  "hard": [
+   "some messages skip some of the habits",
+   "the greeting changes capital letters and punctuation between messages but is the same word(s)"
+  ],
+  "items": [
+   {
+    "listing_title": "Ikea Kallax shelf",
+    "asking_price": 35
+   },
+   {
+    "listing_title": "North Face puffer jacket",
+    "asking_price": 90
+   },
+   {
+    "listing_title": "Samsung Galaxy S23 256GB",
+    "asking_price": 330
+   },
+   {
+    "listing_title": "Kindle Paperwhite",
+    "asking_price": 70
+   },
+   {
+    "listing_title": "GoPro Hero 10",
+    "asking_price": 200
+   },
+   {
+    "listing_title": "Xbox Series X",
+    "asking_price": 280
+   },
+   {
+    "listing_title": "Grey fabric 3 seater sofa",
+    "asking_price": 150
+   },
+   {
+    "listing_title": "Ninja air fryer",
+    "asking_price": 60
+   }
+  ],
+  "marketplace": "facebook"
+ }
+]
