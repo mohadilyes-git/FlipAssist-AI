@@ -6,9 +6,20 @@ kinds it gives first: "small crack on the back, battery 79%" is damage and batte
 
 flip-kinds-1, FlipAssist's flaw-sorting model (Gemma 3 4B with a LoRA trained on 4,600 sentences, each labelled by two
 blind labellers and a third where they differed; merged for Ollama as "flip-kinds-1"), reads one sentence in its
-listing and answers its kinds. On 400 real flaw sentences it had never seen, labelled blind by three (6 Oct): 93.2%
-exactly right, the price cut wrong by 3 points or more on 5.2%, where code's rules (flip.prices.kinds_of) were wrong
-on 23.5% and the prices API's own sorter on 38.0%. Free, on this Mac, about a second a sentence.
+listing and answers its kinds. On the sealed test, 400 flaw sentences it had never seen (about 350 from real listings,
+about 50 from the reader's made-up practice listings), labelled blind by three (6 Oct), first key: 93.2% exactly
+right, the price cut wrong by 3 points or more on 5.2%, where code's rules (flip.prices.kinds_of) were wrong on 23.5%
+and the prices API's own sorter on 25.8% (38.0% before its 6 Oct fix). Free, on this Mac, about 1.5 s a sentence.
+
+The carrier rule (the owner's, 6 Oct evening; buyer-safe): a carrier or network named for the phone ("Carrier: AT&T",
+"for Straight Talk", "works on Verizon") is a network lock unless the listing says it's unlocked or works on any
+network. Nothing here applies it: flip-kinds-1 answers that way by itself (on network lock it matched a blind relabel
+to the rule on 158 of 161 test sentences), and with the sealed test's carrier sentences labelled again it prices 3.8%
+wrong, code's rules 25.0%. Code's rules count a network lock only for "locked to X", "X only" and the like (across the
+three tests they found 23 of the 94 locks, 7 of the sealed test's 40), and they sort the title and any sentence the
+model can't answer, so a carrier named only in the title ("Galaxy S21 EE") isn't cut. A second training round
+(flip-kinds-2, with more Samsung and MacBook sentences) wasn't better: on the second fresh test 8.5% priced wrong
+against 8.2%, and worse on iPhones. So this one stays.
 
 Each sentence the model can't answer (no Ollama, no flip-kinds-1, a fault or a timeout) is sorted by code's rules, as
 before: the model only ever replaces code, it never stops a price. The title is always sorted by code ("iPhone 12 for
