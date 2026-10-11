@@ -68,7 +68,8 @@ def test_an_iphone_is_priced_with_its_flaws_sorted_into_kinds():
     (["Small scratch on the back, no repairs, never opened"], ["wear"]),  # the API: for parts, £90
     (["Not iCloud locked, has a small scratch on the screen"], ["wear"]),  # the API: locked
     (["Find My iPhone is off, small dent on the corner"], ["damage"]),  # the API: locked
-    (["Only tested with EE, not tested on other networks, small scratch"], ["wear"]),  # the API: for parts
+    # the owner's carrier rule (6 Oct): a network named for the phone, with no "unlocked", is a lock (buyer-safe)
+    (["Only tested with EE, not tested on other networks, small scratch"], ["wear", "network lock"]),  # API: for parts
     (["Fully working, no faults, small scratch on the screen"], ["wear"]),  # the API: a fault
     (["no cracks a couple scratches on the back"], ["wear"]),  # the API: damage
     (["Cracked screen and Face ID not working"], ["damage", "fault"]),  # the API: damage only
@@ -737,7 +738,8 @@ def test_a_macbooks_sizes_after_its_chips_own_graphics_are_read(text, sizes):
     ("Previously EE locked, now unlocked", []), ("Was EE locked but has been unlocked", []),
     ("Previously locked to O2", []), ("EE locked, now unlocked", []),
     ("Locked to Three but can be unlocked", ["network lock"]),  # still locked
-    ("I only use EE so can't test other sims", ["wear"]), ("I only use EE", []),  # the seller's own network
+    # the seller's own network, the phone's as far as a buyer knows: a lock under the owner's carrier rule (6 Oct)
+    ("I only use EE so can't test other sims", ["wear", "network lock"]), ("I only use EE", ["network lock"]),
     ("Phone dead clean IMEI", ["parts"]),  # dead, with a clean IMEI: not "dead clean"
     ("Battery goes dead quick", ["battery"]),  # not "dead quick" as UK slang
 ])
@@ -1091,7 +1093,7 @@ RECHECK_KINDS = [  # the findings' sentences: (sentence, kinds), read in "iPhone
     ("Locked to Three but can be unlocked", ["network lock"]),
     ("Was on EE but has been unlocked", []),
     ("Previously EE locked, now unlocked", []),
-    ("I only use EE so can't test other sims", ["wear"]),
+    ("I only use EE so can't test other sims", ["wear", "network lock"]),  # the owner's carrier rule (6 Oct)
     ("Face ID stopped working after a drop", ["fault"]),
     ("Screen has a small chip in the corner", ["damage"]),
     ("Battery health 76% so will need a new one soon", ["battery"]),

@@ -13,11 +13,10 @@ and the prices API's own sorter on 25.8% (38.0% before its 6 Oct fix). Free, on 
 
 The carrier rule (the owner's, 6 Oct evening; buyer-safe): a carrier or network named for the phone ("Carrier: AT&T",
 "for Straight Talk", "works on Verizon") is a network lock unless the listing says it's unlocked or works on any
-network. Nothing here applies it: flip-kinds-1 answers that way by itself (on network lock it matched a blind relabel
-to the rule on 158 of 161 test sentences), and with the sealed test's carrier sentences labelled again it prices 3.8%
-wrong, code's rules 25.0%. Code's rules count a network lock only for "locked to X", "X only" and the like (across the
-three tests they found 23 of the 94 locks, 7 of the sealed test's 40), and they sort the title and any sentence the
-model can't answer, so a carrier named only in the title ("Galaxy S21 EE") isn't cut. A second training round
+network. flip-kinds-1 answers that way by itself (on network lock it matched a blind relabel to the rule on 158 of 161
+test sentences), and with the sealed test's carrier sentences labelled again it prices 3.8% wrong. Code's rules, which
+sort the title and any sentence the model can't answer, follow it too since 6 Oct evening (flip.prices.network_lock):
+on the sealed test 17.5% priced wrong, 25.0% before. A second training round
 (flip-kinds-2, with more Samsung and MacBook sentences) wasn't better: on the second fresh test 8.5% priced wrong
 against 8.2%, and worse on iPhones. So this one stays.
 

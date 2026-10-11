@@ -15,7 +15,7 @@ tested. The weights and the training data aren't in this repo: see [Why the weig
 |---|---|---|---|
 | **flip-reader-5** | Reads a listing: each flaw as the seller's own sentence, where to collect, and whether the seller takes offers | 33,160 / 595 listings: phones and MacBooks from the UK, the US and Canada, plus 3,098 made-up practice listings for 32 kinds of tricky line | Tested against round 4: a tie |
 | **flip-wording-4b** | Turns the reader's flaw sentences into the offer's reason ("there's a hairline crack on the top left of the screen"), keeping every fact and adding none, under four rules added on 6 Oct: "for parts only" kept but "can be used for parts" left out, a missing charger or box isn't a flaw, nor a mark on a screen protector, and a custom phone system (LineageOS, a custom ROM) is | 14,513 / 602 | Judged blind side by side with flip-wording-3 under the same rules: on 740 real listings **90.3% sendable vs 88.0%** (better on 34, worse on 17, p = 0.024), a made-up fact 3.4% vs 5.0%; on 80 made-up listings written for the four rules, 92.5% vs 63.8%. A Claude Haiku check and a Sonnet fix still follow it in the app |
-| **flip-kinds-1** | Sorts each of the seller's flaw sentences into the kinds the price is cut for: lock, parts, network lock, not genuine, damage, fault, battery or wear ("small crack on the back, battery 79%" is damage and battery; "battery health 88%" is none) | 4,600 / 400 flaw sentences from the readers' training listings, each labelled by two labellers who couldn't see each other's answers, and a third where they differed | The sealed test: 400 flaw sentences it never saw (about 350 from real listings, about 50 from the reader's practice listings), labelled blind by three. Under the carrier rule (below; the test's carrier, network, SIM and lock sentences labelled again blind): the price cut off by 3 points or more on **3.8%**, 94.8% exactly right, against 25.0% for the app's own rules. Under the first key, before that rule: 5.2% and 93.2%, against 23.5% for the app's own rules, 25.8% for the prices API's sorter (38.0% for its earlier one) and 65.8% for plain Gemma 3 4B; on the real sentences alone 5.8% against 23.4%, 25.7% and 64.2%. The first two labellers gave the same answer on 94.5% |
+| **flip-kinds-1** | Sorts each of the seller's flaw sentences into the kinds the price is cut for: lock, parts, network lock, not genuine, damage, fault, battery or wear ("small crack on the back, battery 79%" is damage and battery; "battery health 88%" is none) | 4,600 / 400 flaw sentences from the readers' training listings, each labelled by two labellers who couldn't see each other's answers, and a third where they differed | The sealed test: 400 flaw sentences it never saw (about 350 from real listings, about 50 from the reader's practice listings), labelled blind by three. Under the carrier rule (below; the test's carrier, network, SIM and lock sentences labelled again blind): the price cut off by 3 points or more on **3.8%**, 94.8% exactly right, against 17.5% for the app's own rules (25.0% before they followed the rule too). Under the first key, before that rule: 5.2% and 93.2%, against 23.5% for the app's own rules, 25.8% for the prices API's sorter (38.0% for its earlier one) and 65.8% for plain Gemma 3 4B; on the real sentences alone 5.8% against 23.4%, 25.7% and 64.2%. The first two labellers gave the same answer on 94.5% |
 | **flip-style-1b** | Reads a buyer's past offer messages and names the habits they repeat: greeting, how they make the offer, what they add after it, how they say they like the item, sign-off, words they always write short | 2,833 / 245 made-up buyers (no real person's messages): 1,078 written by Claude agents from code-written plans and checked by a blind judge and by code, 2,000 built by code from Claude-written phrases | The hard style test ([`evals/style/`](evals/style/), 40 made-up buyers it never saw): **182 of 189 habits found, 6 wrong, 3 invented**, against plain Gemma 3 4B's 146 found, 37 wrong, 230 invented, and the app's code alone 105 found. The app takes only its sign-off, once code has checked it: 113 habits with it, 110 with plain Gemma |
 
 flip-wording-4b's numbers come from judges who applied the four new rules, which flip-wording-3 wasn't trained for: under them flip-wording-3 is sendable on 87.1% of the 240 held-out listings, against 92.5% on 3 Oct. Compare the two models by their side-by-side numbers, not across the tables.
@@ -33,7 +33,7 @@ written free-form, with no code-written plan:
 
 | Model | Fresh test | Against |
 |---|---|---|
-| flip-kinds-1 | 181 flaw sentences from the 128 listings with a flaw, first blind key: **91.7% exactly right, price cut wrong on 6.6%**; under the carrier rule (below): **3.9%**, 94.5% exactly right | the app's own rules: 74.6% and 23.8% (p < 0.0001); under the carrier rule 26.0% |
+| flip-kinds-1 | 181 flaw sentences from the 128 listings with a flaw, first blind key: **91.7% exactly right, price cut wrong on 6.6%**; under the carrier rule (below): **3.9%**, 94.5% exactly right | the app's own rules: 74.6% and 23.8% (p < 0.0001); under the carrier rule 18.2% (26.0% before they followed it) |
 | flip-wording-4b | the 128 listings, blind judges: **94.5% sendable**, a made-up fact 3.1%, a fact lost 2.3% | flip-wording-3: 91.4%, 3.9%, 3.1% (better on 6, worse on 2: not a proven difference) |
 | flip-style-1b | the 40 new buyers: **131 of 136 habits found, 0 wrong, 5 invented** | plain Gemma 3 4B: 108 found, 16 wrong, 276 invented |
 
@@ -50,9 +50,14 @@ network, a SIM or a lock (161 across the sealed test and both fresh tests) was l
 blind, by two labellers (who agreed on 160) and a third on the split; the scores here use those keys, and the rule only
 ever added a network lock (to 6 sealed sentences, 5 in the first fresh test, 18 in the second). flip-kinds-1 already
 answers this way: on network lock it agreed with those labels on 158 of the 161 (93 of the 94 locks). The app's own
-rules don't: they count one only when the listing says so ("locked to EE", "EE only"), so they found 23 of the 94, and
-they sort the title and any sentence the model can't answer, so a carrier named only in the title isn't cut. A code
-rule doing the opposite (a network lock only when the sentence says "locked", "only" or "tied to") was tried and
+rules, which sort the title and any sentence the model can't answer, follow it too since 6 Oct evening (`network_lock`
+in [`flip/prices.py`](flip/prices.py)): before, they counted a lock only when the listing said so ("locked to EE", "EE
+only") and found 23 of the 94. Two independent reviews tried 353 ways sellers write a carrier, an unlock or a word that
+only looks like one ("Cosmic Orange Mobile Phone", "on three spots", "playing cricket", "unlocked from my iCloud", "I
+think it's unlocked"); the first one's 193 and every one that failed are tests now
+([`tests/carrier_cases.py`](tests/carrier_cases.py), [`tests/test_carrier_rule.py`](tests/test_carrier_rule.py)). On titles from 673 more listings from the reader's test
+sets no one had read, labelled blind, every lock it found was right (119 of 119); it missed 6 that blind labellers
+called locked, now read too, so that's no longer an unseen test. A code rule doing the opposite (a network lock only when the sentence says "locked", "only" or "tied to") was tried and
 dropped, as it contradicts the rule. Under the earlier keys its record was mixed: on the second fresh test it took
 flip-kinds-1 from 43 to 26 of 305 priced wrong (that key's brief said a named carrier isn't a lock), on the sealed test
 from 21 to 34 of 400.
@@ -69,7 +74,8 @@ carrier rule, and the relabel of 63 of the 305 sentences (18 gained a network lo
 
 | Flaw sorter, scored to the carrier rule | Price cut wrong (305 sentences) | iPhone (146) | Samsung (70) | MacBook (82) | Sealed 400 |
 |---|---|---|---|---|---|
-| the app's own rules | 26.9% | 19.9% | 44.3% | 23.2% | 25.0% |
+| the app's own rules (following the rule) | 20.0% | 14.4% | 25.7% | 23.2% | 17.5% |
+| the app's own rules, before | 26.9% | 19.9% | 44.3% | 23.2% | 25.0% |
 | **flip-kinds-1 (in use)** | **8.2%** | 3.4% | 10.0% | 12.2% | **3.8%** |
 | flip-kinds-2 (not used) | 8.5% | 5.5% | 8.6% | 11.0% | 4.2% |
 

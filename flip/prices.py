@@ -152,9 +152,11 @@ def kind_of(title):
 # check put back what those broke: "untested for parts" and a repair that failed are still for parts, a torch that
 # won't come on is a fault, "Cracks: no Scratches: yes" is wear.
 
-NETWORKS = (r"(?:ee|o2|vodafone|three|virgin(?:\smobile)?|giffgaff|tesco(?:\smobile)?|sky(?:\smobile)?|bt(?:\smobile)?|"
-            r"id\smobile|smarty|lebara|lyca(?:mobile)?|asda(?:\smobile)?|verizon|at&t|t-?mobile|sprint|cricket|"
-            r"metro(?:pcs)?)")
+NETWORKS = (r"(?:ee|o2|02|vodafone|voda|three|virgin(?:\smobile)?|giff\s?gaff|tesco(?:\smobile)?|sky(?:\smobile)?|"
+            r"bt(?:\smobile)?|id\smobile|smarty|lebara|lyca(?:\s?mobile)?|asda(?:\smobile)?|voxi|verizon|verizion|vzw|"
+            r"at\s?&\s?t|at&amp;t|att|t-?\s?mobile|tmobile|tmo|sprint|cricket|metro(?:\s?pcs)?|straight\s?talk|tracfone|"
+            r"boost(?:\s?mobile)?|visible|mint(?:\smobile)?|xfinity|spectrum|us\s?cellular|rogers|telus|fido|koodo|chatr|"
+            r"vid[ée]otron|freedom(?:\smobile)?|bell(?:\smobility)?|fizz|eastlink|telstra|optus)")
 DOESNT = r"(?:doesn'?t|does\snot|dosen'?t|dosent|dosnt|doesent|doesen'?t|dose\snot)"  # as typed: "face id dosent work"
 # one part or feature of the phone, for what's said of it alone: "Face ID untested", "works except the speaker"
 FEATURES = (r"(?:face\s?id|touch\s?id|true\s?tone|e-?sims?|sim(?:\scard)?(?:\s(?:tray|reader|slot))?|(?:(?:front|rear|"
@@ -207,9 +209,206 @@ PART_AFTER = re.compile(rf"\s(?:the\s|its\s|my\s)?{FEATURES}\b", I)
 # a network lock that's gone: "previously EE locked", "originally locked to O2"
 PAST_LOCK = re.compile(rf"""\b(?:previously|originally|formerly|used\sto\sbe|once)\s(?:been\s)?(?:{NETWORKS}[\s-]locked|
     locked\s(?:to|on)\s(?:the\s)?{NETWORKS}|(?:network|carrier|sim)[\s-]?locked)\b""", X)
-# ...or said to be gone anywhere in the sentence: "Was EE locked, now unlocked", "has since been unlocked"
-NOW_UNLOCKED = re.compile(r"\b(?:now|since|been|got\s(?:it\s)?|had\s(?:it\s)?|officially|professionally|permanently)\s"
-                          r"(?:been\s)?(?:fully\s|officially\s)?unlocked\b", I)
+# The owner's carrier rule (6 Oct 2026, buyer-safe): a carrier or network named for the phone ("Carrier: AT&T", "Galaxy
+# S21 EE", "for Straight Talk", "works on Verizon") is a network lock unless the listing says it's unlocked or works on
+# any network: a locked phone bought as unlocked costs more than an offer 5-10% lower. flip-kinds-1 answers that way by
+# itself (it matched a blind relabel to the rule on 158 of 161 test sentences); these let code's rules do the same for
+# the title and for any flaw the model can't answer (network_lock, in kinds_of). Two independent reviews tried 350+ ways
+# sellers write it (6 Oct evening); tests/test_carrier_rule.py keeps them.
+# names that are only ever a carrier (but a colour or a model before "Mobile Phone" isn't: "Galaxy S24 Ultra Mobile
+# Phone", "Cosmic Orange Mobile Phone", "Mint Mobile Phone")
+CARRIERS = r"""(?:
+    at\s?&\s?t | at&amp;t | at\sand\st | atandt | att | verizon | verizion | verzion | vzw | t-?\s?mobile | t-?\s?moblie |
+    tmobile | tmo | sprint | cricket(?:\swireless)? | metro\s?pcs | metro\sby\st-?\s?mobile | straight\s?talk | tracfone |
+    total\s(?:wireless|by\sverizon) | spectrum(?:\smobile)? | xfinity(?:\smobile)? | u\.?\s?s\.?\s?cellular |
+    visible\swireless | mint\smobile(?!\s?phones?\b) | simple\smobile(?!\s?phones?\b) | h2o\swireless | tello | net10 |
+    page\splus | consumer\scellular | google\sfi | ultra\smobile(?!\s?phones?\b) | red\spocket | safelink |
+    assurance\swireless | boost\s?mobile | boost\sinfinite |
+    ee | o2 | vodafone | voda | three\s(?:network(?!\sbars?)|uk|mobile) | giff\s?gaff |
+    tesco\smobile | sky\smobile | virgin\smobile | virgin\splus | bt\smobile | id\smobile | smarty | lebara | lyca\s?mobile | lyca | asda\smobile |
+    voxi | talkmobile | orange\s(?:network|mobile)(?!\s?phones?\b) |
+    rogers | telus | fido | koodo | freedom\smobile | chatr | vid[ée]otron | public\smobile |
+    lucky\smobile | bell\smobility | sasktel | eastlink | fizz | telstra | optus | amaysim)"""
+# names that are plain words too ("three scratches", "Cosmic Orange", "on the metro", "visible marks", "mint
+# condition", "02 March"): a carrier only where nothing else fits (NAMED_NETWORK)
+PLAIN = r"(?:three|orange|bell|boost|metro|visible|virgin|sky|tesco|bt|mint|freedom|simple|total|ultra|h2o|h20|02)"
+TITLE_PLAIN = r"(?:three|bell|boost|metro|visible|virgin|freedom|tesco)"  # a title's last word: "iPhone 13 128GB Bell"
+NAMED_NETWORK = re.compile(rf"""\b{CARRIERS}\b
+  | \b(?:carrier|network|provider|operator|fournisseur|operador|compa[ñn][ií]a)\s*(?:[:=–-]\s*)?{CARRIERS}\b
+  | \b(?:carrier|network|provider|operator|fournisseur|operador|compa[ñn][ií]a)\s*(?:[:=–-]|is(?:\son)?)\s*(?:the\s)?
+    {PLAIN}\b
+  | \b(?:on|with|from|for|via|chez|avec|con|de|para|sur)\s{PLAIN}\b
+    (?=\s*$|\s*(?![/.:-]\s?\d)[^\w\s]|\s(?:network|mobile|uk|sims?|contract|plan|service|carrier|phone|only|or|and|so|
+    but|since|until|before|for|now)\b)                     # (not a date: "on 02/03/2025")
+  | \bon\s3\snetwork\b | \b(?:02|o2)\ssim\b""", X)
+TITLE_NETWORK = re.compile(rf"(?:^|[\s(/-]){TITLE_PLAIN}\s*\)?\s*$|\(\s?(?:three|3)\s?\)", I)  # titles only
+# ...but not a network that isn't the phone's: a test caveat ("untested on EE", "never tried an O2 sim in it", "not
+# tested on EE or O2"), one the seller is moving to ("switching to Vodafone", "ported my number to Mint Mobile"), "not
+# a Verizon phone", cricket the sport
+ANY_CARRIER = rf"(?:{CARRIERS}|{PLAIN})"
+CARRIER_LIST = rf"{ANY_CARRIER}(?:\s?(?:,|/|&|\bor\b|\band\b)\s?(?:the\s)?{ANY_CARRIER})*"
+NOT_ITS_NETWORK = re.compile(rf"""
+    \b(?:untested|(?:not|never|haven'?t|havent|hasn'?t|hasnt|wasn'?t|wasnt|isn'?t|isnt|didn'?t|didnt|can'?t|cant|
+    cannot|couldn'?t|couldnt|unable\sto)\s(?:been\s|yet\s)?(?:tested|tried|checked|used|test|try|check|use))\s
+    (?:it\s)?(?:(?:on|with|in)\s)?(?:an?\s|the\s|any\s)?{CARRIER_LIST}(?:\s(?:sims?|networks?|cards?))?
+  | \b(?:switch(?:ed|ing)?|mov(?:ed|ing|e)|chang(?:ed|ing|e)|going|gone|went|join(?:ed|ing)?|port(?:ed|ing)?)\s
+    (?:over\s)?(?:my\s(?:number|line|contract|plan|sim)\s)?(?:(?:networks?|carriers?|providers?)\s)?(?:over\s)?to\s
+    (?:the\s)?{CARRIER_LIST}
+  | \b(?:not|isn'?t|isnt|never\sbeen)\s(?:an?\s)?{ANY_CARRIER}\s(?:phone|model|device|branded|version|handset)
+  | \bplay(?:ing|ed|s)?\s(?:\w+\s)?cricket\b | \bcricket\s(?:bat|ball|match|game|pitch|club|team|season|world)""", X)
+# the listing saying the phone works on any network: "Unlocked", "factory unlock", "SIM-free", "S/F", "open line",
+# "works on all 3 major carriers", "not network locked", "Network locked: No", "No SIM restrictions", "liberado"...
+UNLOCK_WORDS = re.compile(rf"""\bun-?locked\b | \bunlkd\b | \bfactory[\s-]?unlock(?:ed)?\b | \bsim[\s-]?free\b | \bs/f\b
+  | \bopen\sline\b | \b(?:liberad[oa]|desbloquead[oa]|d[ée]bloqu[ée]e?|d[ée]verrouill[ée]e?|d[ée]barr[ée]e?)\b
+  | \bunlock(?=\s(?:{CARRIERS}\b|\d{{1,4}}\s?(?:gb|tb)\b))  # "iPhone 12 Unlock Telus 128GB": a title's word for it""", X)
+ANY_NETWORK = re.compile(r"""\b(?:any|all|every|cualquier|todas?\slas?|tous\sles|toutes\sles)\s(?:[\w&/+-]+\s){0,3}?
+    (?:networks?|carriers?|sims?|sim\scards?|providers?|operators?|compa[ñn][ií]as?|fournisseurs?|r[ée]seaux|
+    op[ée]rateurs?)\b""", X)
+NOT_LOCKED = re.compile(rf"""
+    \b(?:not|never|isn'?t|isnt|wasn'?t|wasnt|hasn'?t|hasnt|haven'?t|havent|is\snot|was\snot|has\snot|have\snot)\s
+    (?:been\s|ever\s(?:been\s)?)?(?:(?:network|carrier|sim|{ANY_CARRIER})[\s-])?locked\b
+    (?!\s(?:to|on|with|by)\s(?:(?:the|an?|my|any|your|previous|old|someone'?s?)\s)*(?:owner|i\s?cloud|apple|google|
+    account|samsung|activation|frp))
+  | \bno\s(?:(?:network|carrier|sim|{CARRIERS})[\s-]?)lock(?:ed)?\b
+  | \b(?:doesn'?t|doesnt|does\snot|don'?t|dont|do\snot)\shave\s(?:an?\s|any\s)?(?:network|carrier|sim)[\s-]?lock\b
+  | \b(?:network|carrier|sim)[\s-]?lock(?:ed)?\s*[:=–-]\s*(?:no|none|n/?a|nope|unlocked|off)\b
+  | \bno\ssim\srestrictions?\b""", X)
+# ...undone by what's around it in its clause: a "no"/"not"/"never" right before ("not unlocked", "hasnt been
+# unlocked", "never got round to getting it unlocked"), a promise ("can be unlocked", "will work on all networks once
+# unlocked", "easily unlocked"), a doubt ("I think", "as far as I know", "idk if", "was told"), or another lock than the
+# network's ("unlocked from my iCloud", "iCloud unlocked", "OEM unlocked", "unlocked bootloader")
+FILLER = (r"(?:\s(?:been|yet|be|it|is|it'?s|its|got|get|getting|round|around|to|fully|officially|properly|network|"
+          r"carrier|sim|actually|even|ever|still|have|tried|tested|used|work|works|working|take|takes|accept|on|with|"
+          r"in|unlocked))*")
+NOT_BEFORE = re.compile(rf"""\b(?:not|never|no|isn'?t|isnt|wasn'?t|wasnt|hasn'?t|hasnt|haven'?t|havent|hadn'?t|hadnt|
+    doesn'?t|doesnt|didn'?t|didnt|aren'?t|arent|can'?t|cant|cannot|won'?t|wont|pas|non|no\sest[aá]|nunca|jamais)\b
+    {FILLER}\s*$""", X)
+LATER_BEFORE = re.compile(rf"""\b(?:can|could|will|would|should|must|may|might|to|need|needs|once|until|till|when|if|unless|
+    after|eligible|pending|easily|able|going|gonna|wants?|yet|awaiting|waiting|requested)\b{FILLER}\s*$""", X)
+LATER_AFTER = re.compile(r"^[^.!?\n]{0,30}?\b(?:once|when|after|if|unless|until)\s(?:it'?s\s|it\sis\s|it\sgets\s|i\s)?"
+                         r"(?:unlocked|paid\s(?:off|for)|unlocking)\b|^\s(?:other\sthan|except|apart\sfrom|but)\b", I)
+DOUBT = re.compile(r"""\b(?:think|thinks|believe|believes|guess|assume|assuming|reckon|apparently|supposedly|probably|
+    possibly|maybe|might|hopefully|unconfirmed|tbc|unsure|idk|dunno|afaik|said|says|should|presumably|allegedly)\b
+  | \bnot\s(?:100%|sure|certain|positive) | \bdon'?t\sknow | \bdont\sknow | \bas\sfar\sas\si\s(?:know|can\stell|am\saware)
+  | (?<!\bfor\s)(?<!\bmake\s)\bsure\b                   # "I'm pretty sure it's unlocked" (not "unlocked for sure")
+  | \b(?:was|been|were|i'?ve\sbeen|i\swas)\stold""", X)
+PROMISED = re.compile(r"\b(?:can|could|will|would|should|must|may|might|to|once|when|if|after|unless|until|yet)\b"
+                      r"(?:\s[\w']+){0,3}\sunlock(?:ed)?\s(?:for|to|on|with|onto)\s*$", I)
+OTHER_LOCK = re.compile(r"(?:i\s?cloud|bootloader|oem|activation|frp|google|account|apple\sid|screen|bios|firmware|mdm)"
+                        r"[\s-]*$", I)
+OTHER_LOCK_AFTER = re.compile(r"""^\s*(?:(?:from|on|with|by|of|to)\s(?:(?:my|the|your|their|his|her|previous|old|
+    owner'?s?|an?|any)\s)*(?:i\s?cloud|apple(?:\sid)?|account|google|samsung\saccount|activation|owner|frp)|bootloader)""",
+                              X)
+SENTENCES = re.compile(r"[.!?\n;|•]+")
+CLAUSE_BREAK = re.compile(r",|\s(?:but|and|&|plus|though|although|however|except|so)\s|\s[-–—]\s", I)
+
+
+def says_unlocked(text):
+    """Whether the listing plainly says the phone works on any network: UNLOCK_WORDS, ANY_NETWORK or NOT_LOCKED with
+    nothing in its own clause undoing, deferring or doubting it (NOT_BEFORE, LATER_BEFORE, LATER_AFTER, DOUBT) and not
+    about another lock (OTHER_LOCK). A doubt in a short clause right after counts too ("Unlocked, I think")."""
+    for sentence in SENTENCES.split(re.sub(r"[’‘ʼ]", "'", text or "")):
+        breaks = [b.span() for b in CLAUSE_BREAK.finditer(sentence)]
+        for words, kind in ((NOT_LOCKED, "not locked"), (UNLOCK_WORDS, "unlocked"), (ANY_NETWORK, "any network")):
+            for m in words.finditer(sentence):
+                start = max([e for s, e in breaks if e <= m.start()], default=0)
+                end = min([s for s, e in breaks if s >= m.end()], default=len(sentence))
+                after_next = min([s for s, e in breaks if s > end], default=len(sentence))
+                before, after, nxt = sentence[start:m.start()], sentence[m.end():end], sentence[end:after_next]
+                nxt = nxt if len(nxt.split()) <= 5 else ""
+                if DOUBT.search(before) or DOUBT.search(after) or DOUBT.search(nxt):
+                    continue
+                if kind == "not locked":
+                    return True  # "not network locked", "Network locked: No"
+                if NOT_BEFORE.search(before) or LATER_AFTER.search(after):
+                    continue
+                if kind == "any network" and PROMISED.search(before):
+                    continue  # "can be unlocked for any SIM card worldwide": a promise, not what it is
+                if kind == "unlocked" and (LATER_BEFORE.search(before) or OTHER_LOCK.search(before)
+                                           or OTHER_LOCK_AFTER.search(after)):
+                    continue
+                return True
+    return False
+
+
+# a lock said in words the reader's judge doesn't read as one (it reads "never" as a denial): sure ones ("won't take
+# other networks' SIMs", "barré", "solo funciona con Boost")...
+NOT_A_COUNT = (r"(?!\s(?:out\sof|of|times?|tries|attempts?|occasions?|days?|weeks?|months?|years?|hours?|minutes?|%|"
+               r"percent|spots?|keys?|sides?|corners?|edges?|lenses|cameras?|scratch\w*|marks?|dents?|chips?|"
+               r"cracks?)\b)")
+WONT_OTHERS = rf"""(?<!wi-fi\s)(?<!wifi\s)(?<!\bwi\sfi\s)\b(?:won'?t|wont|{DOESNT}|will\snot|can'?t|cant|cannot|
+    isn'?t\sable\sto|not\sable\sto|unable\sto)\s(?:work|be\sused|take|accept|read|recogni[sz]e)\s(?:on\s|with\s|in\s)?
+    (?:(?:sims?|sim\scards?)\sfrom\s)?(?:any\s)?other\s(?:networks?'?|carriers?'?|providers?|sims?|sim\scards?)
+  | \bother\s(?:(?:networks?'?|carriers?'?)\s)?(?:sims?|sim\scards?)\s(?:won'?t|wont|don'?t|dont|do\snot|will\snot|
+    can'?t|cannot|doesn'?t)\s(?:work|be\sused|connect|register|read)"""
+LOCK_SAID_SURE = re.compile(rf"""{WONT_OTHERS}
+  | \b(?:network|sim|carrier)[\s-]lock(?:ed)?\s*[:=–-]\s*(?:yes|y|on|active)\b
+  | \b(?:no\sest[aá]|not)\s(?:liberad[oa]|desbloquead[oa])\b | \bpas\s(?:d[ée]barr[ée]|d[ée]bloqu[ée]|d[ée]verrouill[ée])
+  | \bbarr[ée]e?\b | \bbloquead[oa]\s(?:con|a|para|por|en)\s
+  | \b(?:solo|s[oó]lo|solamente|[uú]nicamente)\s(?:sirve|funciona|trabaja)\s(?:con|en|para)\s
+  | \b(?:sirve|funciona|trabaja)\s(?:solo|s[oó]lo|solamente|[uú]nicamente)\s(?:con|en|para)\s
+  | \b(?:fonctionne|marche)\s(?:seulement|uniquement)\s(?:avec|sur|chez)\s | \bseulement\s(?:avec|sur|chez)\s""", X)
+# ...and ones about unlocking, which could be the screen or an account ("needs unlocking, forgot the passcode", "can
+# only be unlocked with the passcode", "not unlocked from iCloud yet"): only with nothing of that around (OTHER_UNLOCK)
+NO_ACCOUNT = (r"(?!\s(?:from|on|with|using|via|by|to)\s(?:(?:the|an?|my|your|their|his|her|previous|old|owner'?s?)\s)*"
+              r"(?:i\s?cloud|apple(?:\sid)?|account|google|owner|activation|pass(?:code|word)|pin|code|face\s?id|"
+              r"touch\s?id|fingerprint|pattern|watch|frp))")
+LOCK_SAID_UNLOCK = re.compile(rf"""
+    \b(?:not|never|isn'?t|isnt|wasn'?t|wasnt|hasn'?t|hasnt|haven'?t|havent|hadn'?t|hadnt)\s(?:yet\s)?(?:been\s)?
+    (?:yet\s)?(?:(?:officially|fully|properly|actually|network|carrier|sim)\s)*unlocked\b{NO_ACCOUNT}
+  | \bnever\sgot\s(?:a)?round\sto\s(?:getting\s(?:it\s)?)?unlock(?:ed|ing)\b
+  | \b(?:can|could|will|would)\s(?:(?:easily|still|only|soon)\s)?be\s(?:(?:easily|still|only|soon)\s)?
+    (?:(?:network|carrier|sim)\s)?unlocked\b{NO_ACCOUNT}
+  | \b(?:can|could)\s(?:easily\s)?get\s(?:it\s)?unlocked\b{NO_ACCOUNT}
+  | \byet\sto\sbe\s(?:(?:network|carrier|sim)\s)?unlocked\b
+  | \beasily\sunlocked\sby\s(?:calling|contacting|asking|phoning|ringing)\b
+  | \bunlock(?:ing)?\s(?:is\s)?(?:pending|requested|in\sprogress|underway)\b
+  | \b(?:awaiting|waiting\s(?:on|for))\s(?:the\s|an?\s)?(?:(?:network|carrier|sim)\s)?unlock(?:\scode)?\b
+  | \beligible\s(?:for\s(?:an?\s)?unlock|to\sbe\sunlocked)\b
+  | \bneeds?\s(?:to\sbe\s)?(?:(?:network|carrier|sim)\s)?unlock(?:ed|ing)\b{NO_ACCOUNT}""", X)
+OTHER_UNLOCK = re.compile(r"\b(?:pass\s?code|password|pin|i\s?cloud|activation|apple\s?id|account|google|frp|face\s?id|"
+                          r"touch\s?id|fingerprint|screen\s?lock|forgot|forgotten|previous\sowner)\b", I)
+# what turns a lock back on or keeps it: "Originally EE locked and still is", "still on Vodafone"; and a lock said in
+# the past ("Was locked to EE"), which an unlock anywhere in the listing undoes
+STILL_LOCKED = re.compile(r"\bstill\s(?:is|locked|on|tied|stuck|with|network\slocked|carrier\slocked|sim\slocked)\b",
+                          I)
+PAST_TENSE = re.compile(r"\b(?:was|were|used\sto\sbe|previously|originally|formerly|once|had\sbeen)\b|\bex[\s-]", I)
+
+
+def network_named(said, title=False):
+    """Whether these words name a carrier or network for the phone (NAMED_NETWORK; in a title also TITLE_NETWORK),
+    leaving out NOT_ITS_NETWORK."""
+    said = NOT_ITS_NETWORK.sub(" ", re.sub(r"[’‘ʼ]", "'", said or ""))
+    return bool(NAMED_NETWORK.search(said) or (title and TITLE_NETWORK.search(said)))
+
+
+def lock_said(flaw, around):
+    """Whether the flaw says the phone is network locked in words no rule reads (LOCK_SAID_SURE, LOCK_SAID_UNLOCK)."""
+    if LOCK_SAID_SURE.search(flaw):
+        return True
+    return bool(LOCK_SAID_UNLOCK.search(flaw)) and not OTHER_UNLOCK.search(around)
+
+
+def network_lock(flaw, around, listing, found, title=False):
+    """Whether a flaw sentence (or the title) gives a network lock, the owner's carrier rule: a lock its words state
+    (found: the rules read one; or lock_said), unless the same sentence undoes it or it was in the past and the listing
+    says it's unlocked; else a carrier named for the phone (network_named) unless the listing says it's unlocked. Never
+    for a MacBook, and never a lock that's gone ("Previously EE locked", PAST_LOCK)."""
+    head = listing[:150]
+    if MACBOOK.search(head) and not IPHONE.search(head) and not SAMSUNG.search(head):
+        return False  # a MacBook has no network to be locked to ("Wi-Fi won't connect to other networks": a fault)
+    flaw, around = (re.sub(r"[’‘ʼ]", "'", said) for said in (flaw, around))
+    if PAST_LOCK.search(flaw) and not STILL_LOCKED.search(around):
+        return False
+    if found or lock_said(flaw, around):
+        if STILL_LOCKED.search(around):
+            return True  # "Originally EE locked and still is", "Not unlocked, still on Vodafone"
+        if says_unlocked(around):
+            return False  # "EE locked but I got it unlocked last year", "Was locked to O2 but unlocked now"
+        return not (PAST_TENSE.search(flaw) and says_unlocked(listing))  # "Was locked to EE. Unlocked by EE in May"
+    return network_named(flaw, title) and not says_unlocked(listing)
+
+
 # a black screen that's a fault ("black screen", "black screen on boot"), not its colour ("Midnight black screen and
 # back perfect", "Black Screen Perfect")
 BLACK_SCREEN = (r"(?<!midnight\s)(?<!phantom\s)(?<!jet\s)(?<!space\s)(?<!onyx\s)(?<!cosmic\s)(?<!prism\s)"
@@ -288,19 +487,26 @@ KIND_RULES = [
       | \bdead\s(?:i\s?phone|phone|samsung|galaxy|mac\s?book|laptop|handset|device|unit|mobile)\b
       | \buntested\b | \b(?:sold|selling|sell)\s(?:it\s|this\s|them\s)?as\s(?:a\s)?(?:spares|repairs?|faulty|broken|
         not\sworking|untested|parts)\b""", X)),
-    # (not the seller's own network: "I only use EE")
+    # a network lock in so many words ("locked to EE", "VZW locked", "Network: Locked", "has a network lock on it",
+    # "won't take other networks' SIMs"); a carrier just named is read by the carrier rule (network_lock), and so is
+    # the seller's own network ("I only use EE", a lock under the carrier rule)
     ("network lock", re.compile(rf"""
-        \blocked\s(?:to|on)\s(?:the\s)?(?:ee|o2|vodafone|three|3|virgin(?:\smobile)?|giffgaff|tesco(?:\smobile)?|
-        sky(?:\smobile)?|bt(?:\smobile)?|id\smobile|smarty|lebara|lyca(?:mobile)?|asda(?:\smobile)?|verizon|at&t|
-        t-?mobile|sprint|cricket|metro(?:pcs)?|a\snetwork|one\snetwork|network|a\scarrier|carrier)\b
-      | \bnetwork[\s-]?locked\b | \bcarrier[\s-]?locked\b | \bsim[\s-]?locked\b
-      | \b{NETWORKS}[\s-]locked\b | \blocked\s{NETWORKS}\b
-      | \b(?:ee|o2|vodafone|three|virgin|giffgaff|tesco|sky|bt|verizon|at&t|t-?mobile|sprint|cricket|metro)
-        (?:\snetwork)?\sonly\b
-      | \bonly\s(?:works\s)?(?:on|with)\s(?:the\s)?(?:ee|o2|vodafone|three|virgin|giffgaff|tesco|sky|bt|verizon|
-        at&t|t-?mobile)\b
+        \blocked\s(?:to|on|with)\s(?:the\s)?(?:{NETWORKS}|3)\b{NOT_A_COUNT}
+      | \blocked\s(?:to|on)\s(?:(?:its|the|an?|one|some)\s)?(?:(?:original|first|home|old|previous|own)\s)?
+        (?:network|carrier|provider)\b
+      | \bnetwork[\s-]?locked\b | \bcarrier[\s-]?locked\b | \bsim[\s-]?locked\b | \bnetwrok[\s-]?locked\b
+      | \b(?:network|carrier|sim)\s*:\s*locked\b
+      | \b{NETWORKS}[\s-]locked\b | \blocked\s{NETWORKS}\b{NOT_A_COUNT}
+      | \b{NETWORKS}(?:\snetwork)?\sonly\b
+      | \bonly\s(?:works?\s|working\s)?(?:on|with)\s(?:the\s)?{NETWORKS}\b{NOT_A_COUNT}
       | (?<!\bi\s)(?<!\bwe\s)\bonly\s(?:takes?|accepts?|uses?|works?\s(?:with|on))\s(?:an?\s|the\s)?{NETWORKS}
-        (?:\s(?:sims?|sim\scards?))?\b
+        (?:\s(?:sims?|sim\scards?))?\b{NOT_A_COUNT}
+      | \b(?:only\s(?:works?|work|working)|will\sonly\swork|works\sonly)\s(?:on|with)\s(?:one|its\s(?:original|own)|
+        the\soriginal|a\ssingle)\s(?:network|carrier|provider)\b
+      | \b(?:has|have|with|got|there'?s|there\sis)\s(?:an?\s|the\s)?(?:network|sim|carrier)[\s-]lock\b
+      | \b(?:network|sim|carrier)[\s-]lock\s(?:is\s)?(?:still\s)?on\b
+      | \b(?:network|sim|carrier)[\s-]lock(?:ed)?\s*[:=–-]\s*(?:yes|y|on|active)\b
+      | {WONT_OTHERS}
         """, X)),
     ("not genuine", re.compile(r"""
         \bnon[\s-]?genuine\b | \bnon[\s-]?original\b
@@ -721,8 +927,9 @@ def kinds_of(flaws, text, title=False):
     sentence says ("Everything works except Face ID": a fault). A clause the reader's judge calls a flaw that no rule
     names counts as wear, as the API counts it. A battery at 80% or more, a missing charger or box, a repair done
     and gone, a network lock since undone ("now unlocked"), and anything denied ("no repairs", "not iCloud locked",
-    "Find My is off") count for nothing. title: the flaws are the listing's title, whose words say what's sold
-    (TITLE_PARTS: "iPhone 12 Pro repairs" is for parts)."""
+    "Find My is off") count for nothing. A carrier or network named for the phone ("Carrier: AT&T", "iPhone 13 EE") is
+    a network lock unless the listing says it's unlocked (the owner's carrier rule, network_lock). title: the flaws are
+    the listing's title, whose words say what's sold (TITLE_PARTS: "iPhone 12 Pro repairs" is for parts)."""
     straight = lambda said: re.sub(r"[’‘ʼ]", "'", said)  # "doesn’t" as "doesn't": the rules' apostrophe
     kinds, text = [], straight(text)
     for flaw in (straight(f) for f in flaws):
@@ -739,8 +946,13 @@ def kinds_of(flaws, text, title=False):
         for clause in parts_of(flaw):
             said += [k for k in judged_kinds(clause, listing, rules, bool(said)) if k not in said]
         said += [k for k in sentence_kinds(flaw) if k not in said]
-        if "network lock" in said and NOW_UNLOCKED.search(around):
-            said.remove("network lock")  # "Previously EE locked, now unlocked"
+        # the owner's carrier rule (network_lock): "Carrier: AT&T" and "iPhone 13 EE" are locks, "Was EE locked, now
+        # unlocked" isn't, nor a MacBook's "Wi-Fi won't connect to other networks"
+        locked = network_lock(flaw, around, listing, "network lock" in said, title)
+        if locked and "network lock" not in said:
+            said.append("network lock")
+        elif not locked and "network lock" in said:
+            said.remove("network lock")
         kinds += [k for k in said if k not in kinds]
     return kinds
 
