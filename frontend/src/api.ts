@@ -4,6 +4,8 @@
 
 export type Kind = "lower" | "asking" | "more";
 export type Writer = "auto" | "template" | "ai";
+/** how many of the listing's flaws a lower offer gives as its reason: the worst first, or all of them */
+export type FlawsSaid = 1 | 2 | 3 | "all";
 
 /** colour_only: a second look at the colour alone, when the local model was unsure from the photos */
 export type Attempt = { model: string; problems: string[]; seconds: number; cost_pence: number; colour_only?: boolean;
@@ -30,6 +32,9 @@ export type PriceEstimate = {
   read_by?: string | null;
   /** who sorted the flaws into kinds: "flip-kinds-1", "code" (its rules) or "flip-kinds-1 and code"; null: no flaws */
   sorted_by?: string | null;
+  /** the damage cut FlipAssist measured (14 Oct): how bad, the model's price tier, the cut (-0.24), whether it's rough
+   * (borrowed: from says where) and how many listings it's from */
+  damage?: { level: string; tier: string; cut: number; rough: boolean; from?: string | null; n: number } | null;
 };
 
 export type Reading = {
@@ -65,6 +70,8 @@ export type MessageRequest = {
   /** with previous or rewrite_of: the reason the message on screen gives, and the lines it was worded from
    * (reading.quotes): kept rather than worded and checked again, when this listing still reads the same */
   reason?: (Reason & { quotes: string[] }) | null;
+  /** with mention, how many flaws a lower offer gives (14 Oct); left out, as before */
+  flaws_said?: FlawsSaid | null;
 };
 
 export type ReasonCheckRequest = {
@@ -72,7 +79,7 @@ export type ReasonCheckRequest = {
   listing: Listing;
   /** reading.flaws, for code's checks */
   flaws: string[];
-  /** reading.quotes: the sentences flip-wording worded the reason from, which Haiku checks it against */
+  /** the draft's reason_from: the sentences flip-wording worded the reason from, which Haiku checks it against */
   quotes?: string[];
   clause: string;
   message: string;
@@ -107,6 +114,8 @@ export type MessageDraft = {
   warnings: string[];
   attempts: Attempt[];
   reason?: Reason | null;
+  /** the reader's lines the reason was worded from: the picked ones with flaws_said, else reading.quotes */
+  reason_from?: string[];
   cost_pence: number;
 };
 
@@ -172,7 +181,8 @@ export type Stats = {
   drafts: number;
   ready: number;
   needs_you: number;
-  done_on_this_mac: number;
+  /** the share of drafts that used no paid AI at any step: reading, the reason's check or fix, writing (14 Oct) */
+  done_on_this_device: number;
   /** each model once for each job it did: "read", "draft" (writing), "reason" or "colour" */
   models: { model: string; job: string; attempts: number; passed: number; cost_pence: number }[];
   cost_pence: number;
@@ -184,10 +194,17 @@ export type Stats = {
 export type Health = {
   local_model: string;
   local_running: boolean;
+  /** the paid model that reads or writes when this device's models can't (Claude Sonnet 5.5) */
   api_model: string;
   api_key_set: boolean;
+  /** the paid model that checks each reason is sendable (Claude Haiku 5.5), and the one that fixes a flagged reason;
+   * empty when off */
+  check_model?: string;
+  fix_model?: string;
+  /** AlertFlip's prices API (fresh UK sales) has its URL and key */
+  prices_api_set?: boolean;
   flip_api_key_set: boolean;
-  /** the models Ollama is asked for, by job, and whether this Mac has each (empty when Ollama isn't running) */
+  /** the models Ollama is asked for, by job, and whether this device has each (empty when Ollama isn't running) */
   models?: { job: string; name: string; installed: boolean }[];
 };
 
@@ -243,7 +260,8 @@ export const api = {
   approve: (draftId: number, sent: string) => call<Approved>(`/drafts/${draftId}/approve`, json({ sent })),
   style: () => call<Style>("/style"),
   styleMessages: () => call<StyleMessage[]>("/style/messages"),
-  addStyleMessages: (messages: NewStyleMessage[]) => call<StyleMessage[]>("/style/messages", json(messages)),
+  /** your setup's answers, in place of your last setup's: your style is learned from them afresh */
+  setUpStyle: (messages: NewStyleMessage[]) => call<StyleMessage[]>("/style/setup", { ...json(messages), method: "PUT" }),
   forgetStyleMessage: (id: string) => call<null>(`/style/messages/${encodeURIComponent(id)}`, { method: "DELETE" }),
   changeLearned: (key: string, used: boolean) => call<Style>("/style/learned", json({ key, used })),
 };

@@ -1,30 +1,43 @@
 // AI message: the listing on the left; on the right your price (three cards
 // and a line to slide it along), how it's written, and the message. Code sets
-// the starting prices and checks every draft; your own sentences (or the AI)
-// write it. Nothing is sent from here: you copy it into the marketplace, and
-// approving it teaches your style.
+// the starting prices and checks every draft; your own sentences (or the AI
+// writer) write it. Nothing is sent from here: you copy it into the marketplace,
+// and approving it teaches your style.
 import { useEffect, useMemo, useState } from "react";
-import { api, type Kind, type Length, type Listing, type MessageDraft, type Writer } from "../api";
-import { cost, MARKETPLACES, readBy, reasonLine, seconds, writerName } from "../format";
+import { api, type FlawsSaid, type Kind, type Length, type Listing, type MessageDraft, type Writer } from "../api";
+import { cost, readBy, reasonLine, seconds, writerName } from "../format";
 import { gapOf, lowerPrice, money, morePrice, sliderRange, toPence } from "../prices";
 import { CheckIcon, ChevronIcon, Chip, Head, PriceSlider, SparkleIcon, Steps, Warn, WarningIcon } from "../ui";
 
-type Mention = "auto" | "yes" | "no";
-const MENTION: Record<Mention, boolean | null> = { auto: null, yes: true, no: false };
+type Mention = "yes" | "no";
 const KINDS: Kind[] = ["lower", "asking", "more"];
 const LABEL: Record<Kind, string> = { lower: "Offer lower", asking: "Pay asking", more: "Offer more" };
+// how many of the listing's flaws an offer lower gives as its reason, the worst first (14 Oct): yours to pick
+const COUNTS: { said: FlawsSaid; label: string }[] = [{ said: 1, label: "1 flaw only" }, { said: 2, label: "2 flaws only" },
+  { said: 3, label: "3 flaws only" }, { said: "all", label: "All flaws" }];
+// who writes the message (14 Oct: the AI writer, or no AI writing; no "Auto")
+const WRITERS: { writer: Writer; label: string; hint: string }[] = [
+  { writer: "ai", label: "AI writer", hint: "Gemma 3 4B writes the whole message on this device; Claude Sonnet 5.5 "
+    + "(paid) writes it when Gemma's drafts fail the checks" },
+  { writer: "template", label: "No AI writing", hint: "The AI still reads the listing's flaws; your sentences (or "
+    + "AlertFlip's) write the message" },
+];
+// the listing's marketplace, now there's none to pick (14 Oct): written for a listing you collect and pay cash for,
+// unless its description says it's posted ("Postage only"), which the API reads from the description itself
+const MARKETPLACE = "facebook";
 /** what happened when you approved: copied or not, and whether it joined your style */
 type Approval = { copied: boolean; edited: boolean; saved: boolean };
 
 export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
   const [title, setTitle] = useState("");
   const [asking, setAsking] = useState("");
-  const [marketplace, setMarketplace] = useState("facebook");
   const [description, setDescription] = useState("");
   const [kind, setKind] = useState<Kind>("lower");
   const [moved, setMoved] = useState<Partial<Record<Kind, number>>>({});
   const [mention, setMention] = useState<Mention>("yes"); // the flaw is said unless you pick otherwise (3 Oct)
-  const [writer, setWriter] = useState<Writer>("auto");
+  const [flaws, setFlaws] = useState<FlawsSaid | null>(null); // how many: none picked until you pick (14 Oct)
+  const [pickFlaws, setPickFlaws] = useState(false); // you wrote without picking how many: the row turns red
+  const [writer, setWriter] = useState<Writer>("template");
   const [draft, setDraft] = useState<MessageDraft | null>(null);
   const [draftedFor, setDraftedFor] = useState(""); // the title and description the draft on screen was made from
   const [text, setText] = useState("");
@@ -55,20 +68,28 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
     };
   }, [askingPence, moved]);
   const range = prices && kind !== "asking" ? sliderRange(prices.asking, kind) : null;
+  // only an offer lower gives a flaw as its reason (14 Oct): paying asking or more never names one
+  const saysFlaws = kind === "lower" && mention === "yes";
 
-  async function write(asked: Length, overrides: { mention?: boolean | null; previous?: string; rewrite_of?: string } = {}) {
+  async function write(asked: Length, overrides: { previous?: string; rewrite_of?: string } = {}) {
     if (!prices) return;
+    if (saysFlaws && flaws === null) {
+      setPickFlaws(true); // nothing is written until you pick how many flaws to say
+      return;
+    }
     setBusy(true);
     setError("");
     setApproval(null);
     try {
-      const listing = { title, description, asking_price: (prices.asking / 100).toFixed(2), marketplace };
+      const listing = { title, description, asking_price: (prices.asking / 100).toFixed(2), marketplace: MARKETPLACE };
       const thisListing = JSON.stringify([title, description]);
       const found = await api.draftMessage({
         listing,
         kind,
         offer: (prices[kind] / 100).toFixed(2),
-        mention: overrides.mention !== undefined ? overrides.mention : MENTION[mention],
+        // lower: Yes or No; asking: never the flaw; more: your style decides whether to say it's in good condition
+        mention: kind === "lower" ? mention === "yes" : kind === "asking" ? false : null,
+        flaws_said: saysFlaws ? flaws : null,
         length: asked,
         previous: overrides.previous ?? null,
         writer,
@@ -78,7 +99,7 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
         // the same listing: a listing you've changed since gets its reason worded again (3 Oct: a new listing was
         // given the last one's "there's a scratch on the screen")
         reason: (overrides.previous ?? overrides.rewrite_of) && draft?.reason && draftedFor === thisListing
-          ? { ...draft.reason, quotes: draft.reading.quotes ?? draft.reading.flaws } : null,
+          ? { ...draft.reason, quotes: worded(draft) } : null,
       });
       const changing = overrides.previous ?? overrides.rewrite_of;
       if (!found.message && changing) {
@@ -106,8 +127,9 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
     try {
       const done = await api.checkReason({
         draft_id: found.draft_id,
-        // Haiku checks the reason against the sentences flip-wording worded it from; code's checks use the flaws
-        listing, flaws: found.reading.flaws, quotes: found.reading.quotes ?? [],
+        // Haiku checks the reason against the sentences flip-wording worded it from (the picked ones, when you
+        // picked how many flaws); code's checks use the flaws
+        listing, flaws: found.reading.flaws, quotes: found.reason_from ?? found.reading.quotes ?? [],
         clause: found.reason!.clause, message: found.message!,
         kind: found.kind, offer_pence: found.offer_pence, by: found.reason!.by, // credited to the model that worded it
       });
@@ -158,24 +180,13 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
               <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={300}
                 placeholder="iPhone 13 128GB Blue" />
             </label>
-            <div className="pair">
-              <label className="field">
-                <span>Asking price</span>
-                <input className="input" value={asking} inputMode="decimal" placeholder="£220" onChange={(e) => {
-                  setAsking(e.target.value);
-                  setMoved({});
-                }} />
-              </label>
-              <label className="field">
-                <span>Marketplace</span>
-                <span className="select">
-                  <select className="input" value={marketplace} onChange={(e) => setMarketplace(e.target.value)}>
-                    {MARKETPLACES.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                  </select>
-                  <ChevronIcon size={14} stroke={2.4} />
-                </span>
-              </label>
-            </div>
+            <label className="field">
+              <span>Asking price</span>
+              <input className="input asking" value={asking} inputMode="decimal" placeholder="£220" onChange={(e) => {
+                setAsking(e.target.value);
+                setMoved({});
+              }} />
+            </label>
             <label className="field">
               <span>The seller's description</span>
               <textarea className="input" rows={4} value={description} maxLength={5000}
@@ -207,30 +218,40 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
 
           {kind === "lower" && draft?.reading.no_offers && <Warn>The seller says no offers</Warn>}
 
-          <div className="chips" role="group" aria-label="How it's written">
-            <span className="label">Say the flaw</span>
-            {(["auto", "yes", "no"] as Mention[]).map((m) => (
-              <Chip key={m} on={mention === m} label={m === "auto" ? "My style" : m === "yes" ? "Yes" : "No"}
-                onClick={() => setMention(m)} />
-            ))}
-            <span className="chips-divider" aria-hidden="true" />
-            <span className="label">Writer</span>
-            {(["auto", "template", "ai"] as Writer[]).map((w) => (
-              <Chip key={w} on={writer === w} label={w === "auto" ? "Auto" : w === "template" ? "No AI writing" : "AI"}
-                hint={w === "template" ? "The AI still reads the listing's flaws; your sentences (or AlertFlip's) "
-                  + "write the message" : undefined}
-                onClick={() => setWriter(w)} />
-            ))}
+          <div className="how-written">
+            <div className="chips" role="group" aria-label="Say the flaw">
+              <span className="label">Say the flaw</span>
+              {kind === "lower" ? (["yes", "no"] as Mention[]).map((m) => (
+                <Chip key={m} on={mention === m} label={m === "yes" ? "Yes" : "No"} onClick={() => {
+                  setMention(m);
+                  if (m === "no") setPickFlaws(false);
+                }} />
+              )) : <span className="chips-note">Not said when paying asking or more</span>}
+            </div>
+            {saysFlaws && (
+              <div className={pickFlaws ? "chips flaw-counts missing" : "chips flaw-counts"} role="group"
+                aria-label="How many flaws to say">
+                {COUNTS.map(({ said, label }) => (
+                  <Chip key={label} on={flaws === said} label={label} onClick={() => {
+                    setFlaws(said);
+                    setPickFlaws(false);
+                  }} />
+                ))}
+                {pickFlaws && <span className="flaw-pick" role="alert">Pick how many flaws to say</span>}
+              </div>
+            )}
+            <div className="chips" role="group" aria-label="Writer">
+              <span className="label">Writer</span>
+              {WRITERS.map((w) => (
+                <Chip key={w.writer} on={writer === w.writer} label={w.label} hint={w.hint} onClick={() => setWriter(w.writer)} />
+              ))}
+            </div>
           </div>
 
           {shown ? (
             <Drafted draft={shown} text={text} setText={setText} busy={busy} approval={approval}
-              longer={length === "longer"}
+              longer={length === "longer"} rewrites={writer === "ai"}
               onLength={() => void (length === "longer" ? write("usual") : write("longer", { previous: text }))}
-              onAnswer={(yes) => {
-                setMention(yes ? "yes" : "no");
-                void write(length, { mention: yes });
-              }}
               onRewrite={() => void write(length, { rewrite_of: text })} onApprove={() => void approve()} />
           ) : (
             <>
@@ -247,6 +268,10 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
   );
 }
 
+/** The lines a draft's reason was worded from: the picked ones when you picked how many flaws, else the reader's whole
+ * sentences (its quotes), else its flaws. Haiku's check reads these, and Make it longer and Rewrite send them back. */
+const worded = (draft: MessageDraft) => draft.reason_from ?? draft.reading.quotes ?? draft.reading.flaws;
+
 type DraftedProps = {
   draft: MessageDraft;
   text: string;
@@ -254,13 +279,14 @@ type DraftedProps = {
   busy: boolean;
   approval: Approval | null;
   longer: boolean;
+  /** the AI writer is picked: with no AI writing your sentences say it one way only, so there's nothing to rewrite */
+  rewrites: boolean;
   onLength: () => void;
-  onAnswer: (yes: boolean) => void;
   onRewrite: () => void;
   onApprove: () => void;
 };
 
-function Drafted({ draft, text, setText, busy, approval, longer, onLength, onAnswer, onRewrite, onApprove }: DraftedProps) {
+function Drafted({ draft, text, setText, busy, approval, longer, rewrites, onLength, onRewrite, onApprove }: DraftedProps) {
   const [why, setWhy] = useState(false);
   const reading = draft.reading;
   const steps = [...reading.attempts, ...draft.attempts];
@@ -278,16 +304,6 @@ function Drafted({ draft, text, setText, busy, approval, longer, onLength, onAns
           </button>
         </p>
       </div>
-
-      {draft.ask && (
-        <div className="card">
-          <p className="ask">{draft.ask}</p>
-          <div className="ask-buttons">
-            <button type="button" disabled={busy} onClick={() => onAnswer(true)}>Yes, mention it</button>
-            <button type="button" disabled={busy} onClick={() => onAnswer(false)}>No</button>
-          </div>
-        </div>
-      )}
 
       <div className="tips">
         <p className="caps">Read from the listing</p>
@@ -311,9 +327,10 @@ function Drafted({ draft, text, setText, busy, approval, longer, onLength, onAns
       </div>
 
       <div className="buttons">
-        <button type="button" className="second" aria-busy={busy} disabled={busy} onClick={onRewrite}>
+        <button type="button" className="second" aria-busy={busy} disabled={busy || !rewrites} onClick={onRewrite}
+          title={rewrites ? undefined : "Pick the AI writer to rewrite it: your sentences say it one way only"}>
           <SparkleIcon size={16} />
-          {busy ? "Writing…" : "Rewrite"}
+          {busy ? "Writing…" : rewrites ? "Rewrite" : "Rewrite (AI writer only)"}
         </button>
         <button type="button" className="main" disabled={busy || !text.trim()} onClick={onApprove}>Copy &amp; approve</button>
       </div>

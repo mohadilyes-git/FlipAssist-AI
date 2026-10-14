@@ -1,17 +1,18 @@
 // How the API's answers read on screen.
 
 const WRITERS: Record<string, string> = {
-  template: "Added sentences (no AI)",  // AlertFlip's sentences, or yours once it has learned them (3 Oct)
-  "gemma3:4b": "Gemma 3 4B (on this Mac)",
-  "flip-reader-5": "flip-reader-5 (on this Mac)",
-  "flip-wording-3": "flip-wording-3 (on this Mac)",
-  "flip-wording-4b": "flip-wording-4b (on this Mac)",  // the wording model since 6 Oct
-  "flip-style-1b": "flip-style-1b (on this Mac)",  // the style reader since 6 Oct
-  "flip-kinds-1": "flip-kinds-1 (on this Mac)",
+  // the Writer you pick on AI message (14 Oct): your sentences, or AlertFlip's until it has learned yours
+  template: "No AI writing",
+  "gemma3:4b": "Gemma 3 4B (on this device)",
+  "flip-reader-5": "flip-reader-5 (on this device)",
+  "flip-wording-3": "flip-wording-3 (on this device)",
+  "flip-wording-4b": "flip-wording-4b (on this device)",  // the wording model since 6 Oct
+  "flip-style-1b": "flip-style-1b (on this device)",  // the style reader since 6 Oct
+  "flip-kinds-1": "flip-kinds-1 (on this device)",
   "claude-haiku-5-5": "Claude Haiku 5.5 (paid)",
   "claude-sonnet-5-5": "Claude Sonnet 5.5 (paid)",
   code: "Code only",
-};  // each model by its real name (4 Oct); one not here shows as it's called ("flip-reader-4")
+};  // each model by its real name (4 Oct), the same everywhere; one not here shows as it's called ("flip-reader-4")
 
 /** Who worded the offer's reason and who checked it: "Reason by flip-wording · checked by Claude Haiku". */
 export function reasonLine(reason: { by: string; checked: string }): string {
@@ -30,13 +31,13 @@ export function jobName(model: string, job: string): string {
   if (job === "price") return "reading for a UK price";
   if (job === "colour") return "checking the colour";
   if (job === "reason") {
-    return model.startsWith("claude-haiku") ? "checking the reason" : model.startsWith("claude-sonnet") ? "fixing the reason"
+    return model.startsWith("claude-haiku") ? "checking the reason is sendable" : model.startsWith("claude-sonnet") ? "fixing the reason"
       : "wording the reason";
   }
   return "writing the message";
 }
 
-/** "template" -> "Added sentences (no AI)", "gemma3:4b" -> "Gemma 3 4B (on this Mac)". */
+/** "template" -> "No AI writing", "gemma3:4b" -> "Gemma 3 4B (on this device)". */
 export function writerName(model: string | null): string {
   return model ? (WRITERS[model] ?? model) : "Nobody yet";
 }
@@ -46,7 +47,7 @@ export function modelName(model: string): string {
   return writerName(model).split(/,| \(/)[0];
 }
 
-/** Who read the listing: "read by Gemma, on this Mac", or "read by code (no AI)". */
+/** Who read the listing: "read by flip-reader-5 (on this device)", or "read by code (no AI)". */
 export function readBy(model: string): string {
   return model === "code" ? "read by code (no AI)" : `read by ${writerName(model)}`;
 }
@@ -68,11 +69,3 @@ export const CONDITIONS: Record<string, string> = {
   "3000": "Used",
   "7000": "For parts or not working",
 };
-
-export const MARKETPLACES = [
-  { id: "facebook", name: "Facebook" },
-  { id: "ebay", name: "eBay" },
-  { id: "vinted", name: "Vinted" },
-  { id: "gumtree", name: "Gumtree" },
-  { id: "other", name: "Other" },
-];

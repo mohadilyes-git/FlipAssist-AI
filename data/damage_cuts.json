@@ -1,0 +1,591 @@
+{
+ "made": "14 Oct 2026 (fix 1): from 1,965 damaged listings read blind by agents (part-cuts), kept as analyze.py keeps them; each cut is the median price against flawless ones of the same model and storage; a cell with under 10 listings borrows and is rough",
+ "min_n": 10,
+ "kept": 1697,
+ "notes": [
+  "macbook/uk top: minor and moderate pooled (-0.127)",
+  "macbook/us middle: minor and moderate pooled (-0.214)",
+  "macbook/us top: minor and moderate pooled (-0.127)",
+  "samsung/us bottom: moderate and severe pooled (-0.422)",
+  "samsung/us middle: moderate and severe pooled (-0.444)",
+  "samsung/us top: moderate and severe pooled (-0.385)",
+  "samsung/uk: no UK listings; edges [134.36, 230.48] from the US Samsung's by the iPhone's UK/US edges"
+ ],
+ "tables": {
+  "iphone/ca": {
+   "currency": "CAD",
+   "edges": [
+    190.0,
+    572.25
+   ],
+   "ranges": {
+    "bottom": [
+     100.0,
+     180.0
+    ],
+    "middle": [
+     200.0,
+     550.0
+    ],
+    "top": [
+     594.5,
+     1649.5
+    ]
+   },
+   "rough_edges": false,
+   "cuts": {
+    "bottom": {
+     "minor": {
+      "cut": -0.315,
+      "n": 21,
+      "rough": true,
+      "from": "the US"
+     },
+     "moderate": {
+      "cut": -0.325,
+      "n": 15,
+      "rough": true,
+      "from": "pooled with the middle tier"
+     },
+     "severe": {
+      "cut": -0.368,
+      "n": 23,
+      "rough": true,
+      "from": "the US (pooled with the middle tier)"
+     }
+    },
+    "middle": {
+     "minor": {
+      "cut": -0.2,
+      "n": 39,
+      "rough": true,
+      "from": "the US"
+     },
+     "moderate": {
+      "cut": -0.371,
+      "n": 10,
+      "rough": false,
+      "from": null
+     },
+     "severe": {
+      "cut": -0.381,
+      "n": 14,
+      "rough": true,
+      "from": "the US"
+     }
+    },
+    "top": {
+     "minor": {
+      "cut": -0.147,
+      "n": 44,
+      "rough": true,
+      "from": "the US"
+     },
+     "moderate": {
+      "cut": -0.3,
+      "n": 14,
+      "rough": true,
+      "from": "pooled with the middle tier"
+     },
+     "severe": {
+      "cut": -0.381,
+      "n": 18,
+      "rough": true,
+      "from": "the US (pooled with the middle tier)"
+     }
+    }
+   }
+  },
+  "iphone/uk": {
+   "currency": "GBP",
+   "edges": [
+    129.5,
+    255.0
+   ],
+   "ranges": {
+    "bottom": [
+     27.5,
+     127.0
+    ],
+    "middle": [
+     132.0,
+     250.0
+    ],
+    "top": [
+     260.0,
+     1100.0
+    ]
+   },
+   "rough_edges": false,
+   "cuts": {
+    "bottom": {
+     "minor": {
+      "cut": -0.22,
+      "n": 104,
+      "rough": false,
+      "from": null
+     },
+     "moderate": {
+      "cut": -0.391,
+      "n": 162,
+      "rough": false,
+      "from": null
+     },
+     "severe": {
+      "cut": -0.455,
+      "n": 39,
+      "rough": false,
+      "from": null
+     }
+    },
+    "middle": {
+     "minor": {
+      "cut": -0.188,
+      "n": 153,
+      "rough": false,
+      "from": null
+     },
+     "moderate": {
+      "cut": -0.304,
+      "n": 191,
+      "rough": false,
+      "from": null
+     },
+     "severe": {
+      "cut": -0.391,
+      "n": 32,
+      "rough": false,
+      "from": null
+     }
+    },
+    "top": {
+     "minor": {
+      "cut": -0.167,
+      "n": 175,
+      "rough": false,
+      "from": null
+     },
+     "moderate": {
+      "cut": -0.236,
+      "n": 177,
+      "rough": false,
+      "from": null
+     },
+     "severe": {
+      "cut": -0.264,
+      "n": 31,
+      "rough": false,
+      "from": null
+     }
+    }
+   }
+  },
+  "iphone/us": {
+   "currency": "USD",
+   "edges": [
+    176.26,
+    442.0
+   ],
+   "ranges": {
+    "bottom": [
+     53.5,
+     172.53
+    ],
+    "middle": [
+     180.0,
+     439.0
+    ],
+    "top": [
+     445.0,
+     1120.0
+    ]
+   },
+   "rough_edges": false,
+   "cuts": {
+    "bottom": {
+     "minor": {
+      "cut": -0.315,
+      "n": 21,
+      "rough": false,
+      "from": null
+     },
+     "moderate": {
+      "cut": -0.359,
+      "n": 54,
+      "rough": false,
+      "from": null
+     },
+     "severe": {
+      "cut": -0.368,
+      "n": 23,
+      "rough": true,
+      "from": "pooled with the middle tier"
+     }
+    },
+    "middle": {
+     "minor": {
+      "cut": -0.2,
+      "n": 39,
+      "rough": false,
+      "from": null
+     },
+     "moderate": {
+      "cut": -0.273,
+      "n": 33,
+      "rough": false,
+      "from": null
+     },
+     "severe": {
+      "cut": -0.381,
+      "n": 14,
+      "rough": false,
+      "from": null
+     }
+    },
+    "top": {
+     "minor": {
+      "cut": -0.147,
+      "n": 44,
+      "rough": false,
+      "from": null
+     },
+     "moderate": {
+      "cut": -0.27,
+      "n": 41,
+      "rough": false,
+      "from": null
+     },
+     "severe": {
+      "cut": -0.381,
+      "n": 18,
+      "rough": true,
+      "from": "pooled with the middle tier"
+     }
+    }
+   }
+  },
+  "macbook/uk": {
+   "currency": "GBP",
+   "edges": [
+    225.0,
+    361.25
+   ],
+   "ranges": {
+    "bottom": [
+     90.0,
+     200.0
+    ],
+    "middle": [
+     250.0,
+     360.0
+    ],
+    "top": [
+     362.5,
+     1500.0
+    ]
+   },
+   "rough_edges": false,
+   "cuts": {
+    "bottom": {
+     "minor": {
+      "cut": -0.127,
+      "n": 56,
+      "rough": true,
+      "from": "the US"
+     },
+     "moderate": {
+      "cut": -0.134,
+      "n": 15,
+      "rough": true,
+      "from": "the US"
+     },
+     "severe": {
+      "cut": -0.537,
+      "n": 11,
+      "rough": true,
+      "from": "the US (pooled with the middle tier)"
+     }
+    },
+    "middle": {
+     "minor": {
+      "cut": -0.133,
+      "n": 11,
+      "rough": false,
+      "from": null
+     },
+     "moderate": {
+      "cut": -0.172,
+      "n": 20,
+      "rough": true,
+      "from": "the US"
+     },
+     "severe": {
+      "cut": -0.605,
+      "n": 12,
+      "rough": true,
+      "from": "the US (pooled with the top tier)"
+     }
+    },
+    "top": {
+     "minor": {
+      "cut": -0.127,
+      "n": 59,
+      "rough": true,
+      "from": "the US; pooled with moderate to keep the order"
+     },
+     "moderate": {
+      "cut": -0.127,
+      "n": 17,
+      "rough": true,
+      "from": "the US; pooled with minor to keep the order"
+     },
+     "severe": {
+      "cut": -0.605,
+      "n": 12,
+      "rough": true,
+      "from": "the US (pooled with the middle tier)"
+     }
+    }
+   }
+  },
+  "macbook/us": {
+   "currency": "USD",
+   "edges": [
+    353.8,
+    531.5
+   ],
+   "ranges": {
+    "bottom": [
+     112.5,
+     347.6
+    ],
+    "middle": [
+     360.0,
+     513.0
+    ],
+    "top": [
+     550.0,
+     2700.0
+    ]
+   },
+   "rough_edges": false,
+   "cuts": {
+    "bottom": {
+     "minor": {
+      "cut": -0.127,
+      "n": 56,
+      "rough": false,
+      "from": null
+     },
+     "moderate": {
+      "cut": -0.134,
+      "n": 15,
+      "rough": false,
+      "from": null
+     },
+     "severe": {
+      "cut": -0.537,
+      "n": 11,
+      "rough": true,
+      "from": "pooled with the middle tier"
+     }
+    },
+    "middle": {
+     "minor": {
+      "cut": -0.214,
+      "n": 48,
+      "rough": true,
+      "from": "pooled with moderate to keep the order"
+     },
+     "moderate": {
+      "cut": -0.214,
+      "n": 20,
+      "rough": true,
+      "from": "pooled with minor to keep the order"
+     },
+     "severe": {
+      "cut": -0.605,
+      "n": 12,
+      "rough": true,
+      "from": "pooled with the top tier"
+     }
+    },
+    "top": {
+     "minor": {
+      "cut": -0.127,
+      "n": 59,
+      "rough": true,
+      "from": "pooled with moderate to keep the order"
+     },
+     "moderate": {
+      "cut": -0.127,
+      "n": 17,
+      "rough": true,
+      "from": "pooled with minor to keep the order"
+     },
+     "severe": {
+      "cut": -0.605,
+      "n": 12,
+      "rough": true,
+      "from": "pooled with the middle tier"
+     }
+    }
+   }
+  },
+  "samsung/us": {
+   "currency": "USD",
+   "edges": [
+    182.88,
+    399.5
+   ],
+   "ranges": {
+    "bottom": [
+     109.0,
+     175.75
+    ],
+    "middle": [
+     190.0,
+     399.0
+    ],
+    "top": [
+     399.99,
+     1100.0
+    ]
+   },
+   "rough_edges": false,
+   "cuts": {
+    "bottom": {
+     "minor": {
+      "cut": -0.22,
+      "n": 15,
+      "rough": true,
+      "from": "pooled with the middle tier"
+     },
+     "moderate": {
+      "cut": -0.422,
+      "n": 17,
+      "rough": true,
+      "from": "pooled with the middle tier; pooled with severe to keep the order"
+     },
+     "severe": {
+      "cut": -0.422,
+      "n": 23,
+      "rough": true,
+      "from": "the iPhone (iphone/us), pooled with the middle tier; pooled with moderate to keep the order"
+     }
+    },
+    "middle": {
+     "minor": {
+      "cut": -0.08,
+      "n": 19,
+      "rough": true,
+      "from": "pooled with the top tier"
+     },
+     "moderate": {
+      "cut": -0.444,
+      "n": 17,
+      "rough": true,
+      "from": "pooled with the bottom tier; pooled with severe to keep the order"
+     },
+     "severe": {
+      "cut": -0.444,
+      "n": 14,
+      "rough": true,
+      "from": "the iPhone (iphone/us); pooled with moderate to keep the order"
+     }
+    },
+    "top": {
+     "minor": {
+      "cut": -0.059,
+      "n": 11,
+      "rough": false,
+      "from": null
+     },
+     "moderate": {
+      "cut": -0.385,
+      "n": 15,
+      "rough": true,
+      "from": "pooled with the middle tier; pooled with severe to keep the order"
+     },
+     "severe": {
+      "cut": -0.385,
+      "n": 18,
+      "rough": true,
+      "from": "the iPhone (iphone/us), pooled with the middle tier; pooled with moderate to keep the order"
+     }
+    }
+   }
+  },
+  "samsung/uk": {
+   "currency": "GBP",
+   "edges": [
+    134.36,
+    230.48
+   ],
+   "ranges": null,
+   "rough_edges": true,
+   "cuts": {
+    "bottom": {
+     "minor": {
+      "cut": -0.22,
+      "n": 15,
+      "rough": true,
+      "from": "the US (pooled with the middle tier)"
+     },
+     "moderate": {
+      "cut": -0.422,
+      "n": 17,
+      "rough": true,
+      "from": "the US (pooled with the middle tier; pooled with severe to keep the order)"
+     },
+     "severe": {
+      "cut": -0.422,
+      "n": 23,
+      "rough": true,
+      "from": "the US (the iPhone (iphone/us), pooled with the middle tier; pooled with moderate to keep the order)"
+     }
+    },
+    "middle": {
+     "minor": {
+      "cut": -0.08,
+      "n": 19,
+      "rough": true,
+      "from": "the US (pooled with the top tier)"
+     },
+     "moderate": {
+      "cut": -0.444,
+      "n": 17,
+      "rough": true,
+      "from": "the US (pooled with the bottom tier; pooled with severe to keep the order)"
+     },
+     "severe": {
+      "cut": -0.444,
+      "n": 14,
+      "rough": true,
+      "from": "the US (the iPhone (iphone/us); pooled with moderate to keep the order)"
+     }
+    },
+    "top": {
+     "minor": {
+      "cut": -0.059,
+      "n": 11,
+      "rough": true,
+      "from": "the US"
+     },
+     "moderate": {
+      "cut": -0.385,
+      "n": 15,
+      "rough": true,
+      "from": "the US (pooled with the middle tier; pooled with severe to keep the order)"
+     },
+     "severe": {
+      "cut": -0.385,
+      "n": 18,
+      "rough": true,
+      "from": "the US (the iPhone (iphone/us), pooled with the middle tier; pooled with moderate to keep the order)"
+     }
+    }
+   }
+  }
+ }
+}

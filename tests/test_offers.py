@@ -356,3 +356,14 @@ def test_a_reasons_own_words_back_the_message():
     message = "Hi, would you take £255 for it? I'm offering that because of a couple scratches on the back."
     assert check_condition_talk(message, text, point, True) == []
     assert check_condition_talk("Hi, would you take £255 for it? It has a cracked screen.", text, point, True) != []
+
+
+def test_an_offer_that_leaves_the_condition_out_doesnt_say_it_vaguely_either():
+    """14 Oct: the AI writer's Offer more said "Condition's a bit rough, isn't it?" with the condition to leave out."""
+    listing = "iPhone 13. Back glass cracked. Face ID not working. Battery 79%."
+    rough = ("Hi mate, I'll pay £235 if you hold it for me. Condition's a bit rough, isn't it? Can collect today.")
+    assert check_condition_talk(rough, listing, None, False, "more", 23500) == \
+        ["the message talks about the condition, but this draft leaves that out"]
+    for fine in ("Hi mate, I can pay £235 if you can hold it for me. Can collect today. Cheers",
+                 "Hi mate, I can pay £220 for it. Is it in good condition?", "Hi, I can pay £235 if you hold it. No problem if not!"):
+        assert check_condition_talk(fine, listing, None, False, "more", 23500) == []

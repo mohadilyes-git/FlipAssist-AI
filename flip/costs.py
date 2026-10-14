@@ -6,7 +6,7 @@ import os
 from decimal import Decimal
 
 PRICES_USD = {"claude-haiku-5-5": (Decimal("0.10"), Decimal("0.50")),  # per million tokens: in, out
-              "claude-sonnet-5-5": (Decimal("2.00"), Decimal("10.00"))}  # the reason's fixer (flip.wording), 3 Oct
+              "claude-sonnet-5-5": (Decimal("2.00"), Decimal("10.00"))}  # fixes reasons, and the fallback (14 Oct)
 CACHE_READ, CACHE_WRITE = Decimal("0.1"), Decimal("1.25")  # of the input price: read from, or put in, the 5-minute cache
 USD_TO_GBP = Decimal("0.80")  # the default rate; change it in .env when it moves
 

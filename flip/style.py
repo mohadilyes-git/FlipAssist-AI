@@ -1448,6 +1448,33 @@ class StyleBook:
             self.index.add(rows)
         return rows
 
+    def set_up(self, messages):
+        """Your answers from setting up your style (as add takes them), in place of your last setup's: every message
+        you wrote or pasted in the app (source "added") goes, and what you removed from your style is cleared, so it's
+        learned from these afresh. The drafts you approved and any CSV stay. All at once: a failure changes nothing.
+        The new rows, as add gives them."""
+        at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        rows = [{"id": f"msg-{uuid.uuid4().hex[:12]}", "listing_title": m.get("listing_title") or "",
+                 "asking_price": m.get("asking_price") or "", "marketplace": m.get("marketplace") or "",
+                 "my_message": m["my_message"].strip(), "source": "added", "at": at} for m in messages]
+        with self.lock:
+            old = [row_id for (row_id,) in self.db.execute("select id from messages where source = 'added'")]
+            try:
+                self.db.execute("delete from messages where source = 'added'")
+                self.db.execute("delete from removed")
+                self.db.executemany(
+                    "insert into messages (id, listing_title, asking_price, marketplace, my_message, source, at) "
+                    "values (:id, :listing_title, :asking_price, :marketplace, :my_message, :source, :at)", rows)
+                self.db.commit()
+            except sqlite3.Error:
+                self.db.rollback()
+                raise
+            self._card = self._learned_card = None
+        if self.index is not None:
+            self.index.remove(old)
+            self.index.add(rows)
+        return rows
+
     def remove(self, message_id):
         """Forget one message. False if there's no such message."""
         with self.lock:

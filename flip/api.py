@@ -64,6 +64,7 @@ MAX_ID = 2**63 - 1  # the biggest id SQLite keeps
 OPEN = {"/health", "/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json"}  # no key: they call nothing
 MONEY = r"^\d{1,6}(?:\.\d{1,2})?$"  # pounds, as written: "220" or "219.99"
 Mode = Literal["auto", "local", "api"]
+BACKUP_MODEL = "claude-sonnet-5-5"  # reads or writes when this device's models can't (14 Oct; Claude Haiku before)
 
 load_env()  # FLIP_API_KEY and ANTHROPIC_API_KEY, from .env; nothing already set is overwritten
 
@@ -116,6 +117,10 @@ class MessageRequest(BaseModel):
     reason: ReasonOnScreen | None = Field(None, description="with previous or rewrite_of: the reason the message on "
                                                             "screen gives (draft.reason), kept when that message still "
                                                             "says it")
+    flaws_said: Literal[1, 2, 3, "all"] | None = Field(None, description="with mention, how many of the listing's "
+                                                       "flaws a lower offer gives as its reason: 1, 2 or 3 (the worst, "
+                                                       "by how much each cuts the price) or \"all\"; null as before "
+                                                       "(every flaw worded, code's own sentence says up to two)")
 
 
 class ReasonCheckRequest(BaseModel):
@@ -183,6 +188,9 @@ class MessageDraft(BaseModel):
                                             "different models, a rewrite that couldn't find other words")
     attempts: list[Attempt]
     reason: Reason | None = Field(None, description="the reason flip.wording worded and checked, when it did")
+    reason_from: list[str] = Field(default_factory=list, description="the reader's lines the reason was worded from: "
+                                   "the picked ones with flaws_said, else reading.quotes. Send them as the quotes of "
+                                   "/messages/check-reason, and of reason with Make it longer or Rewrite")
     cost_pence: float = Field(description="reading and drafting together")
 
 
@@ -295,7 +303,8 @@ class Stats(BaseModel):
     drafts: int
     ready: int
     needs_you: int
-    done_on_this_mac: float = Field(description="share of passing answers from the template or the local model")
+    done_on_this_device: float = Field(description="share of drafts that used no paid AI at any step (reading, the "
+                                                   "reason's check or fix, writing)")
     models: list[ModelUse]
     cost_pence: float
     cost_per_100_drafts_pence: float
@@ -313,8 +322,13 @@ class ModelState(BaseModel):
 class Health(BaseModel):
     local_model: str
     local_running: bool
-    api_model: str
-    api_key_set: bool = Field(description="the Anthropic key for the paid fallback is in .env")
+    api_model: str = Field(description="the paid model that reads or writes when this device's models can't (Claude "
+                                       "Sonnet 5.5 since 14 Oct)")
+    api_key_set: bool = Field(description="the Anthropic key for the paid models is in .env")
+    check_model: str = Field("", description="the paid model that checks each offer's reason is sendable (Claude Haiku "
+                                             "5.5); empty when it's off")
+    fix_model: str = Field("", description="the paid model that rewrites a reason the check flags; empty when it's off")
+    prices_api_set: bool = Field(False, description="the AlertFlip prices API (fresh UK sales) has its URL and key in .env")
     flip_api_key_set: bool = Field(description=f"the key callers need is set, {MIN_KEY} characters or more; "
                                                 "without it every call is refused")
     models: list[ModelState] = Field(default_factory=list, description="the models Ollama is asked for, by job, and "
@@ -355,9 +369,15 @@ def audit():
     return AuditLog()
 
 
+def backup_model():
+    """The paid model that reads a listing, writes a message or a listing, or looks at the colour when this device's
+    models can't: FLIP_BACKUP_MODEL, else Claude Sonnet 5.5 (14 Oct: Claude Haiku 5.5 only checks each reason)."""
+    return os.environ.get("FLIP_BACKUP_MODEL", "").strip() or BACKUP_MODEL
+
+
 @lru_cache
 def setup():
-    api = ApiModel() if os.environ.get("ANTHROPIC_API_KEY") else None
+    api = ApiModel(backup_model()) if os.environ.get("ANTHROPIC_API_KEY") else None
     local = LocalModel(max_tokens=MESSAGE_TOKENS)
     return Setup(local, api, audit(), LocalModel(), reader=lambda: reader_for(local), wording="settings",
                  kinds=lambda: kinds_sorter(local.url))
@@ -506,8 +526,10 @@ def health():
               ("sorts price flaws", kinds_model()), ("reads your style", style_model()), ("writes messages", local.name)]
     models = [ModelState(job=job, name=name, installed=name in names or f"{name}:latest" in names)
               for job, name in wanted if name] if running else []
-    return Health(local_model=local.name, local_running=running, api_model=ApiModel().name,
-                  api_key_set=bool(os.environ.get("ANTHROPIC_API_KEY")),
+    names = settings()  # the reason's models: empty when there's no Anthropic key or a step is off in .env
+    return Health(local_model=local.name, local_running=running, api_model=backup_model(),
+                  api_key_set=bool(os.environ.get("ANTHROPIC_API_KEY")), check_model=names["check"],
+                  fix_model=names["fix"], prices_api_set=all(prices_settings()),
                   flip_api_key_set=bool(usable_key()), models=models)
 
 
@@ -531,7 +553,8 @@ def draft_a_message(request: MessageRequest, s: Setup = Depends(setup), book: St
                                reading=reading, writer=request.writer, offer=offer, rewrite_of=request.rewrite_of,
                                wording=s.wording,  # flip-wording, Haiku's check, Sonnet's fix (flip.wording)
                                check_reason_now=not request.check_later,
-                               reason_on_screen=request.reason.model_dump() if request.reason else None)
+                               reason_on_screen=request.reason.model_dump() if request.reason else None,
+                               flaws_said=request.flaws_said)
     except Refused as e:  # anything else is a fault here, not the caller's: a 500
         raise HTTPException(422, str(e))
     answer = result["answer"] or {}
@@ -547,6 +570,7 @@ def draft_a_message(request: MessageRequest, s: Setup = Depends(setup), book: St
                         read_by=reading["read_by"], attempts=read),
         reasons=result["reasons"], warnings=result["warnings"], attempts=tried,
         reason=Reason(**result["reason"]) if result.get("reason") else None,
+        reason_from=result.get("reason_from") or reading.get("quotes") or reading["flaws"],
         cost_pence=round(sum(a.cost_pence for a in tried + read), 4))
 
 
@@ -634,6 +658,9 @@ class PriceEstimate(BaseModel):
     read_by: str | None = None
     # who sorted the flaws into kinds: "flip-kinds-1", "code" (its rules), "flip-kinds-1 and code"; None: no flaws
     sorted_by: str | None = None
+    # the damage cut FlipAssist measured (14 Oct): how bad (minor, moderate, severe), the price tier (bottom, middle,
+    # top), the cut (-0.24), whether it's rough (borrowed: "from" says where) and how many listings it's from
+    damage: dict | None = None
 
 
 class PriceChecks:
@@ -670,7 +697,9 @@ def check_a_reason(request: ReasonCheckRequest, s: Setup = Depends(setup)):
     A fixed reason replaces the old one in the message (the writer puts it in word for word), the condition checks
     run again, and the audit log keeps the new text, so approving it counts as unedited. Anything that can't be done
     leaves the message as it was."""
-    result = {"item_id": request.listing.id, "attempts": []}
+    # logged for the draft's own item, so Home counts the check as part of that draft (14 Oct)
+    item = s.log.item_of(request.draft_id) if s.log is not None else None
+    result = {"item_id": item or request.listing.id, "attempts": []}
     flaws = completed(request.quotes or request.flaws, request.listing.description)  # as the draft gave flip-wording
     # the model that worded it, as the draft said; the settings' only when the app didn't send it
     worded_by = request.by or settings()["wording"] or WORDING_MODEL
@@ -764,6 +793,25 @@ def add_style_messages(messages: list[NewMessage] = Body(min_length=1, max_lengt
         rows.append({"listing_title": m.title.strip(), "asking_price": price, "marketplace": m.marketplace.strip(),
                      "my_message": m.text})
     added = [shown(m) for m in book.add(rows, "added")]
+    book.learn_later()  # our AI reads them too, in the background (flip.style_ai)
+    return added
+
+
+@app.put("/style/setup", response_model=list[StyleMessage], dependencies=[Depends(key)])
+def set_up_style(messages: list[NewMessage] = Body(min_length=1, max_length=100), book: StyleBook = Depends(style)):
+    """Your answers from setting up your style. They take the place of the ones from your last setup (every message
+    you wrote or pasted in the app), and what you removed from your style is cleared, so it's learned from these
+    afresh. The drafts you approved and any CSV stay."""
+    rows = []
+    for m in messages:
+        price = pounds(m.price)
+        if price is None:
+            raise HTTPException(422, f"{m.price}: not a price")
+        if not m.text.strip():
+            raise HTTPException(422, "a message needs some words")
+        rows.append({"listing_title": m.title.strip(), "asking_price": price, "marketplace": m.marketplace.strip(),
+                     "my_message": m.text})
+    added = [shown(m) for m in book.set_up(rows)]
     book.learn_later()  # our AI reads them too, in the background (flip.style_ai)
     return added
 

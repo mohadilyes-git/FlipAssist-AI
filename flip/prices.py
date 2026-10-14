@@ -38,6 +38,7 @@ import re
 import urllib.error
 import urllib.request
 
+from flip.severity import damage_cut, severity
 from flip.checks import NEGATED_THINGS, NOT_A_FLAW, PROBLEM, denied_by, slipped
 from flip.offers import battery_now
 from flip.reader import (CLAUSE_WORDS, HOW_BAD, ITEM_OPENERS, MAX_BEFORE, MAX_FLAW, NEGATORS, OTHER_ITEM, judge,
@@ -1162,7 +1163,12 @@ def estimate(title, flaws=(), country="uk", opener=None, description=None, sorte
     kinds, by = sorted_kinds(flaws, text, title, description, sorter)
     # the title's own, read as what's sold: "Faulty iPhone 12 for parts", "iPhone 12 Pro repairs", "iPhone 12 dead"
     kinds += [k for k in kinds_of([title], text, title=True) if k not in kinds]
-    body = {"action": "price", "country": country, "title": title, "kinds": kinds, "strict": True}
+    # fix 1 (14 Oct): damage is cut by how bad it is and the model's price tier, from FlipAssist's own measured table
+    # (flip.severity), in place of the prices API's one damage cut: the API is asked without "damage", so every
+    # other cut stays the API's. Not for a locked or for-parts one, which the API prices as that alone
+    own_damage = "damage" in kinds and not (PARTS_WORDS.search(title) or {"lock", "parts"} & set(kinds))
+    body = {"action": "price", "country": country, "title": title, "strict": True,
+            "kinds": [k for k in kinds if k != "damage"] if own_damage else kinds}
     if PARTS_WORDS.search(title) or {"lock", "parts"} & set(kinds):
         body["bucket"] = "good"
     in_title = sizes_in(title, kind)
@@ -1173,7 +1179,7 @@ def estimate(title, flaws=(), country="uk", opener=None, description=None, sorte
         body["ram_gb"] = in_description[1]
     remembered = json.dumps([url, body], sort_keys=True)
     if remembered in _seen:
-        return {**_seen[remembered], "sorted_by": by}
+        return with_damage({**_seen[remembered], "sorted_by": by}, own_damage, kinds, flaws, title)
     request = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
                                      headers={"Content-Type": "application/json", "x-prices-key": key})
     try:
@@ -1205,4 +1211,20 @@ def estimate(title, flaws=(), country="uk", opener=None, description=None, sorte
              "parts_price": "for-parts price" in used, "rough": bool(answer.get("rough")),
              "exact": bool(answer.get("exact_match")), "mode": answer.get("mode")}
     _seen[remembered] = found
-    return {**found, "sorted_by": by}
+    return with_damage({**found, "sorted_by": by}, own_damage, kinds, flaws, title)
+
+
+def with_damage(found, own, kinds, flaws, title):
+    """The estimate with the damage cut FlipAssist measured (fix 1, 14 Oct): how bad the damage is (flip.severity: minor,
+    moderate or severe; moderate when no word says) and the model's price tier, by its clean middle price, take the
+    cut from data/damage_cuts.json off the API's price for its other flaws. "damage" says which: {"level", "tier",
+    "cut", "rough", "from", "n"}. Not own (no damage, or locked or for parts): the API's estimate as it is."""
+    found = {**found, "kinds": kinds}
+    if not own or found.get("price") is None:
+        return found
+    level = severity(flaws, title) or "moderate"
+    cut = damage_cut(found.get("kind"), "uk", found.get("middle") or found["price"], level)
+    if cut is None:
+        return found
+    return {**found, "price": round(found["price"] * (1 + cut["cut"])),
+            "cuts": [*(c for c in found.get("cuts", []) if c != "damage"), "damage"], "damage": {"level": level, **cut}}

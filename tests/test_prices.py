@@ -51,12 +51,16 @@ def test_an_iphone_is_priced_with_its_flaws_sorted_into_kinds():
     opener, sent = asking()
     found = prices.estimate("iPhone 13 128GB Blue", ["Small crack on the back", " "], opener=opener,
                             description="Small crack on the back. Collection Leeds.")
-    assert found == {"price": 170, "middle": 210, "low": 180, "high": 240, "currency": "GBP", "sales": 38,
+    # fix 1 (14 Oct): the damage is FlipAssist's own cut, by how bad (a small crack: minor) and the model's price tier
+    # (a clean one £210: middle), measured on 153 such UK iPhone listings; the API is asked for its other cuts only
+    assert found == {"price": 138, "middle": 210, "low": 180, "high": 240, "currency": "GBP", "sales": 38,
                      "model": "iphone 13", "item": None, "storage_gb": 128, "ram_gb": None, "asked_storage_gb": 128,
                      "asked_ram_gb": None, "kind": "iphone", "kinds": ["damage"], "cuts": ["damage"],
-                     "parts_price": False, "rough": False, "exact": True, "mode": "catalogue", "sorted_by": "code"}
+                     "parts_price": False, "rough": False, "exact": True, "mode": "catalogue", "sorted_by": "code",
+                     "damage": {"level": "minor", "tier": "middle", "cut": -0.188, "rough": False, "from": None,
+                                "n": 153}}
     url, headers, body = sent[0]
-    assert body == {"action": "price", "country": "uk", "title": "iPhone 13 128GB Blue", "kinds": ["damage"],
+    assert body == {"action": "price", "country": "uk", "title": "iPhone 13 128GB Blue", "kinds": [],
                     "strict": True}  # the API's own sorter isn't used, and a title naming no model is refused
     assert headers["X-prices-key"] == "k" * 64
     prices.estimate("iPhone 13 128GB Blue", ["Small crack on the back"], opener=opener,
@@ -197,10 +201,32 @@ def kinds(sentence):
 
 
 def sent(title, flaws=(), description=""):
-    """What estimate asks the pretend API, without what every request has."""
+    """What estimate asks the pretend API, without what every request has, and with the kinds it counted: since fix 1
+    (14 Oct) damage is FlipAssist's own cut, so the API is asked without it (test_damage_is_cut_once_by_how_bad)."""
     opener, asked = asking()
-    prices.estimate(title, list(flaws), opener=opener, description=description)
-    return {k: v for k, v in asked[0][2].items() if k not in ("action", "country", "title", "strict")}
+    found = prices.estimate(title, list(flaws), opener=opener, description=description)
+    return {**{k: v for k, v in asked[0][2].items() if k not in ("action", "country", "title", "strict")},
+            "kinds": found["kinds"]}
+
+
+@pytest.mark.parametrize("flaws, level, tier, price", [
+    (["Screen smashed"], "severe", "middle", 104),  # 170 x (1 - 0.391)
+    (["Screen cracked"], "moderate", "middle", 118),  # 170 x (1 - 0.304)
+    (["Tiny chip on the corner"], "minor", "middle", 138),  # 170 x (1 - 0.188)
+])
+def test_damage_is_cut_once_by_how_bad_and_the_models_price_tier(flaws, level, tier, price):
+    opener, asked = asking()
+    found = prices.estimate("iPhone 13 128GB Blue", flaws, opener=opener, description=". ".join(flaws))
+    assert "damage" not in asked[0][2]["kinds"]  # not cut twice: the API's own damage cut isn't asked for
+    assert (found["damage"]["level"], found["damage"]["tier"], found["price"], found["cuts"]) == \
+        (level, tier, price, ["damage"])
+
+
+def test_a_locked_or_for_parts_one_keeps_the_apis_price_with_no_damage_cut_of_ours():
+    opener, asked = asking()
+    found = prices.estimate("iPhone 13 128GB Blue", ["Screen smashed", "iCloud locked"], opener=opener,
+                            description="Screen smashed. iCloud locked.")
+    assert "damage" in asked[0][2]["kinds"] and "damage" not in found  # priced as locked by the API alone
 
 
 @pytest.mark.parametrize("sentence, expected", [

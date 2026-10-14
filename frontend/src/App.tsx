@@ -1,6 +1,6 @@
 // The app: a Mac-style window with five screens in a sidebar, each at its own
 // address (#home, #message, #style, #price, #listing) so a refresh keeps your place,
-// light or dark as your Mac is (or as you switch it), and on first launch
+// light or dark as your device is (or as you switch it), and on first launch
 // "Set up your style" before any of them.
 import { type ComponentType, useCallback, useEffect, useMemo, useState } from "react";
 import { api, type Health, type Style } from "./api";
@@ -55,7 +55,7 @@ const fromHash = (): Tab => {
   return TABS.some((t) => t.tab === found) ? (found as Tab) : "home";  // it opens on Home
 };
 
-/** Light or dark: your Mac's choice, until you switch it here. */
+/** Light or dark: your device's choice, until you switch it here. */
 function useTheme(): [Theme, () => void] {
   const darkMac = useMemo(() => window.matchMedia?.("(prefers-color-scheme: dark)"), []);
   const [mac, setMac] = useState<Theme>(darkMac?.matches ? "dark" : "light");
@@ -84,6 +84,8 @@ function useTheme(): [Theme, () => void] {
 export function App() {
   const [tab, setTab] = useState<Tab>(fromHash);
   const [setup, setSetup] = useState<SetupStep | null>(() => (stored(SETUP_DONE) ? null : "welcome"));
+  // the setup was opened from Your style (Do setup, Redo setup): leaving it goes back there, not to Home
+  const [again, setAgain] = useState(false);
   const [theme, toggleTheme] = useTheme();
   const [style, setStyle] = useState<Style | null>(null);
   const [running, setRunning] = useState<Running>(null);
@@ -126,10 +128,13 @@ export function App() {
     window.location.hash = next;
     setTab(next);
   }, []);
-  const start = () => {
+  // leaving the setup, done or not: back to Your style when it was opened from there, else on to Home (first launch,
+  // skipped or done: Your style's Do setup is there for later)
+  const leave = () => {
     store(SETUP_DONE, "1");
     setSetup(null);
-    go("home");
+    setAgain(false);
+    go(again ? "style" : "home");
   };
 
   const name = setup ? "Set up your style" : TABS.find((t) => t.tab === tab)!.label;
@@ -188,7 +193,7 @@ export function App() {
           <main className="content">
             <div className="column">
               {setup ? (
-                <Setup step={setup} go={setSetup} style={style} onLearned={loadStyle} onStart={start} />
+                <Setup step={setup} go={setSetup} style={style} onLearned={loadStyle} onLeave={leave} again={again} />
               ) : (
                 <>
                   {/* the screens you type into stay put while you look elsewhere; the others load fresh */}
@@ -197,8 +202,10 @@ export function App() {
                   <div className="screen" hidden={tab !== "listing"}><ListingScreen /></div>
                   {tab === "home" && <HomeScreen go={go} count={count} running={running} reload={loadRunning} />}
                   {tab === "style" && (
-                    <StyleScreen style={style} reload={loadStyle} redo={() => setSetup("welcome")}
-                      addMore={() => setSetup("paste")} />
+                    <StyleScreen style={style} reload={loadStyle} setUp={() => {
+                      setAgain(true);
+                      setSetup("welcome");
+                    }} />
                   )}
                 </>
               )}

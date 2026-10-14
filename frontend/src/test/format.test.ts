@@ -3,13 +3,13 @@ import { modelName, readBy, reasonLine, writerName } from "../format";
 
 describe("who read the listing", () => {
   it("names FlipAssist's own reader", () => {
-    expect(readBy("flip-reader-5")).toBe("read by flip-reader-5 (on this Mac)");
+    expect(readBy("flip-reader-5")).toBe("read by flip-reader-5 (on this device)");
     expect(modelName("flip-reader-5")).toBe("flip-reader-5");
   });
   it("still names Gemma and code", () => {
-    expect(writerName("gemma3:4b")).toBe("Gemma 3 4B (on this Mac)");
-    expect(writerName("flip-wording-4b")).toBe("flip-wording-4b (on this Mac)");
-    expect(writerName("flip-style-1b")).toBe("flip-style-1b (on this Mac)");
+    expect(writerName("gemma3:4b")).toBe("Gemma 3 4B (on this device)");
+    expect(writerName("flip-wording-4b")).toBe("flip-wording-4b (on this device)");
+    expect(writerName("flip-style-1b")).toBe("flip-style-1b (on this device)");
     expect(readBy("code")).toBe("read by code (no AI)");
   });
 });

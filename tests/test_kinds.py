@@ -70,7 +70,8 @@ def test_the_model_sorts_each_flaw_and_its_answer_is_the_price_cut():
     found = prices.estimate("iPhone 13 128GB Blue", ["Small crack on the back", "battery health 88%"], opener=opener,
                             description="Small crack on the back. battery health 88%. Collection Leeds.",
                             sorter=kinds.Sorter(model))
-    assert sent[0]["kinds"] == ["damage"] and found["kinds"] == ["damage"]
+    # since fix 1 (14 Oct) damage is FlipAssist's own cut (flip.severity): the API is asked for the other kinds
+    assert sent[0]["kinds"] == [] and found["kinds"] == ["damage"]
     assert found["sorted_by"] == "flip-kinds-1"
     system, user, photos, schema = model.asked[0]
     assert system == kinds.SYSTEM and photos == [] and schema == kinds.SCHEMA  # exactly as it was trained and tested
@@ -101,7 +102,8 @@ def test_a_flaw_the_model_cant_answer_is_sorted_by_code():
     opener, sent = asking()
     found = prices.estimate("iPhone 13 128GB Blue", ["Small crack on the back", "Face ID not working"], opener=opener,
                             description="Small crack on the back. Face ID not working.", sorter=kinds.Sorter(model))
-    assert sent[0]["kinds"] == ["fault", "damage"]  # the model's, then code's for the one it couldn't answer
+    assert found["kinds"] == ["fault", "damage"]  # the model's, then code's for the one it couldn't answer
+    assert sent[0]["kinds"] == ["fault"]  # damage is FlipAssist's own cut since fix 1
     assert found["sorted_by"] == "flip-kinds-1 and code"
     assert len(model.asked) == 2  # a bad answer isn't the model gone: the next flaw is still asked
 
@@ -113,7 +115,7 @@ def test_a_model_that_isnt_running_is_asked_once_then_code_sorts_the_rest():
     opener, sent = asking()
     found = prices.estimate("iPhone 13 128GB Blue", ["Small crack on the back", "Face ID not working"], opener=opener,
                             description="Small crack on the back. Face ID not working.", sorter=kinds.Sorter(model))
-    assert sent[0]["kinds"] == ["damage", "fault"] and found["sorted_by"] == "code"
+    assert found["kinds"] == ["damage", "fault"] and sent[0]["kinds"] == ["fault"] and found["sorted_by"] == "code"
     assert len(model.asked) == 1  # not a minute's wait for each flaw
 
 
@@ -122,7 +124,7 @@ def test_a_model_that_raises_never_stops_the_price():
     opener, sent = asking()
     found = prices.estimate("iPhone 13 128GB Blue", ["Small crack on the back"], opener=opener,
                             description="Small crack on the back.", sorter=kinds.Sorter(model))
-    assert sent[0]["kinds"] == ["damage"] and found["sorted_by"] == "code"
+    assert found["kinds"] == ["damage"] and sent[0]["kinds"] == [] and found["sorted_by"] == "code"
 
 
 def test_the_title_is_sorted_by_code_whatever_the_model_says():
@@ -143,11 +145,11 @@ def test_no_flaws_asks_nothing():
 def test_flaws_sent_with_no_description_are_their_own_listing():
     model = FakeModel({"Small crack on the back": ok("damage"), "battery 79%": ok("battery")})
     opener, sent = asking()
-    prices.estimate("iPhone 13 128GB Blue", ["Small crack on the back", "battery 79%"], opener=opener,
-                    sorter=kinds.Sorter(model))
+    found = prices.estimate("iPhone 13 128GB Blue", ["Small crack on the back", "battery 79%"], opener=opener,
+                            sorter=kinds.Sorter(model))
     assert model.asked[0][1] == ("Title: iPhone 13 128GB Blue\nDescription: Small crack on the back. battery 79%\n"
                                  "The flaw sentence: Small crack on the back")
-    assert sent[0]["kinds"] == ["damage", "battery"]
+    assert found["kinds"] == ["damage", "battery"] and sent[0]["kinds"] == ["battery"]
 
 
 def test_a_long_description_is_cut_round_the_sentence_as_in_the_test():

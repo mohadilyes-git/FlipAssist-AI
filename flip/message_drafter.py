@@ -44,6 +44,7 @@ from flip.checks import (COLLECT_TALK, HOLD, LOCK_TALK, NO_CASH, NO_COLLECT, che
 from flip.checks import LOWBALL, UNDER_ASKING_TALK, prices_in
 from flip.money import offer_for, to_pence
 from flip.offers import battery_now, check_condition_talk, copied_question, point_for, question_for, says_point
+from flip.picking import left_out_said, pick_flaws
 from flip.offers import check_battery_reason
 from flip.prompts import MESSAGE_SCHEMA, RETRY, buying_line, message_prompt, offer_words
 from flip.questions import check_no_answered_questions, load_questions, open_questions
@@ -387,7 +388,7 @@ def habits(card, examples):
 def draft_message(listing, card=None, index=None, local=None, api=None, mode="auto", log=None,
                   discount_percent=15, leave_out=None, kind="lower", mention=None, length="usual", previous=None,
                   reading=None, writer="auto", offer=None, rewrite_of=None, wording=None, check_reason_now=True,
-                  reason_on_screen=None):
+                  reason_on_screen=None, flaws_said=None):
     """Draft one offer message. listing has a title, description, asking_price
     (pounds, as written) and marketplace. card is your style card
     (flip.style.style_card) and index a MessageIndex of your past messages;
@@ -404,7 +405,12 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     price itself, or over it for more. rewrite_of: the message on screen, for
     Rewrite: the new one must say it in other words. Your own sentences say
     it one way only, so the AI writes a rewrite (or, with writer="template",
-    you get the same message back and a warning saying so)."""
+    you get the same message back and a warning saying so). flaws_said: how
+    many of the listing's flaws a lower offer gives as its reason, 1, 2 or 3
+    (the worst, by how much each cuts the price: flip.picking) or "all";
+    None as before (every flaw the reader quoted is worded, code's own
+    sentence gives up to two). result["reason_from"]: the reader's lines the
+    reason is worded from, the picked ones when it picked."""
     if length not in ("usual", "longer"):
         raise Refused(f"not a length: {length!r} (usual or longer)")
     if writer not in WRITERS:
@@ -448,6 +454,19 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     # the reader's whole sentences (V8: a long one is split, never dropped; reader-5's 12-word cut gave some messages
     # no reason at all); flip-wording words the reason from these same sentences when it's on (flip/wording.py)
     point = point_for(kind, sources, reading["flaws"], battery_in(sources, model))
+    # the reader's whole sentences, which flip-wording words the reason from (when it's on)
+    lines = reading.get("quotes") or reading["flaws"]
+    # how many flaws a lower offer gives, when you picked (14 Oct): the worst first, so flip-wording words only those,
+    # Haiku checks only those, and the message may say no other (left_out); "all" lifts code's own two
+    left_out = []
+    if kind == "lower" and point and point["about"] == "flaw" and flaws_said is not None:
+        if flaws_said == "all":
+            point = point_for(kind, sources, reading["flaws"], battery_in(sources, model), most=None) or point
+        else:  # code's own sentence (when flip-wording can't) gives the same number, picked the same way
+            picked, left_out = pick_flaws(lines, sources, flaws_said)
+            said = pick_flaws(reading["flaws"], sources, flaws_said)[0] if left_out else reading["flaws"]
+            lines = picked if left_out else lines
+            point = point_for(kind, sources, said, battery_in(sources, model), most=flaws_said) or point
     style_decides = mention is None
     if style_decides:  # your style decides; before you have one, AlertFlip's: a lower offer gives its reason
         mention = says_point(previous, point) if previous and point else \
@@ -493,7 +512,7 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
               "length": length, "words": longer["words"] if longer else None,
               "questions": longer["questions"] if longer else [],
               "examples": [e["id"] for e in examples], "writer": None, "answer": None, "title": None,
-              "attempts": [], "warnings": []}
+              "attempts": [], "warnings": [], "reason_from": list(lines)}
     # steps 3-5 (flip.wording): the reason, worded from the reader's whole sentences by flip-wording, checked by Haiku,
     # fixed by Sonnet only when Haiku flags it, or None: code words it, as before. wording: None, off (code words every
     # reason); "settings", the models .env names (the app); or {"wording", "check", "fix"} models (tests)
@@ -505,7 +524,6 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     # a fault added to the description) gets its reason worded again (3 Oct: a kept reason left out "the phone turns
     # off and on sometimes", added after it was worded, and a new listing got the last one's)
     # the reader's sentences before code's story cut (reading["quotes"]): flip-wording was trained on them whole
-    lines = reading.get("quotes") or reading["flaws"]
     on_screen = (previous or rewrite_of).lower()
     same_lines = reason_on_screen is not None and \
         [q.strip() for q in reason_on_screen.get("quotes") or []] == [q.strip() for q in lines if q.strip()]
@@ -558,6 +576,10 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
         problems = check_message(message, offer, sources, asking, kind, at_least, ebay=not in_person, own=own) + \
             check_condition_talk(message, checked_sources, point, mention, kind, offer) + \
             check_battery_reason(message, point if mention else None, offer, checked_sources, title, kind)
+        if left_out and mention and isinstance(message, str):  # the flaws you chose to leave out stay out
+            gone = left_out_said(message, [*(point or {}).get("says", []), (point or {}).get("worded")], left_out, offer)
+            if gone:
+                problems.append(f"the message gives a flaw you chose to leave out: {', '.join(gone)}")
         signed = (card or {}).get("signature")  # the message on screen has your sign-off; the writer's doesn't yet
         if isinstance(message, str) and rewrite and rewrite_of and \
                 words(unsigned(message, signed)) == words(unsigned(rewrite_of, signed)):

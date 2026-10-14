@@ -150,7 +150,8 @@ class LocalModel:
 
 
 class ApiModel:
-    """Claude Haiku through the Anthropic API, for answers the local model got wrong."""
+    """A Claude model through the Anthropic API: the paid fallback for answers this device's models got wrong
+    (Claude Sonnet 5.5 since 14 Oct, flip.api.BACKUP_MODEL), and the reason's check and fix (flip.wording)."""
 
     def __init__(self, name="claude-haiku-5-5", client=None, thinking=None):
         self.name, self.client = name, client  # the client is made on first use

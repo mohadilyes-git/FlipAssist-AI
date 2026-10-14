@@ -363,16 +363,20 @@ def test_gemma_unsure_of_the_colour_gets_haikus_look_at_the_colour_alone(tmp_pat
     assert [m for (m,) in log.db.execute("select model from attempts order by id")] == ["gemma3:4b", "claude-haiku-5-5"]
 
 
-def test_a_colour_look_costs_but_doesnt_count_as_haiku_writing_the_draft(tmp_path):
-    """The test agents' (14 Sep): "done on this Mac" fell to half when Haiku only looked at the colour."""
+def test_a_colour_look_is_paid_ai_but_doesnt_count_as_writing_the_draft(tmp_path):
+    """The test agents' (14 Sep): a look at the colour alone isn't the paid model writing the draft. Since 14 Oct "done
+    on this device" counts drafts with no paid step at all, so a paid look at the colour counts against it."""
     log = AuditLog(tmp_path / "audit.sqlite3")
-    for look in ({"colour": "Midnight"}, {"colour": "unsure"}):
-        draft(local=FakeModel("gemma3:4b", UNSURE_GEMMA), api=FakeModel("claude-haiku-5-5", look), log=log)
+    for n, look in enumerate(({"colour": "Midnight"}, {"colour": "unsure"})):  # each draft its own item, as in the app
+        draft({**ENTRY, "id": f"t{n}"}, local=FakeModel("gemma3:4b", UNSURE_GEMMA), api=FakeModel("claude-haiku-5-5", look),
+              log=log)
+    draft({**ENTRY, "id": "t2"}, local=FakeModel("gemma3:4b", GOOD), log=log)  # a colour the listing settles: no look
     stats = log.stats()
-    assert stats["done_on_this_mac"] == 1.0  # Gemma wrote both drafts
+    assert stats["done_on_this_device"] == 0.333  # 1 of 3 drafts used no paid AI
+    assert {m["model"]: m["job"] for m in stats["models"]}["gemma3:4b"] == "draft"  # Gemma wrote all three
     haiku = next(m for m in stats["models"] if m["model"] == "claude-haiku-5-5")
     assert (haiku["attempts"], haiku["cost_pence"] > 0) == (2, True)  # its looks are still counted, and paid for
-    assert [job for (job,) in log.db.execute("select job from attempts order by id")] == ["draft", "colour"] * 2
+    assert [job for (job,) in log.db.execute("select job from attempts order by id")] == ["draft", "colour"] * 2 + ["draft"]
 
 
 def test_haiku_unsure_too_or_failing_leaves_the_colour_for_you():

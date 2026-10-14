@@ -391,14 +391,15 @@ def read_listing(text):
     return found
 
 
-def point_for(kind, text, flaws=None, battery=None):
+def point_for(kind, text, flaws=None, battery=None, most=2):
     """What's worth saying with this kind of offer, read from the listing
     (title and description), or None: {"about": "flaw", "condition" or
     "battery", "says": up to two parts of the listing, in the seller's words}.
     flaws: the listing's flaws as flip.reader read them, in place of code's
     own. battery: the phone's battery health the listing gives ("80", read
     by flip.numbers): with no flaw, LOW_BATTERY or under is the reason for a
-    lower offer, as AlertFlip gives it ("the battery health is 80%")."""
+    lower offer, as AlertFlip gives it ("the battery health is 80%"). most:
+    how many parts it says, 2 unless you picked how many flaws (None: all)."""
     read = read_listing(text)
     if flaws is not None:
         read["flaws"] = list(flaws)
@@ -422,7 +423,7 @@ def point_for(kind, text, flaws=None, battery=None):
         about, says = "condition", read["good"]
     else:
         return None
-    return {"about": about, "says": once_each(says)[:2]}
+    return {"about": about, "says": once_each(says)[:most]}
 
 
 def once_each(says):
@@ -698,6 +699,24 @@ def backed(kind, listed):
     return kind in listed
 
 
+# the condition said vaguely, which condition_said has no level for (14 Oct: the AI writer's Offer more said
+# "Condition's a bit rough, isn't it?" when it was to leave the condition out); a tag question states it (said_in)
+VAGUE_CONDITION = re.compile(r"\b(?:condition|rough|tatty|worn|battered|beat(?:en)?[- ]up|seen better days|flaws?|"
+                             r"damaged?|state of it)\b", re.IGNORECASE)
+# ...but not minding it says nothing about the item, and is yours to say: "I'm not fussed about the condition"
+NOT_MINDING = re.compile(r"\b(?:don'?t|do not|doesn'?t|does not|won'?t)\s+(?:really\s+|honestly\s+)?(?:mind|care|bother|"
+                         r"matter)|\bnot\s+(?:too\s+|really\s+|that\s+)?(?:fussed|bothered|worried)|\b(?:isn'?t|is not|"
+                         r"not)\s+an?\s+(?:issue|problem)|\bhappy with\b|\bno (?:issue|problem|worries)\b", re.IGNORECASE)
+
+
+def vaguely_said(message, statements):
+    """Whether a message states the condition in vague words (VAGUE_CONDITION), in a sentence that isn't about not
+    minding it ("..., happy with the condition." is cut at "happy with": its whole sentence is read)."""
+    sentences = re.split(r"(?<=[.!?])\s+", message)
+    whole = lambda part: next((s for s in sentences if part.strip() and part.strip() in s), part)
+    return any(VAGUE_CONDITION.search(part) and not NOT_MINDING.search(whole(part)) for part in statements)
+
+
 def check_condition_talk(message, listing_text, point, mention, kind="lower", offer=None):
     """A message talks about the item's condition only when this draft is
     meant to (there's a point, and it's mentioned), says only what the listing
@@ -722,7 +741,7 @@ def check_condition_talk(message, listing_text, point, mention, kind="lower", of
             problems.append(f"the message asks about {quoted(point)} instead of saying it")
         elif kind == "asking" and not DONT_MIND.search(message):
             problems.append(f"the message names {quoted(point)} but doesn't say you don't mind it")
-    elif stated or said_point:
+    elif stated or said_point or vaguely_said(message, statements):
         problems.append("the message talks about the condition, but this draft leaves that out")
     listed = condition_said(esim_read(listing_text)(listing_text))
     if point and mention:  # the reason's words are the listing's own (flip.reader checked them): what they say, it says

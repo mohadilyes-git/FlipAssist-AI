@@ -484,11 +484,6 @@ dd {
   color: var(--tx2);
 }
 
-.head-buttons {
-  display: flex;
-  gap: 8px;
-}
-
 .caps {
   font-size: 10px;
   font-weight: 800;
@@ -650,10 +645,6 @@ textarea.input {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
   gap: 8px;
-}
-
-.buttons.wide {
-  grid-column: 1 / -1;
 }
 
 .link {
@@ -975,30 +966,6 @@ textarea.input {
 
 .message textarea {
   min-height: 118px;
-}
-
-.ask {
-  font-size: 14.5px;
-  line-height: 22px;
-  font-weight: 600;
-  color: var(--body);
-}
-
-.ask-buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.ask-buttons button {
-  height: 44px;
-  border-radius: 14px;
-  border: 1px solid var(--bc);
-  background: var(--card);
-  color: var(--tx);
-  font-size: 14px;
-  font-weight: 800;
-  cursor: pointer;
 }
 
 /* ── List on eBay ───────────────────────────────────────────────────────── */
@@ -1501,12 +1468,6 @@ textarea.input {
   color: var(--tx2);
 }
 
-.trait.removed .trait-value,
-.phrase.removed .phrase-value {
-  text-decoration: line-through;
-  opacity: 0.5;
-}
-
 .card-head {
   display: flex;
   justify-content: space-between;
@@ -1689,9 +1650,7 @@ textarea.input {
   gap: 12px;
 }
 
-.progress .link,
-.paste-head .link,
-.paste-foot .link {
+.progress .link {
   font-size: 13px;
 }
 
@@ -1801,99 +1760,6 @@ textarea.input {
   background: var(--card);
 }
 
-.paste-head {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  align-items: flex-start;
-}
-
-.paste-head .link {
-  margin-bottom: 8px;
-}
-
-.paste-head .step-title {
-  margin: 0;
-}
-
-.paste-head .sub {
-  font-size: 13px;
-}
-
-.pasted {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
-  gap: 14px;
-}
-
-.pasted .card {
-  padding: 16px;
-  gap: 10px;
-}
-
-.pasted-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.round-x {
-  width: 26px;
-  height: 26px;
-  border-radius: 999px;
-  border: none;
-  background: var(--field);
-  color: var(--tx2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  padding: 0;
-}
-
-.pasted-pair {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 92px;
-  gap: 8px;
-}
-
-.pasted-pair .input {
-  padding: 10px 12px;
-  font-size: 13.5px;
-}
-
-.add-tile {
-  min-height: 200px;
-  border-radius: 18px;
-  border: 1.5px dashed var(--slotB);
-  background: var(--slotBg);
-  color: var(--acc);
-  font-size: 14px;
-  font-weight: 800;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-
-.paste-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.paste-foot .link {
-  margin-right: 8px;
-}
-
-.paste-foot .main {
-  padding: 0 26px;
-}
-
 .check-circle {
   width: 60px;
   height: 60px;
@@ -1913,3 +1779,50 @@ textarea.input {
 .how-it-works { margin: 4px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
 .how-it-works li { list-style: decimal; font-size: 13.5px; line-height: 1.45; color: var(--tx2); }
 .how-it-works strong { font-weight: 650; }
+
+/* Home (fix 2, 14 Oct) */
+/* each of Ollama's models on its own line, under Ollama's */
+.running.model-line { padding-left: 18px; }
+.running.model-line strong { font-size: 13px; font-weight: 750; }
+.running.model-line .dot { width: 6px; height: 6px; margin-top: 6px; }
+/* switched off as set up (no Anthropic key, a step off in .env): grey, not red */
+.dot.off { background: var(--tx2); box-shadow: 0 0 0 3px var(--bc); }
+
+/* AI message (fix 2, 14 Oct) */
+.how-written {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chips-note {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--tx2);
+}
+
+.flaw-counts {
+  padding: 8px 10px;
+  border: 1px solid var(--bc);
+  border-radius: 14px;
+}
+
+.flaw-counts.missing {
+  border-color: var(--neg);
+  background: var(--negT);
+}
+
+.flaw-counts.missing .chip {
+  border-color: var(--neg);
+}
+
+.flaw-pick {
+  flex-basis: 100%;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--neg);
+}
+
+.input.asking {
+  max-width: calc(50% - 5px);
+}

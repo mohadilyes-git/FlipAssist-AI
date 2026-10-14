@@ -1,12 +1,12 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App, markShell, SETUP_DONE, THEME } from "../App";
 import type { ListingDraft, MessageDraft, PriceEstimate, Style } from "../api";
 import { ListingScreen } from "../screens/ListingScreen";
-import { ollamaRow } from "../screens/HomeScreen";
+import { HomeScreen, ollamaRows, paidRows, runningRows } from "../screens/HomeScreen";
 import { MessageScreen } from "../screens/MessageScreen";
-import { cautions, itemName, PriceScreen, sortedBy } from "../screens/PriceScreen";
+import { cautions, damageLine, itemName, PriceScreen, sortedBy } from "../screens/PriceScreen";
 
 const DRAFT: MessageDraft = {
   draft_id: 7, status: "ready", written_by: "template", kind: "lower", offer: "£185", offer_pence: 18500,
@@ -25,9 +25,15 @@ const STYLE: Style = { count: 14, traits: [{ k: "Opens with", v: "'Hi mate'" }, 
 const NO_STYLE: Style = { count: 0, traits: [], phrases: [], learned: [] };
 // the same style with paying cash removed
 const NO_CASH: Style = { ...STYLE, learned: STYLE.learned.map((r) => (r.key === "mention:cash" ? { ...r, used: false } : r)) };
-const HEALTH = { local_model: "gemma3:4b", local_running: true, api_model: "claude-haiku-5-5", api_key_set: true,
-  flip_api_key_set: true };
-const STATS = { drafts: 2, ready: 2, needs_you: 0, done_on_this_mac: 0.8, models: [], cost_pence: 0,
+// 14 Oct: Claude Haiku 5.5 only checks each reason; Claude Sonnet 5.5 writes when this device's models can't
+const HEALTH = { local_model: "gemma3:4b", local_running: true, api_model: "claude-sonnet-5-5", api_key_set: true,
+  check_model: "claude-haiku-5-5", fix_model: "claude-sonnet-5-5", prices_api_set: true, flip_api_key_set: true,
+  models: [{ job: "reads listings", name: "flip-reader-5", installed: true },
+    { job: "words the reason", name: "flip-wording-4b", installed: true },
+    { job: "sorts price flaws", name: "flip-kinds-1", installed: true },
+    { job: "reads your style", name: "flip-style-1b", installed: true },
+    { job: "writes messages", name: "gemma3:4b", installed: true }] };
+const STATS = { drafts: 2, ready: 2, needs_you: 0, done_on_this_device: 0.8, models: [], cost_pence: 0,
   cost_per_100_drafts_pence: 0, approved: 0, edited_before_sending: 0 };
 
 type Answer = [number, unknown];
@@ -60,9 +66,14 @@ afterEach(() => {
 });
 
 describe("AI message", () => {
+  /** the listing typed in, and how many flaws to say picked: nothing is written for a lower offer until you pick */
+  async function fill(user: ReturnType<typeof userEvent.setup>, title = "iPhone 13 128GB Blue", price = "£220") {
+    await user.type(screen.getByLabelText("Listing title"), title);
+    await user.type(screen.getByLabelText("Asking price"), price);
+    await user.click(screen.getByRole("button", { name: "All flaws" }));
+  }
   async function draft(user: ReturnType<typeof userEvent.setup>) {
-    await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
-    await user.type(screen.getByLabelText("Asking price"), "£220");
+    await fill(user);
     await user.click(screen.getByRole("button", { name: "Write my message" }));
     return screen.findByDisplayValue(DRAFT.message!);
   }
@@ -77,9 +88,107 @@ describe("AI message", () => {
     expect(screen.getByText("Black dot on the screen")).toBeTruthy();
     expect(screen.getByText("Collect: Leeds LS6")).toBeTruthy();
     expect(screen.getByText("The seller says no offers")).toBeTruthy(); // Offer lower is picked
-    expect(screen.getByText("Added sentences (no AI) · 1.2s · free · read by Gemma 3 4B (on this Mac)")).toBeTruthy();
+    expect(screen.getByText("No AI writing · 1.2s · free · read by Gemma 3 4B (on this device)")).toBeTruthy();
     const body = sent(fetch, "POST /api/messages/draft");
     expect([body.listing.asking_price, body.offer, body.listing.marketplace]).toEqual(["220.00", "185.00", "facebook"]);
+  });
+
+  it("has no marketplace to pick: it writes for a listing you collect, unless the listing says it's posted", () => {
+    render(<MessageScreen />);
+    expect(screen.queryByText("Marketplace")).toBeNull();
+    expect(screen.queryByRole("combobox")).toBeNull();
+  });
+
+  it("says the flaw only once you pick how many: none picked turns the row red and writes nothing", async () => {
+    const fetch = serve({ "POST /api/messages/draft": [200, DRAFT] });
+    const user = userEvent.setup();
+    render(<MessageScreen />);
+    expect(screen.getByRole("button", { name: "Yes" }).getAttribute("aria-pressed")).toBe("true"); // the flaw is said
+    expect(screen.queryByRole("button", { name: "My style" })).toBeNull();
+    const counts = within(screen.getByRole("group", { name: "How many flaws to say" }));
+    expect(counts.getAllByRole("button").map((b) => [b.textContent, b.getAttribute("aria-pressed")])).toEqual(
+      [["1 flaw only", "false"], ["2 flaws only", "false"], ["3 flaws only", "false"], ["All flaws", "false"]]);
+    await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
+    await user.type(screen.getByLabelText("Asking price"), "£220");
+    await user.click(screen.getByRole("button", { name: "Write my message" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("Pick how many flaws to say");
+    expect(screen.getByRole("group", { name: "How many flaws to say" }).className).toContain("missing");
+    expect(fetch).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "2 flaws only" }));
+    expect(screen.queryByRole("alert")).toBeNull(); // picking clears the red
+    expect(screen.getByRole("group", { name: "How many flaws to say" }).className).not.toContain("missing");
+    await user.click(screen.getByRole("button", { name: "Write my message" }));
+    await screen.findByDisplayValue(DRAFT.message!);
+    const body = sent(fetch, "POST /api/messages/draft");
+    expect([body.kind, body.mention, body.flaws_said]).toEqual(["lower", true, 2]);
+  });
+
+  it.each([["1 flaw only", 1], ["3 flaws only", 3], ["All flaws", "all"]])("sends %s as the flaws to say", async (label, said) => {
+    const fetch = serve({ "POST /api/messages/draft": [200, DRAFT] });
+    const user = userEvent.setup();
+    render(<MessageScreen />);
+    await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
+    await user.type(screen.getByLabelText("Asking price"), "£220");
+    await user.click(screen.getByRole("button", { name: label as string }));
+    await user.click(screen.getByRole("button", { name: "Write my message" }));
+    await screen.findByDisplayValue(DRAFT.message!);
+    expect([sent(fetch, "POST /api/messages/draft").mention, sent(fetch, "POST /api/messages/draft").flaws_said])
+      .toEqual([true, said]);
+  });
+
+  it("says no flaw with No, and doesn't ask how many", async () => {
+    const fetch = serve({ "POST /api/messages/draft": [200, DRAFT] });
+    const user = userEvent.setup();
+    render(<MessageScreen />);
+    await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
+    await user.type(screen.getByLabelText("Asking price"), "£220");
+    await user.click(screen.getByRole("button", { name: "Write my message" })); // turns red...
+    await user.click(screen.getByRole("button", { name: "No" })); // ...and No needs no count
+    expect(screen.queryByRole("group", { name: "How many flaws to say" })).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Write my message" }));
+    await screen.findByDisplayValue(DRAFT.message!);
+    const body = sent(fetch, "POST /api/messages/draft");
+    expect([body.mention, body.flaws_said]).toEqual([false, null]);
+  });
+
+  it("never says a flaw when paying asking or more: a flaw is a lower offer's reason", async () => {
+    const fetch = serve({ "POST /api/messages/draft": [[200, { ...DRAFT, kind: "asking" }], [200, { ...DRAFT, kind: "more" }]] });
+    const user = userEvent.setup();
+    render(<MessageScreen />);
+    await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
+    await user.type(screen.getByLabelText("Asking price"), "£220");
+    for (const card of ["Pay asking", "Offer more"]) {
+      await user.click(screen.getByRole("radio", { name: new RegExp(card) }));
+      expect(screen.queryByRole("button", { name: "Yes" })).toBeNull();
+      expect(screen.queryByRole("group", { name: "How many flaws to say" })).toBeNull();
+      expect(screen.getByText("Not said when paying asking or more")).toBeTruthy();
+      await user.click(screen.getByRole("button", { name: "Write my message" })); // no count to pick
+      await screen.findByDisplayValue(DRAFT.message!);
+    }
+    const [asking, more] = [sent(fetch, "POST /api/messages/draft", 0), sent(fetch, "POST /api/messages/draft", 1)];
+    expect([asking.kind, asking.mention, asking.flaws_said]).toEqual(["asking", false, null]);
+    expect([more.kind, more.mention, more.flaws_said]).toEqual(["more", null, null]); // your style: good condition
+    await user.click(screen.getByRole("radio", { name: /Offer lower/ }));
+    expect(screen.getByRole("button", { name: "Yes" }).getAttribute("aria-pressed")).toBe("true"); // back again
+  });
+
+  it("writes with the AI writer or with no AI writing, and only the AI writer rewrites", async () => {
+    const fetch = serve({ "POST /api/messages/draft": [[200, DRAFT], [200, { ...DRAFT, draft_id: 8, message: "reworded" }]] });
+    const user = userEvent.setup();
+    render(<MessageScreen />);
+    const writers = within(screen.getByRole("group", { name: "Writer" }));
+    expect(writers.getAllByRole("button").map((b) => [b.textContent, b.getAttribute("aria-pressed")])).toEqual(
+      [["AI writer", "false"], ["No AI writing", "true"]]);
+    expect(screen.queryByRole("button", { name: "Auto" })).toBeNull();
+    await draft(user);
+    expect(sent(fetch, "POST /api/messages/draft").writer).toBe("template");
+    expect(screen.getByRole("button", { name: "Rewrite (AI writer only)" }).hasAttribute("disabled")).toBe(true);
+    await user.click(screen.getByRole("button", { name: "AI writer" }));
+    await user.click(screen.getByRole("button", { name: "Rewrite" }));
+    expect(await screen.findByDisplayValue("reworded")).toBeTruthy();
+    const rewrite = sent(fetch, "POST /api/messages/draft", 1);
+    expect([rewrite.writer, rewrite.rewrite_of]).toEqual(["ai", DRAFT.message]);
   });
 
   it("shows the draft at once, then the reason's check, and a fix replaces the message only if you haven't edited it", async () => {
@@ -93,8 +202,7 @@ describe("AI message", () => {
           { model: "claude-sonnet-5-5", problems: [], seconds: 1.4, cost_pence: 0.152, job: "reason" }] }] });
     const user = userEvent.setup();
     render(<MessageScreen />);
-    await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
-    await user.type(screen.getByLabelText("Asking price"), "£220");
+    await fill(user);
     await user.click(screen.getByRole("button", { name: "Write my message" }));
     expect(await screen.findByDisplayValue(fixedMessage)).toBeTruthy();  // the fix replaced the untouched draft
     expect(screen.getByText("Reason flagged by Claude Haiku 5.5, fixed by Claude Sonnet 5.5")).toBeTruthy();
@@ -112,20 +220,39 @@ describe("AI message", () => {
         changed: false, problems: [], cost_pence: 0.008, attempts: [] }] });
     const user = userEvent.setup();
     render(<MessageScreen />);
-    await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
-    await user.type(screen.getByLabelText("Asking price"), "£220");
+    await fill(user);
     await user.click(screen.getByRole("button", { name: "Write my message" }));
     expect(await screen.findByText("Reason by flip-wording-3 · checked by Claude Haiku 5.5")).toBeTruthy();
     const check = sent(fetch, "POST /api/messages/check-reason");
     expect([check.quotes, check.flaws]).toEqual([["I dropped it and cracked the back"], ["cracked the back"]]);
   });
 
+  it("checks the reason against only the flaws you picked, and keeps them for Make it longer", async () => {
+    const picked = ["Face ID not working"];
+    const pending: MessageDraft = { ...DRAFT, reason_from: picked,
+      reading: { ...DRAFT.reading, flaws: ["Back glass cracked", "Face ID not working", "Battery 79%"],
+        quotes: ["Back glass cracked.", "Face ID not working.", "Battery 79%."] },
+      reason: { clause: "the Face ID isn't working", by: "flip-wording-4b", checked: "pending" } };
+    const fetch = serve({ "POST /api/messages/draft": [[200, pending], [200, { ...pending, draft_id: 8 }]],
+      "POST /api/messages/check-reason": [200, { reason: { ...pending.reason!, checked: "ok" }, message: pending.message,
+        changed: false, problems: [], cost_pence: 0.008, attempts: [] }] });
+    const user = userEvent.setup();
+    render(<MessageScreen />);
+    await fill(user);
+    await user.click(screen.getByRole("button", { name: "1 flaw only" }));
+    await user.click(screen.getByRole("button", { name: "Write my message" }));
+    expect(await screen.findByText("Reason by flip-wording-4b · checked by Claude Haiku 5.5")).toBeTruthy();
+    expect(sent(fetch, "POST /api/messages/check-reason").quotes).toEqual(picked);
+    await user.click(screen.getByRole("button", { name: "Make it longer" }));
+    const longer = sent(fetch, "POST /api/messages/draft", 1);
+    expect([longer.reason.quotes, longer.flaws_said]).toEqual([picked, 1]);
+  });
+
   it("no longer asks for a UK price: that has its own tab (4 Oct)", async () => {
     const fetch = serve({ "POST /api/messages/draft": [200, DRAFT] });
     const user = userEvent.setup();
     render(<MessageScreen />);
-    await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
-    await user.type(screen.getByLabelText("Asking price"), "£220");
+    await fill(user);
     await user.click(screen.getByRole("button", { name: "Write my message" }));
     await screen.findByDisplayValue(DRAFT.message!);
     expect(fetch.mock.calls.map(([url]) => url)).toEqual(["/api/messages/draft"]);
@@ -147,8 +274,7 @@ describe("AI message", () => {
     vi.stubGlobal("fetch", fetch);
     const user = userEvent.setup();
     render(<MessageScreen />);
-    await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
-    await user.type(screen.getByLabelText("Asking price"), "£220");
+    await fill(user);
     await user.click(screen.getByRole("button", { name: "Write my message" }));
     const box = await screen.findByDisplayValue(DRAFT.message!);
     expect(screen.getByText("Reason by flip-wording-3 · checking…")).toBeTruthy();
@@ -163,8 +289,7 @@ describe("AI message", () => {
       reasons: ["no answer passed the checks"] }] });
     const user = userEvent.setup();
     render(<MessageScreen />);
-    await user.type(screen.getByLabelText("Listing title"), "iPhone 13");
-    await user.type(screen.getByLabelText("Asking price"), "220");
+    await fill(user, "iPhone 13", "220");
     await user.click(screen.getByRole("button", { name: "Write my message" }));
     expect(await screen.findByText(/^No draft passed · /)).toBeTruthy();
   });
@@ -175,6 +300,7 @@ describe("AI message", () => {
     expect(chip.getAttribute("title")).toBe("The AI still reads the listing's flaws; your sentences (or AlertFlip's) "
       + "write the message");
     expect(screen.queryByRole("button", { name: "No AI" })).toBeNull();
+    expect(screen.getByRole("button", { name: "AI writer" }).getAttribute("title")).toContain("Gemma 3 4B");
   });
 
   it("shows why, step by step", async () => {
@@ -183,7 +309,7 @@ describe("AI message", () => {
     render(<MessageScreen />);
     await draft(user);
     await user.click(screen.getByRole("button", { name: /Why · 2 steps/ }));
-    expect(screen.getByText("Gemma 3 4B (on this Mac) passed")).toBeTruthy();
+    expect(screen.getByText("Gemma 3 4B (on this device) passed")).toBeTruthy();
     expect(screen.getByText("1.2s · free")).toBeTruthy();
   });
 
@@ -233,7 +359,7 @@ describe("AI message", () => {
     await draft(user);
     await user.type(screen.getByLabelText("The seller's description"), " The phone turns off sometimes.");
     expect(screen.queryByDisplayValue(DRAFT.message!)).toBeNull(); // the old message is gone...
-    expect(screen.queryByRole("button", { name: "Rewrite" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Rewrite/ })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Write my message" })); // ...and you write a new one
     expect(await screen.findByDisplayValue("the new one")).toBeTruthy();
     const body = sent(fetch, "POST /api/messages/draft", 1);
@@ -248,6 +374,7 @@ describe("AI message", () => {
       [200, { ...DRAFT, draft_id: 10 }]] });
     const user = userEvent.setup();
     render(<MessageScreen />);
+    await user.click(screen.getByRole("button", { name: "AI writer" })); // a rewrite is the AI writer's
     await draft(user);
     await user.click(screen.getByRole("button", { name: "Make it longer" }));
     expect(await screen.findByDisplayValue(LONGER.message!)).toBeTruthy();
@@ -266,6 +393,7 @@ describe("AI message", () => {
       written_by: null, reasons: ["no answer passed the checks"] }]] });
     const user = userEvent.setup();
     render(<MessageScreen />);
+    await user.click(screen.getByRole("button", { name: "AI writer" }));
     await draft(user);
     expect(screen.getByText(/The title says iPhone 15 Pro Max but the description says iPhone 14/)).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Rewrite" }));
@@ -273,23 +401,21 @@ describe("AI message", () => {
     expect(screen.getByDisplayValue(DRAFT.message!)).toBeTruthy();
   });
 
-  it("asks before mentioning the flaw, and redrafts with your answer", async () => {
+  it("has no question about mentioning the flaw: Say the flaw already says it", async () => {
     const asked = { ...DRAFT, ask: 'The listing says "Black dot on the screen". Mention it as the reason for your offer?' };
-    const fetch = serve({ "POST /api/messages/draft": [[200, asked], [200, DRAFT]] });
+    serve({ "POST /api/messages/draft": [200, asked] });
     const user = userEvent.setup();
     render(<MessageScreen />);
     await draft(user);
-    await user.click(screen.getByRole("button", { name: "Yes, mention it" }));
-    expect(sent(fetch, "POST /api/messages/draft", 1).mention).toBe(true);
-    expect(screen.getByRole("button", { name: "Yes" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByText(asked.ask)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Yes, mention it" })).toBeNull();
   });
 
   it("says what the API refused", async () => {
     serve({ "POST /api/messages/draft": [422, { detail: [{ loc: ["body", "listing", "asking_price"], msg: "String should match pattern" }] }] });
     const user = userEvent.setup();
     render(<MessageScreen />);
-    await user.type(screen.getByLabelText("Listing title"), "iPhone 13");
-    await user.type(screen.getByLabelText("Asking price"), "220");
+    await fill(user, "iPhone 13", "220");
     await user.click(screen.getByRole("button", { name: "Write my message" }));
     expect((await screen.findByRole("alert")).textContent).toBe("listing › asking_price: String should match pattern");
   });
@@ -302,6 +428,7 @@ describe("the price line", () => {
     render(<MessageScreen />);
     await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
     await user.type(screen.getByLabelText("Asking price"), "220");
+    await user.click(screen.getByRole("button", { name: "All flaws" }));
     const line = screen.getByRole("slider", { name: "Offer lower price" });
     const at = () => ["aria-valuemin", "aria-valuemax", "aria-valuenow", "aria-valuetext"].map((a) => line.getAttribute(a));
     expect(at()).toEqual(["2000", "21500", "18500", "£185"]); // £20 to £215, from £185
@@ -360,7 +487,7 @@ describe("AI UK price estimate", () => {
     expect(hero.textContent).toContain("£160–£190middle half of clean sales(cheapest quarter left out)");
     const flaws = screen.getByLabelText("Flaws it found");
     expect(within(flaws).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["cracked back", "battery 81%"]);
-    expect(flaws.textContent).toContain("Read by flip-reader-5 (on this Mac) · counted as damage");
+    expect(flaws.textContent).toContain("Read by flip-reader-5 (on this device) · counted as damage");
     const how = within(screen.getByLabelText("How it works")).getAllByRole("listitem").map((li) => li.textContent);
     expect(how.map((step) => step.split(/[,:.]| keeps| organises| reads/)[0])).toEqual(
       ["AlertFlip prices API", "Claude Haiku 5", "The middle price of clean ones", "flip-reader-5"]);
@@ -469,14 +596,14 @@ describe("AI UK price estimate", () => {
       middle: 220, low: 210, high: 230, sales: 30, kinds: ["damage"], cuts: ["damage"], flaws: [] });
     expect(got.hero).toContain("−14%cut for its flaws");
     expect(got.flaws).toBe("Flaws it foundNone quoted from the description. Counted from the title: damage"
-      + "Read by flip-reader-5 (on this Mac)");
+      + "Read by flip-reader-5 (on this device)");
     cleanup();
     // S9: a for-parts title, priced at what for-parts ones sell for
     got = await check("Faulty iPhone 12 64GB for parts", "Collection only from Leeds.", { ...PRICED, price: 70, middle: 180,
       low: 170, high: 190, sales: 30, model: "iphone 12", storage_gb: 64, asked_storage_gb: 64, kinds: ["fault", "parts"],
       cuts: [], parts_price: true, flaws: [] });
     expect(got.flaws).toBe("Flaws it foundNone quoted from the description. Counted from the title: fault, parts"
-      + "Read by flip-reader-5 (on this Mac) · priced at what for-parts ones sell for, with nothing cut on top");
+      + "Read by flip-reader-5 (on this device) · priced at what for-parts ones sell for, with nothing cut on top");
   });
 
   it("says which flaws a locked or for-parts price doesn't cut on top", async () => {
@@ -485,12 +612,12 @@ describe("AI UK price estimate", () => {
       cuts: ["lock"], flaws: ["iCloud locked to the previous owner.", "Cracked screen and Face ID not working."] };
     // S1: 3 for-parts sales, too few, so the lock's rough guess: the crack and Face ID aren't cut on top
     let got = await check("iPhone 13 128GB", description, locked);
-    expect(got.flaws).toContain("Read by flip-reader-5 (on this Mac) · counted as lock, damage, fault · priced as locked: "
+    expect(got.flaws).toContain("Read by flip-reader-5 (on this device) · counted as lock, damage, fault · priced as locked: "
       + "damage and fault aren't cut on top");
     cleanup();
     // S2: 8 for-parts sales, so what they sold for
     got = await check("iPhone 13 128GB", description, { ...locked, price: 95, cuts: [], parts_price: true });
-    expect(got.flaws).toContain("Read by flip-reader-5 (on this Mac) · counted as lock, damage, fault · priced at what "
+    expect(got.flaws).toContain("Read by flip-reader-5 (on this device) · counted as lock, damage, fault · priced at what "
       + "for-parts ones sell for, with nothing cut on top");
     cleanup();
     // for parts, with too few for-parts sales
@@ -531,10 +658,11 @@ describe("AI UK price estimate", () => {
   it("says how flaws cut the price as the prices API does it, with no amounts that could go stale", () => {
     render(<PriceScreen />);
     const step = within(screen.getByLabelText("How it works")).getAllByRole("listitem")[3].textContent;
-    expect(step).toBe("flip-reader-5, our AI on this Mac, reads the title and description for flaws (if its reading "
-      + "fails our checks, Claude Haiku 5.5 reads it instead, a paid call). flip-kinds-1, our flaw-sorting AI on this Mac, "
-      + "sorts each flaw into a kind (code's rules do when it isn't installed), and the price is cut by amounts measured on phone listings: any flaw takes a small cut, damage and faults cut the most, "
-      + "and different kinds' cuts multiply. A locked or for-parts one is priced at what for-parts ones of the same model "
+    expect(step).toBe("flip-reader-5, our AI on this device, reads the title and description for flaws (if its reading "
+      + "fails our checks, Claude Sonnet 5.5 reads it instead, a paid call). flip-kinds-1, our flaw-sorting AI on this device, "
+      + "sorts each flaw into a kind (code's rules do when it isn't installed), and the price is cut by amounts measured on phone listings: any flaw takes a small cut, faults cut the most, "
+      + "and different kinds' cuts multiply. Damage is cut by how bad it is (minor, moderate or severe) and how pricey the "
+      + "model is, as measured on 1,697 damaged iPhone, Samsung and MacBook listings. A locked or for-parts one is priced at what for-parts ones of the same model "
       + "and size sell for, or at a rough guess when too few have sold, with its other flaws not cut on top.");
     expect(step).not.toMatch(/\d\s?%|per ?cent/);  // the prices API's cut table is its own and can change
   });
@@ -655,7 +783,7 @@ describe("List on eBay", () => {
     await user.type(screen.getByLabelText("The seller's title"), "iphone 13 128gb");
     await user.click(screen.getByRole("button", { name: "Draft listing" }));
     await screen.findByText("Midnight (from the photos, by Claude Haiku 5.5)");
-    expect(screen.getByText(/^Gemma 3 4B \(on this Mac\) ·/)).toBeTruthy(); // Gemma wrote it; Haiku only looked at the colour
+    expect(screen.getByText(/^Gemma 3 4B \(on this device\) ·/)).toBeTruthy(); // Gemma wrote it; Haiku only looked at the colour
     await user.click(screen.getByRole("button", { name: "Why" }));
     expect(screen.getByText("Claude Haiku 5.5, colour only: passed")).toBeTruthy();
   });
@@ -759,71 +887,126 @@ describe("the app", () => {
   const usual = { "GET /api/health": [200, HEALTH] as Answer, "GET /api/style": [200, STYLE] as Answer,
     "GET /api/stats": [200, STATS] as Answer };
 
-  it("asks you to set up your style on first launch, and learns from the messages you paste", async () => {
-    const fetch = serve({ ...usual, "GET /api/style": [[200, NO_STYLE], [200, STYLE]],
-      "POST /api/style/messages": [201, []] });
+  it("asks you to set up your style on first launch: 6 listings, Do the setup or Skip for now, nothing else", async () => {
+    serve({ ...usual, "GET /api/style": [200, NO_STYLE] });
     const user = userEvent.setup();
     render(<App />);
     expect(screen.getByRole("heading", { name: "Set up your style" })).toBeTruthy();
     expect(screen.queryByRole("navigation")).toBeNull(); // no sidebar until it's done
-    await user.click(screen.getByRole("button", { name: "Paste my messages" }));
-    const learn = screen.getByRole("button", { name: "Learn my style" });
-    expect(learn.hasAttribute("disabled")).toBe(true);
-    const first = within(screen.getByRole("region", { name: "Message 1" }));
-    await user.type(first.getByLabelText("Listing title"), "iPhone 12 64GB");
-    await user.type(first.getByLabelText("Price"), "£150");
-    await user.type(first.getByLabelText("Your message"), "Hi mate, would you take £125 cash? Cheers");
-    await user.click(screen.getByRole("button", { name: "Learn from 1 message" }));
-    expect(await screen.findByText("Learned from 1 message")).toBeTruthy();
-    expect(screen.getByText("about 12 words")).toBeTruthy();
-    expect(sent(fetch, "POST /api/style/messages")).toEqual(
-      [{ title: "iPhone 12 64GB", price: "£150", text: "Hi mate, would you take £125 cash? Cheers" }]);
-    await user.click(screen.getByRole("button", { name: "Start" }));
+    expect(screen.getByText(/reply to 6 quick listings/)).toBeTruthy(); // 14 Oct: it said 8 when there were 6
+    expect(screen.queryByText(/\b8\b/)).toBeNull();
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["Skip for now", "Do the setup"]);
+    expect(screen.queryByText(/paste/i)).toBeNull(); // no pasting: Add more is gone
+    await user.click(screen.getByRole("button", { name: "Skip for now" }));
     expect(screen.getByRole("navigation")).toBeTruthy();
-    expect(window.location.hash).toBe("#home"); // it opens on Home (4 Oct)
+    expect(window.location.hash).toBe("#home");
     expect(localStorage.getItem(SETUP_DONE)).toBe("1");
   });
 
-  it("lists what it learned at the end of setup, and removes what you don't want", async () => {
+  it("lists what it learned at the end of setup, and Remove deletes what you don't want", async () => {
     const fetch = serve({ ...usual, "GET /api/style": [[200, NO_STYLE], [200, STYLE], [200, NO_CASH]],
-      "POST /api/style/messages": [201, []], "POST /api/style/learned": [200, NO_CASH] });
+      "PUT /api/style/setup": [200, []], "POST /api/style/learned": [200, NO_CASH] });
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole("button", { name: "Paste my messages" }));
-    const first = within(screen.getByRole("region", { name: "Message 1" }));
-    await user.type(first.getByLabelText("Your message"), "Hi mate, would you take £125 cash? Cheers");
-    await user.click(screen.getByRole("button", { name: "Learn from 1 message" }));
+    await user.click(screen.getByRole("button", { name: "Do the setup" }));
+    await user.type(screen.getByLabelText("Your message to this seller"), "Hi mate, would you take £185 cash? Cheers");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    for (let n = 2; n <= 6; n++) await user.click(screen.getByRole("button", { name: "Skip" }));
     expect(await screen.findByText("This is what it'll put in your messages. Remove anything you don't want.")).toBeTruthy();
     const list = within(screen.getByLabelText("What it learned"));
     expect(list.getByText("about 12 words")).toBeTruthy(); // how long isn't something to remove
     expect(list.getAllByRole("button").map((b) => b.textContent)).toEqual(["Remove", "Remove", "Remove"]);
     await user.click(screen.getByRole("button", { name: "Remove “paying cash” from your style" }));
     expect(sent(fetch, "POST /api/style/learned")).toEqual({ key: "mention:cash", used: false });
-    expect(await screen.findByRole("button", { name: "Use “paying cash” again" })).toBeTruthy();
+    await waitFor(() => expect(list.queryByText("paying cash")).toBeNull()); // gone, not greyed out (14 Oct)
+    expect(screen.queryByRole("button", { name: /again/ })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Start" }));
+    expect(window.location.hash).toBe("#home");
   });
 
-  it("removes a thing your style learned from Your style, and puts it back", async () => {
+  it("removes a thing your style learned from Your style for good: no Use again", async () => {
     localStorage.setItem(SETUP_DONE, "1");
     window.location.hash = "#style";
-    const fetch = serve({ ...usual, "GET /api/style": [[200, NO_CASH], [200, STYLE]], "GET /api/style/messages": [200, []],
-      "POST /api/style/learned": [200, STYLE] });
+    const fetch = serve({ ...usual, "GET /api/style": [[200, STYLE], [200, NO_CASH]], "GET /api/style/messages": [200, []],
+      "POST /api/style/learned": [200, NO_CASH] });
     const user = userEvent.setup();
     render(<App />);
     const card = within(await screen.findByRole("region", { name: "Style card" }));
-    expect(card.getByText("paying cash").closest("p")?.className).toContain("removed");
-    await user.click(await screen.findByRole("button", { name: "Use “paying cash” again" }));
-    expect(sent(fetch, "POST /api/style/learned")).toEqual({ key: "mention:cash", used: true });
-    expect(await screen.findByRole("button", { name: "Remove “paying cash” from your style" })).toBeTruthy();
+    await user.click(await card.findByRole("button", { name: "Remove “paying cash” from your style" }));
+    expect(sent(fetch, "POST /api/style/learned")).toEqual({ key: "mention:cash", used: false });
+    await waitFor(() => expect(card.queryByText("paying cash")).toBeNull());
+    expect(screen.queryByRole("button", { name: /again/ })).toBeNull();
     const book = within(screen.getByRole("region", { name: "Phrasebook" }));
     expect(book.getByRole("button", { name: "Remove “Cheers” from your style" })).toBeTruthy();
   });
 
-  it("goes through the 6 listings one at a time, sending only the ones you answered", async () => {
-    const fetch = serve({ ...usual, "GET /api/style": [[200, NO_STYLE], [200, STYLE]],
-      "POST /api/style/messages": [201, []] });
+  it("puts a sentence for one kind of offer or one marketplace in the phrasebook, and Remove deletes it", async () => {
+    localStorage.setItem(SETUP_DONE, "1");
+    window.location.hash = "#style";
+    const only = (used: boolean): Style => ({ ...STYLE, learned: [...STYLE.learned,
+      { key: "phrase:closing_lower:can collect today.", what: "Closing under asking", value: "Can collect today.", used },
+      { key: "phrase:offer:would you take £[offer]?", what: "Offer sentence on eBay and Vinted", value: "Would you take £…?",
+        used: true },
+      { key: "ask:is it unlocked", what: "Asks every time", value: "is it unlocked?", used: true }] });
+    const fetch = serve({ ...usual, "GET /api/style": [[200, only(true)], [200, only(false)]],
+      "GET /api/style/messages": [200, []], "POST /api/style/learned": [200, only(false)] });
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole("button", { name: "Reply to 6 listings" }));
+    const book = within(await screen.findByRole("region", { name: "Phrasebook" }));
+    for (const what of ["Closing under asking", "Offer sentence on eBay and Vinted", "Asks every time"]) {
+      expect(await book.findByText(what)).toBeTruthy();
+    }
+    const card = within(screen.getByRole("region", { name: "Style card" }));
+    expect(card.queryByText("Closing under asking")).toBeNull(); // not a habit on the style card
+    await user.click(book.getByRole("button", { name: "Remove “Can collect today.” from your style" }));
+    expect(sent(fetch, "POST /api/style/learned")).toEqual({ key: "phrase:closing_lower:can collect today.", used: false });
+    await waitFor(() => expect(book.queryByText("Closing under asking")).toBeNull());
+  });
+
+  it("says Do setup before you've set up and Redo setup after; Go back returns to Your style", async () => {
+    localStorage.setItem(SETUP_DONE, "1");
+    window.location.hash = "#style";
+    const answer = { id: "msg-1", title: "PS5", price: "300", text: "Hi mate, £255?", marketplace: "facebook", source: "added",
+      at: "now" };
+    const approved = { ...answer, id: "draft-3", source: "approved" };
+    serve({ ...usual, "GET /api/style/messages": [[200, [approved]], [200, [answer, approved]]] });
+    const user = userEvent.setup();
+    const { unmount } = render(<App />);
+    expect(await screen.findByRole("button", { name: "Do setup" })).toBeTruthy(); // an approved draft isn't a setup
+    expect(screen.queryByRole("button", { name: /Add more/ })).toBeNull();
+    unmount();
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: "Redo setup" }));
+    expect(screen.getByRole("heading", { name: "Set up your style" })).toBeTruthy();
+    expect(screen.getByText(/take the place of your last setup/)).toBeTruthy();
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["Go back", "Do the setup"]);
+    await user.click(screen.getByRole("button", { name: "Go back" }));
+    expect(await screen.findByRole("heading", { name: "Your style" })).toBeTruthy();
+    expect(window.location.hash).toBe("#style");
+  });
+
+  it("redoing the setup and skipping all 6 sends nothing and keeps your style", async () => {
+    localStorage.setItem(SETUP_DONE, "1");
+    window.location.hash = "#style";
+    const fetch = serve({ ...usual, "GET /api/style/messages": [200, [{ id: "msg-1", title: "PS5", price: "300",
+      text: "Hi mate, £255?", marketplace: "facebook", source: "added", at: "now" }]] });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: "Redo setup" }));
+    await user.click(screen.getByRole("button", { name: "Do the setup" }));
+    for (let n = 1; n <= 6; n++) await user.click(screen.getByRole("button", { name: "Skip" }));
+    expect(await screen.findByText("You skipped all 6, so your style stays as it was.")).toBeTruthy();
+    expect(fetch.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
+    await user.click(screen.getByRole("button", { name: "Done" }));
+    expect(await screen.findByRole("heading", { name: "Your style" })).toBeTruthy();
+  });
+
+  it("goes through the 6 listings one at a time, sending only the ones you answered", async () => {
+    const fetch = serve({ ...usual, "GET /api/style": [[200, NO_STYLE], [200, STYLE]],
+      "PUT /api/style/setup": [200, []] });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Do the setup" }));
     expect(screen.getByText("1 of 6")).toBeTruthy();
     expect(screen.getByText("Offer lower · £185")).toBeTruthy();
     await user.type(screen.getByLabelText("Your message to this seller"), "Hi mate, £185 given the crack?");
@@ -833,7 +1016,7 @@ describe("the app", () => {
     expect(screen.queryByText(/Vinted|Apple Watch/)).toBeNull(); // 3 Oct: those two cards are gone
     await user.click(screen.getByRole("button", { name: "See my style" }));
     expect(await screen.findByText("Learned from 1 message")).toBeTruthy();
-    expect(sent(fetch, "POST /api/style/messages")).toEqual([{ title: "iPhone 13 128GB, cracked back", price: "220",
+    expect(sent(fetch, "PUT /api/style/setup")).toEqual([{ title: "iPhone 13 128GB, cracked back", price: "220",
       marketplace: "facebook", text: "Hi mate, £185 given the crack?" }]);
   });
 
@@ -858,7 +1041,7 @@ describe("the app", () => {
     expect(await screen.findByText("Ollama running")).toBeTruthy();
     expect(await screen.findByText("Learning from 14 of your messages")).toBeTruthy();
     await user.click(within(screen.getByRole("navigation")).getByText("Home"));
-    expect(await screen.findByText("Done on this Mac")).toBeTruthy();
+    expect(await screen.findByText("Done on this device")).toBeTruthy();
     expect(await screen.findByText("80%")).toBeTruthy();
     expect(window.location.hash).toBe("#home");
     expect(screen.getByText("FlipAssist · Home")).toBeTruthy();
@@ -910,22 +1093,118 @@ describe("the app", () => {
   });
 });
 
-describe("the Ollama row on Home (6 Oct review)", () => {
-  const base = { local_model: "gemma3:4b", local_running: true, api_model: "claude-haiku-5-5", api_key_set: true,
-    flip_api_key_set: true };
-  it("names each model it's asked for, and says one that isn't installed and what does its job instead", () => {
-    expect(ollamaRow({ ...base, models: [
-      { job: "reads listings", name: "flip-reader-5", installed: true },
-      { job: "words the reason", name: "flip-wording-4b", installed: true },
-      { job: "writes messages", name: "gemma3:4b", installed: true }] }))
-      .toEqual({ name: "Ollama: flip-reader-5, flip-wording-4b, Gemma 3 4B", ok: true, state: "Running on this Mac" });
-    const missing = ollamaRow({ ...base, models: [
+describe("Home (fix 2, 14 Oct)", () => {
+  /** Home on its own, with /stats answering stats; reload stands in for the app's /health call. */
+  const home = (running: Parameters<typeof runningRows>[0] = HEALTH, stats: unknown = STATS) => {
+    serve({ "GET /api/stats": [200, stats] });
+    const reload = vi.fn(async () => undefined);
+    render(<HomeScreen go={vi.fn()} count={3} running={running} reload={reload} />);
+    return reload;
+  };
+
+  it("says how many drafts used no paid AI at any step, with no Refresh and no buttons at the bottom", async () => {
+    const reload = home();
+    const hero = within(screen.getByRole("region", { name: "Done on this device" }));
+    expect(await hero.findByText("80%")).toBeTruthy();
+    expect(hero.getByText("of drafts used no paid AI at any step")).toBeTruthy();
+    expect(hero.getByText("edited · none sent yet")).toBeTruthy();
+    expect(screen.queryByText(/never needed the paid backup/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /Refresh/ })).toBeNull();
+    expect(screen.queryByText("Message a seller")).toBeNull();
+    expect(screen.queryByText("List on eBay")).toBeNull();
+    expect(reload).toHaveBeenCalledTimes(1); // it loads when you open it
+    expect(document.body.textContent).not.toMatch(/\bMac\b/); // it can be opened from any device
+  });
+
+  it("loads again by itself when you come back to the window", async () => {
+    const reload = home();
+    await screen.findByText("80%");
+    window.dispatchEvent(new Event("focus"));
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(2));
+  });
+
+  it("counts edits out of the messages you sent", async () => {
+    home(HEALTH, { ...STATS, approved: 4, edited_before_sending: 1 });
+    expect(await screen.findByText("25%")).toBeTruthy();
+    expect(screen.getByText("edited, of 4 sent")).toBeTruthy();
+  });
+
+  it("lists Ollama, then each of its models on its own line with its job, then each paid model and the AlertFlip API", () => {
+    expect(runningRows(HEALTH).map((r) => [r.name, r.state, r.ok, !!r.model])).toEqual([
+      ["Ollama", "Running on this device", true, false],
+      ["flip-reader-5", "reads the listing", true, true],
+      ["flip-wording-4b", "words the offer's reason", true, true],
+      ["flip-kinds-1", "sorts the flaws for the UK price", true, true],
+      ["flip-style-1b", "reads your style", true, true],
+      ["Gemma 3 4B", "the AI writer: writes messages and eBay listings", true, true],
+      ["Claude Haiku 5.5 (paid)", "Only checks each message's reason is sendable", true, false],
+      ["Claude Sonnet 5.5 (paid)", "Writes when this device's models can't: fixes a reason the check flags, writes a "
+        + "message or eBay listing, or reads a listing or its photos", true, false],
+      ["AlertFlip API", "Fresh local sales data for the UK price estimate", true, false],
+      ["FlipAssist API key", "Set", true, false],
+    ]);
+  });
+
+  it("shows the running card on screen, each model on its own line", async () => {
+    home();
+    const card = within(screen.getByRole("region", { name: "Running" }));
+    expect(card.getByText("Ollama")).toBeTruthy();
+    expect(card.getByText("flip-reader-5").closest(".running")?.className).toContain("model-line");
+    expect(card.getByText("Claude Haiku 5.5 (paid)").closest(".running")?.className).not.toContain("model-line");
+    expect(card.getByText("Only checks each message's reason is sendable")).toBeTruthy();
+    expect(card.getByText("AlertFlip API")).toBeTruthy();
+  });
+
+  it("says a model that isn't installed and what does its job instead (6 Oct review)", () => {
+    expect(ollamaRows({ ...HEALTH, models: [
       { job: "reads listings", name: "flip-reader-5", installed: false },
-      { job: "words the reason", name: "flip-wording-4b", installed: false }] });
-    expect(missing.ok).toBe(false);
-    expect(missing.state).toBe("Running, but not installed: flip-reader-5 (reads listings: Gemma does it instead), "
-      + "flip-wording-4b (words the reason: code does it instead)");
-    expect(ollamaRow({ ...base, local_running: false, models: [] }))
-      .toEqual({ name: "Ollama: Gemma 3 4B", ok: false, state: "Not running: start it with ollama serve" });
+      { job: "words the reason", name: "flip-wording-4b", installed: false }] })).toEqual([
+      { name: "Ollama", ok: true, state: "Running on this device, 2 of its models not installed" },
+      { name: "flip-reader-5", model: true, ok: false, state: "Not installed: Gemma 3 4B reads the listing instead" },
+      { name: "flip-wording-4b", model: true, ok: false, state: "Not installed: code words the reason instead" }]);
+    expect(ollamaRows({ ...HEALTH, local_running: false, models: [] }))
+      .toEqual([{ name: "Ollama", ok: false, state: "Not running: start it with ollama serve" }]);
+  });
+
+  it("greys the paid models out with no Anthropic key, and names each job when another model does it", () => {
+    expect(paidRows({ ...HEALTH, api_key_set: false, check_model: "", fix_model: "" })).toEqual([
+      { name: "Claude Haiku 5.5 (paid)", ok: "off", state: "Off: no Anthropic key, so reasons aren't checked" },
+      { name: "Claude Sonnet 5.5 (paid)", ok: "off", state: "Off: no Anthropic key, so everything runs on this device" }]);
+    expect(paidRows({ ...HEALTH, api_model: "claude-haiku-5-5" }).map((r) => [r.name, r.state])).toEqual([
+      ["Claude Haiku 5.5 (paid)", "Only checks each message's reason is sendable"],
+      ["Claude Haiku 5.5 (paid)", "Writes when this device's models can't: writes a message or eBay listing, or reads a listing or its photos"],
+      ["Claude Sonnet 5.5 (paid)", "Fixes a reason the check flags"]]);
+  });
+
+  it("says when the AlertFlip API or the key isn't set, and the API's own state before it answers", () => {
+    const rows = runningRows({ ...HEALTH, prices_api_set: false, flip_api_key_set: false });
+    expect(rows.slice(-2)).toEqual([
+      { name: "AlertFlip API", ok: false, state: "Not set: add PRICES_URL and PRICES_KEY to .env" },
+      { name: "FlipAssist API key", ok: false, state: "Missing: every draft is refused" }]);
+    expect(runningRows(null)).toEqual([{ name: "FlipAssist's API", state: "Checking…", ok: true }]);
+    expect(runningRows("down")[0].ok).toBe(false);
+  });
+});
+
+describe("the damage cut by how bad (fix 1, 14 Oct)", () => {
+  const base: PriceEstimate = { price: 147, middle: 210, currency: "GBP", cuts: ["damage"], kinds: ["damage"],
+    rough: false, exact: true, kind: "iphone" };
+  it("says how bad, the cut and the tier, from how many listings", () => {
+    expect(damageLine({ ...base, damage: { level: "moderate", tier: "middle", cut: -0.304, rough: false, n: 191 } }))
+      .toBe("Damage counted as moderate: −30% for a mid-priced iPhone, from 191 listings like it");
+    expect(damageLine({ ...base })).toBe("");
+  });
+  it("says where a rough one came from", () => {
+    const samsung = { ...base, kind: "samsung", damage: { level: "minor", tier: "top", cut: -0.059, rough: true,
+      from: "the US", n: 11 } };
+    expect(damageLine(samsung)).toBe("Damage counted as minor: −6% for a pricier Samsung, from 11 listings like it "
+      + "(rough: from US sales)");
+  });
+  it("doesn't call a MacBook's damage cut one measured on phones", () => {
+    const mac = { ...base, kind: "macbook", model: "macbook air 13 m1", sales: 40, exact: true,
+      damage: { level: "minor", tier: "middle", cut: -0.133, rough: false, n: 11 } };
+    expect(cautions(mac, "MacBook Air M1").some((c) => c.includes("measured on phones"))).toBe(false);
+    expect(cautions({ ...mac, cuts: ["damage", "fault"], kinds: ["damage", "fault"] }, "MacBook Air M1")
+      .some((c) => c.includes("measured on phones"))).toBe(true);
   });
 });

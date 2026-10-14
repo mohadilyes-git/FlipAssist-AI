@@ -71,6 +71,23 @@ def test_health_needs_no_key_and_shows_none(client, monkeypatch):
     assert "pretend-anthropic-key" not in answer.text and KEY not in answer.text
 
 
+def test_health_says_which_paid_model_does_what_and_whether_the_prices_api_is_set(client, monkeypatch):
+    """14 Oct: Claude Haiku 5.5 only checks each reason; Claude Sonnet 5.5 reads or writes when this device's models
+    can't, and fixes a reason the check flags."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    for name in ("FLIP_BACKUP_MODEL", "FLIP_WORDING_CHECK", "FLIP_WORDING_FIX", "PRICES_URL", "PRICES_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    health = TestClient(api.app).get("/health").json()
+    assert (health["api_model"], health["check_model"], health["fix_model"]) == \
+        ("claude-sonnet-5-5", "claude-haiku-5-5", "claude-sonnet-5-5")
+    assert health["prices_api_set"] is False
+    monkeypatch.setenv("PRICES_URL", "https://example.test/prices")
+    monkeypatch.setenv("PRICES_KEY", "k")
+    monkeypatch.delenv("ANTHROPIC_API_KEY")
+    health = TestClient(api.app).get("/health").json()
+    assert health["prices_api_set"] is True and (health["check_model"], health["fix_model"]) == ("", "")
+
+
 def test_health_names_each_model_by_its_job_and_says_which_isnt_installed(client, monkeypatch):
     """6 Oct review: Home said every model was running whenever Ollama answered."""
     import io
@@ -253,9 +270,64 @@ def test_the_cost_meter_adds_it_all_up(client):
     client.post(f"/drafts/{first['draft_id']}/approve", json={"sent": first["message"]})
     stats = client.get("/stats").json()
     assert (stats["drafts"], stats["ready"], stats["needs_you"]) == (2, 2, 0)
-    assert stats["done_on_this_mac"] == 1.0 and stats["cost_pence"] == 0
+    assert stats["done_on_this_device"] == 1.0 and stats["cost_pence"] == 0
     assert {m["model"] for m in stats["models"]} == {"gemma3:4b", "template"}
     assert (stats["approved"], stats["edited_before_sending"]) == (1, 0)
+
+
+def test_a_draft_any_paid_step_ran_on_isnt_done_on_this_device(client):
+    """14 Oct: the reason's paid check is part of drafting, not a backup: a draft it checked used paid AI."""
+    client.use(local=FakeModel("gemma3:4b", READ, READ, READ), messages=PAST)
+    drafts = [client.post("/messages/draft", json={"listing": LISTING, "mention": True}).json() for _ in range(3)]
+    log = api.app.dependency_overrides[api.audit]()
+    assert client.get("/stats").json()["done_on_this_device"] == 1.0
+    log.attempt(log.item_of(drafts[0]["draft_id"]), Reply("claude-haiku-5-5", answer={"verdict": "ok"}), [], "0.01",
+                job="reason")
+    assert client.get("/stats").json()["done_on_this_device"] == 0.667
+    # a check logged before 14 Oct has no item: it's the draft made just before it
+    log.attempt(None, Reply("claude-haiku-5-5", answer={"verdict": "ok"}), [], "0.01", job="reason")
+    assert client.get("/stats").json()["done_on_this_device"] == 0.333
+    assert log.item_of(10**6) is None
+
+
+def test_the_reasons_check_counts_for_its_draft(client, monkeypatch):
+    client.use(local=FakeModel("gemma3:4b", READ), messages=PAST)
+    draft = client.post("/messages/draft", json={"listing": LISTING, "mention": True}).json()
+    log = api.app.dependency_overrides[api.audit]()
+    setup = api.app.dependency_overrides[api.setup]()
+    setup.wording = {"check": FakeModel("claude-haiku-5-5", {"verdict": "ok"})}
+    api.app.dependency_overrides[api.setup] = lambda: setup
+    checked = client.post("/messages/check-reason", json={
+        "draft_id": draft["draft_id"], "listing": LISTING, "flaws": draft["reading"]["flaws"],
+        "quotes": draft["reason_from"], "clause": "there's a black dot on the screen", "message": draft["message"],
+        "offer_pence": draft["offer_pence"]})
+    assert checked.status_code == 200 and checked.json()["reason"]["checked"] == "ok"
+    items = [row[0] for row in log.db.execute("select item_id from attempts where model = 'claude-haiku-5-5'")]
+    assert items == [log.item_of(draft["draft_id"])]
+
+
+THREE = ["Back glass cracked in the top right corner.", "Face ID not working.", "Battery 79%."]
+LISTING3 = {**LISTING, "description": " ".join(THREE) + " Collection only from Leeds LS6."}
+READ3 = {"flaws": THREE, "pickup": "Collection only from Leeds LS6", "no_offers": ""}
+
+
+@pytest.mark.parametrize("said, given, left", [
+    (1, ["Face ID not working"], ["glass", "battery"]),
+    (2, ["Back glass cracked in the top right corner", "Face ID not working"], ["battery"]),
+    ("all", ["Back glass cracked in the top right corner", "Face ID not working", "Battery 79%"], []),
+])
+def test_you_pick_how_many_flaws_a_lower_offer_gives_the_worst_first(client, said, given, left):
+    client.use(local=FakeModel("gemma3:4b", READ3), messages=PAST)
+    draft = client.post("/messages/draft", json={"listing": LISTING3, "mention": True, "writer": "template",
+                                                 "flaws_said": said}).json()
+    assert draft["status"] == "ready" and draft["point"] == given
+    assert draft["reason_from"] == (given if said != "all" else [t.rstrip(".") for t in THREE])
+    assert "Face ID" in draft["message"] and not [w for w in left if w in draft["message"].lower()]
+
+
+def test_a_flaw_count_that_isnt_one_is_refused(client):
+    for wrong in (0, 4, "two"):
+        assert client.post("/messages/draft", json={"listing": LISTING, "flaws_said": wrong}).status_code == 422
 
 
 def test_the_price_you_picked_is_drafted_and_one_that_doesnt_fit_is_refused(client):
@@ -303,6 +375,30 @@ def test_what_your_style_learned_is_yours_to_remove(client):
     assert client.post("/style/learned", json={"key": "mention:cash", "used": True}).status_code == 200
     assert client.post("/style/learned", json={"key": "mention:cash", "used": True}).status_code == 404
     assert client.post("/style/learned", json={"key": "greeting:yo", "used": False}).status_code == 404
+
+
+def test_doing_the_setup_again_takes_the_place_of_your_last_setup(client):
+    """14 Oct: Redo setup starts your style afresh from your new answers; the drafts you approved and a CSV stay."""
+    client.use(messages=PAST[:2])  # learned from a CSV
+    first = client.put("/style/setup", json=[{"title": "PS5", "price": "300", "text": "Hi mate, would you take £255? Cheers"}])
+    assert first.status_code == 200 and len(first.json()) == 1
+    client.book.add([{"id": "draft-1", "listing_title": "iPhone", "asking_price": "200", "marketplace": "facebook",
+                      "my_message": "Hi, £170?"}], "approved")
+    removable = next(r["key"] for r in client.get("/style").json()["learned"])
+    assert client.post("/style/learned", json={"key": removable, "used": False}).status_code == 200
+    again = client.put("/style/setup", json=[{"title": "Dyson V11", "price": "£180", "text": "Hiya, I'll pay £190 if "
+                                              "you hold it", "marketplace": "facebook"},
+                                             {"title": "", "price": "", "text": "Hiya, would you do £100?"}])
+    assert again.status_code == 200 and [m["price"] for m in again.json()] == ["180", ""]
+    kept = {m["source"]: m["text"] for m in client.get("/style/messages").json()}
+    texts = [m["text"] for m in client.get("/style/messages").json()]
+    assert "Hi mate, would you take £255? Cheers" not in texts and "Hiya, would you do £100?" in texts
+    assert kept["approved"] == "Hi, £170?" and "csv" in kept
+    assert client.get("/style").json()["count"] == len(PAST[:2]) + 1 + 2
+    assert client.book.removed() == set()  # what you removed is cleared: learned afresh
+    for refused in ([], [{"text": "   "}], [{"text": "£90?", "price": "cheap"}]):
+        assert client.put("/style/setup", json=refused).status_code == 422
+    assert TestClient(api.app).put("/style/setup", json=[{"text": "hi"}]).status_code == 401
 
 
 def test_a_message_you_add_needs_words_and_a_price_that_is_one(client):

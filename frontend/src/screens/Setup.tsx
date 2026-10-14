@@ -1,21 +1,24 @@
-// First launch: "Set up your style". Reply to 6 listings, or paste messages
-// you've already sent. Either way they go to the API, which learns from them
-// with plain code (a style card, a phrasebook, and the 3 closest past messages
-// as examples for each new listing): nothing gets trained.
+// "Set up your style": reply to 6 listings the way you'd message their sellers. Your answers go to the API, which
+// learns from them (a style card, a phrasebook, and the 3 closest past messages as examples for each new listing):
+// nothing gets trained. On first launch, and from Your style (Do setup, or Redo setup: your new answers take the place
+// of your last setup's).
 import { useState } from "react";
 import { api, type Kind, type Learned, type NewStyleMessage, type Style } from "../api";
 import { lowerPrice, money, morePrice } from "../prices";
-import { CheckIcon, CrossIcon, Logo, PlusIcon } from "../ui";
-import { habitsOf, keepOrRemove, LearnedRow, lengthOf, sentencesOf } from "./StyleScreen";
+import { CheckIcon, Logo } from "../ui";
+import { habitsOf, LearnedRow, lengthOf, remove, sentencesOf } from "./StyleScreen";
 
-export type SetupStep = "welcome" | "cards" | "paste" | "result";
+export type SetupStep = "welcome" | "cards" | "result";
 
 type Props = {
   step: SetupStep;
   go: (step: SetupStep) => void;
   style: Style | null;
   onLearned: () => Promise<void>;
-  onStart: () => void;
+  /** leave the setup: back where you came from (Your style), or on to Home the first time */
+  onLeave: () => void;
+  /** opened from Your style (Do setup, Redo setup), not on first launch */
+  again: boolean;
 };
 
 // each listing shows one way you might message a seller (3 Oct: no Vinted or posted-flaw card: the eBay AirPods
@@ -42,24 +45,20 @@ const WAYS = [
   ["Closest past messages", "the 3 most like a new listing become examples"],
 ];
 
-type Pasted = { id: number; title: string; price: string; text: string };
-let made = 0;
-const blank = (): Pasted => ({ id: ++made, title: "", price: "", text: "" });
-
-export function Setup({ step, go, style, onLearned, onStart }: Props) {
+export function Setup({ step, go, style, onLearned, onLeave, again }: Props) {
   const [at, setAt] = useState(0);
   const [answers, setAnswers] = useState(() => LISTINGS.map(() => ""));
-  const [pasted, setPasted] = useState(() => [blank(), blank(), blank()]);
   const [learned, setLearned] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  /** Your answers, in place of your last setup's. Every one skipped: nothing is sent, and your style stays as it was. */
   async function learn(messages: NewStyleMessage[]) {
     setError("");
     if (messages.length) {
       setBusy(true);
       try {
-        await api.addStyleMessages(messages);
+        await api.setUpStyle(messages);
         await onLearned();
       } catch (e) {
         setError((e as Error).message);
@@ -133,62 +132,14 @@ export function Setup({ step, go, style, onLearned, onStart }: Props) {
     );
   }
 
-  if (step === "paste") {
-    const filled = pasted.filter((p) => p.text.trim());
-    const edit = (id: number, change: Partial<Pasted>) =>
-      setPasted((now) => now.map((p) => (p.id === id ? { ...p, ...change } : p)));
-    return (
-      <>
-        <div className="paste-head">
-          <button type="button" className="link" onClick={() => go("welcome")}>Back</button>
-          <h1 className="step-title">Paste my messages</h1>
-          <p className="sub">One box per message, with its listing title and price. 10–20 real offers works best.</p>
-        </div>
-        {error && <p className="error" role="alert">{error}</p>}
-        <div className="pasted">
-          {pasted.map((p, i) => (
-            <section className="card" key={p.id} aria-label={`Message ${i + 1}`}>
-              <p className="pasted-top">
-                <span className="caps">Message {i + 1}</span>
-                <button type="button" className="round-x" aria-label={`Remove message ${i + 1}`}
-                  onClick={() => setPasted((now) => now.filter((x) => x.id !== p.id))}>
-                  <CrossIcon size={11} stroke={3} />
-                </button>
-              </p>
-              <div className="pasted-pair">
-                <input className="input" aria-label="Listing title" placeholder="Listing title" value={p.title} maxLength={300}
-                  onChange={(e) => edit(p.id, { title: e.target.value })} />
-                <input className="input" aria-label="Price" placeholder="£220" inputMode="decimal" value={p.price} maxLength={20}
-                  onChange={(e) => edit(p.id, { price: e.target.value })} />
-              </div>
-              <textarea className="input" rows={4} aria-label="Your message" placeholder="Hi mate, would you take £185 cash?" maxLength={2000}
-                value={p.text} onChange={(e) => edit(p.id, { text: e.target.value })} />
-            </section>
-          ))}
-          <button type="button" className="add-tile" onClick={() => setPasted((now) => [...now, blank()])}>
-            <PlusIcon size={20} stroke={2.4} />
-            Add another
-          </button>
-        </div>
-        <div className="paste-foot">
-          <button type="button" className="link" onClick={toCards}>Reply to {LISTINGS.length} listings instead</button>
-          <button type="button" className="main" aria-busy={busy} disabled={busy || !filled.length}
-            onClick={() => void learn(filled.map((p) => ({ title: p.title.trim(), price: p.price.trim(), text: p.text.trim() })))}>
-            {busy ? "Learning…" : filled.length ? `Learn from ${filled.length} message${filled.length > 1 ? "s" : ""}` : "Learn my style"}
-          </button>
-        </div>
-      </>
-    );
-  }
-
   if (step === "result") {
-    // everything it learned, each yours to remove before you start: a removed one is never written
+    // everything it learned, each yours to remove before you start: a removed one is gone, and never written
     const length = lengthOf(style);
     const rows = [...habitsOf(style), ...sentencesOf(style)];
-    const change = async (row: Learned) => {
+    const removeRow = async (row: Learned) => {
       setError("");
       try {
-        await keepOrRemove(row, onLearned);
+        await remove(row, onLearned);
       } catch (e) {
         setError((e as Error).message);
       }
@@ -197,18 +148,23 @@ export function Setup({ step, go, style, onLearned, onStart }: Props) {
       <div className="centre">
         <div className="welcome result">
           <span className="check-circle"><CheckIcon size={28} stroke={2.6} /></span>
-          <p className="caps">Learned from {learned} {learned === 1 ? "message" : "messages"}</p>
+          <p className="caps">{learned ? `Learned from ${learned} ${learned === 1 ? "message" : "messages"}` : "Nothing written"}</p>
           <h1 className="big-title">Your style</h1>
-          {rows.length > 0 && <p className="sub">This is what it'll put in your messages. Remove anything you don't want.</p>}
+          {!learned && (
+            <p className="sub">{again ? `You skipped all ${LISTINGS.length}, so your style stays as it was.`
+              : `You skipped all ${LISTINGS.length}: do the setup any time from Your style.`}</p>
+          )}
+          {learned > 0 && rows.length > 0 && <p className="sub">This is what it'll put in your messages. Remove anything you don't want.</p>}
           {error && <p className="error" role="alert">{error}</p>}
-          <div className="hero result-card" aria-label="What it learned">
-            {length && <p className="trait"><span>{length.k}</span><span>{length.v}</span></p>}
-            {rows.map((row) => <LearnedRow key={row.key} row={row} onUse={(r) => void change(r)} kind="trait" />)}
-            {!length && !rows.length &&
-              <p className="trait"><span>Nothing to learn from yet: add messages any time from Your style</span></p>}
-          </div>
+          {(learned > 0 || again) && (
+            <div className="hero result-card" aria-label="What it learned">
+              {length && <p className="trait"><span>{length.k}</span><span>{length.v}</span></p>}
+              {rows.map((row) => <LearnedRow key={row.key} row={row} onRemove={(r) => void removeRow(r)} kind="trait" />)}
+              {!length && !rows.length && <p className="trait"><span>Nothing to learn from yet</span></p>}
+            </div>
+          )}
           <p className="sub">Every message you approve teaches it a bit more.</p>
-          <button type="button" className="main full" onClick={onStart}>Start</button>
+          <button type="button" className="main full" onClick={onLeave}>{again ? "Done" : "Start"}</button>
         </div>
       </div>
     );
@@ -218,9 +174,12 @@ export function Setup({ step, go, style, onLearned, onStart }: Props) {
     <div className="centre">
       <div className="welcome">
         <Logo big />
-        <p className="caps">First launch · about 3 minutes</p>
+        <p className="caps">{again ? "Your style · about 3 minutes" : "First launch · about 3 minutes"}</p>
         <h1 className="big-title">Set up your style</h1>
-        <p className="lead">Teach FlipAssist how you message sellers: 8 quick listings, or paste messages you've already sent.</p>
+        <p className="lead">
+          Teach FlipAssist how you message sellers: reply to {LISTINGS.length} quick listings.
+          {again && " Your answers take the place of your last setup's."}
+        </p>
         <ol className="card ways">
           {WAYS.map(([name, what], i) => (
             <li key={name}>
@@ -230,8 +189,8 @@ export function Setup({ step, go, style, onLearned, onStart }: Props) {
           ))}
         </ol>
         <div className="choose">
-          <button type="button" className="second" onClick={() => go("paste")}>Paste my messages</button>
-          <button type="button" className="main" onClick={toCards}>Reply to {LISTINGS.length} listings</button>
+          <button type="button" className="second" onClick={onLeave}>{again ? "Go back" : "Skip for now"}</button>
+          <button type="button" className="main" onClick={toCards}>Do the setup</button>
         </div>
         <p className="footnote">Nothing gets trained. It learns from your own messages.</p>
       </div>

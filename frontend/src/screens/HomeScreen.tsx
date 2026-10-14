@@ -1,48 +1,71 @@
-// Home: the cost meter in the blue hero card, whether everything's running,
-// and who did the work. From /stats and /health.
+// Home: how much of drafting ran on this device and what it cost (the blue card, from /stats), what's running and
+// what each part does (from /health), and who did the work. It loads afresh each time you open it, and again when
+// you come back to the window (14 Oct: no Refresh button).
 import { type MouseEvent, useCallback, useEffect, useState } from "react";
 import { api, type Health, type Stats } from "../api";
 import type { Running, Tab } from "../App";
 import { cost, jobName, modelName } from "../format";
-import { GaugeIcon, Head, PenIcon, TagIcon } from "../ui";
+import { GaugeIcon, Head, PenIcon } from "../ui";
 
 type Props = { go: (tab: Tab) => void; count: number; running: Running; reload: () => Promise<void> };
+/** One line of the Running card. ok: true (green), false (red: something's wrong) or "off" (grey: switched off, as
+ * set up). model: one of Ollama's models, on its own line under Ollama's. */
+export type Row = { name: string; state: string; ok: boolean | "off"; model?: boolean };
 
 const percent = (part: number, whole = 1) => (whole ? `${Math.round((part / whole) * 100)}%` : "–");
+
+// what each of Ollama's models does, by the job /health names it for
+const JOBS: Record<string, string> = {
+  "reads listings": "reads the listing",
+  "words the reason": "words the offer's reason",
+  "sorts price flaws": "sorts the flaws for the UK price",
+  "reads your style": "reads your style",
+  "writes messages": "the AI writer: writes messages and eBay listings",
+};
+// ...and what does that job when the model isn't installed
+const INSTEAD: Record<string, string> = {
+  "reads listings": "Gemma 3 4B reads the listing instead",
+  "words the reason": "code words the reason instead",
+  "sorts price flaws": "code's rules sort the flaws instead",
+  "reads your style": "code reads your style alone",
+  "writes messages": "the AI writer can't run on this device",
+};
 
 export function HomeScreen({ go, count, running, reload }: Props) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    setBusy(true);
-    setError("");
     try {
       const [found] = await Promise.all([api.stats(), reload()]);
       setStats(found);
+      setError("");
     } catch (e) {
       setError((e as Error).message);
-    } finally {
-      setBusy(false);
     }
   }, [reload]);
-  useEffect(() => void load(), [load]);
+  useEffect(() => {
+    void load();  // each time you open Home
+    const again = () => void load();  // ...and when you come back to the window
+    window.addEventListener("focus", again);
+    return () => window.removeEventListener("focus", again);
+  }, [load]);
 
   const link = (tab: Tab) => (e: MouseEvent) => {
     e.preventDefault();
     go(tab);
   };
+  const checks = typeof running === "object" && running !== null && !!running.check_model;
   return (
     <>
-      <Head icon={<GaugeIcon />} title="FlipAssist" sub="Code first · AI on this Mac · paid AI only when it must"
-        right={<button type="button" className="link" disabled={busy} onClick={() => void load()}>{busy ? "Refreshing…" : "Refresh"}</button>} />
+      <Head icon={<GaugeIcon />} title="FlipAssist"
+        sub={checks ? "Code first · AI on this device · Claude Haiku 5.5 checks each reason" : "Code first · AI on this device"} />
       {error && <p className="error" role="alert">{error}</p>}
       <div className="split tight">
-        <section className="hero" aria-label="Done on this Mac">
-          <p className="caps">Done on this Mac</p>
-          <p className="hero-big">{stats ? percent(stats.done_on_this_mac) : "–"}</p>
-          <p className="sub">of drafts never needed the paid backup</p>
+        <section className="hero" aria-label="Done on this device">
+          <p className="caps">Done on this device</p>
+          <p className="hero-big">{stats ? percent(stats.done_on_this_device) : "–"}</p>
+          <p className="sub">of drafts used no paid AI at any step</p>
           <a className="hero-pill" href="#style" onClick={link("style")}>
             <PenIcon size={12} stroke={2.4} />
             Learning from {count} of your messages
@@ -52,15 +75,18 @@ export function HomeScreen({ go, count, running, reload }: Props) {
             <div><strong>{stats ? cost(stats.cost_per_100_drafts_pence) : "–"}</strong><span>per 100 drafts</span></div>
             <div><strong>{stats?.drafts ?? "–"}</strong><span>drafts</span></div>
             <div><strong>{stats ? percent(stats.ready, stats.drafts) : "–"}</strong><span>ready</span></div>
-            <div><strong>{stats ? percent(stats.edited_before_sending, stats.approved) : "–"}</strong><span>edited</span></div>
+            <div>
+              <strong>{stats?.approved ? percent(stats.edited_before_sending, stats.approved) : "–"}</strong>
+              <span>{stats?.approved ? `edited, of ${stats.approved} sent` : "edited · none sent yet"}</span>
+            </div>
           </div>
         </section>
 
-        <section className="card">
+        <section className="card" aria-label="Running">
           <p className="caps">Running</p>
           {runningRows(running).map((row) => (
-            <div className="running" key={row.name}>
-              <span className={row.ok ? "dot" : "dot bad"} aria-hidden="true" />
+            <div className={row.model ? "running model-line" : "running"} key={`${row.name} ${row.state}`}>
+              <span className={row.ok === true ? "dot" : row.ok === "off" ? "dot off" : "dot bad"} aria-hidden="true" />
               <span>
                 <strong>{row.name}</strong>
                 <span className="sub">{row.state}</span>
@@ -69,7 +95,7 @@ export function HomeScreen({ go, count, running, reload }: Props) {
           ))}
         </section>
 
-        <section className="card">
+        <section className="card" aria-label="Who did the work">
           <p className="caps">Who did the work</p>
           {stats?.models.length ? stats.models.map((m) => (
             <div className="model" key={`${m.model} ${m.job}`}>
@@ -82,39 +108,63 @@ export function HomeScreen({ go, count, running, reload }: Props) {
             </div>
           )) : <p className="sub">Nothing drafted yet.</p>}
         </section>
-
-        <div className="buttons wide">
-          <a className="second" href="#listing" onClick={link("listing")}><TagIcon size={16} />List on eBay</a>
-          <a className="main" href="#message" onClick={link("message")}>Message a seller</a>
-        </div>
       </div>
     </>
   );
 }
 
-/** Ollama and the models it's asked for, each by name: one that isn't installed is said, with what does its job instead
- * (6 Oct review: the row said every model was running whenever Ollama was). */
-export function ollamaRow(running: Health): { name: string; state: string; ok: boolean } {
+/** Ollama, then each model it's asked for on its own line, with its job; one that isn't installed is said, with what
+ * does its job instead (6 Oct review: Home said every model was running whenever Ollama was). */
+export function ollamaRows(running: Health): Row[] {
+  if (!running.local_running) {
+    return [{ name: "Ollama", ok: false, state: "Not running: start it with ollama serve" }];
+  }
   const models = running.models ?? [];
-  const named = models.length ? models.map((m) => modelName(m.name)).join(", ") : modelName(running.local_model);
-  const missing = models.filter((m) => !m.installed);
-  if (!running.local_running) return { name: `Ollama: ${named}`, ok: false, state: "Not running: start it with ollama serve" };
-  if (!missing.length) return { name: `Ollama: ${named}`, ok: true, state: "Running on this Mac" };
-  return { name: `Ollama: ${named}`, ok: false,
-    state: `Running, but not installed: ${missing.map((m) =>
-      `${modelName(m.name)} (${m.job}: ${m.job === "reads listings" ? "Gemma" : "code"} does it instead)`).join(", ")}` };
+  const missing = models.filter((m) => !m.installed).length;
+  return [
+    { name: "Ollama", ok: true,
+      state: missing ? `Running on this device, ${missing} of its models not installed` : "Running on this device" },
+    ...models.map((m) => ({ name: modelName(m.name), model: true, ok: m.installed,
+      state: m.installed ? JOBS[m.job] ?? m.job : `Not installed: ${INSTEAD[m.job] ?? "code does its job instead"}` })),
+  ];
 }
 
-function runningRows(running: Running): { name: string; state: string; ok: boolean }[] {
+/** The paid models, each on its own line with what it does: Claude Haiku 5.5 only checks each reason; Claude Sonnet
+ * 5.5 writes when this device's models can't (and fixes a reason the check flags). */
+export function paidRows(running: Health): Row[] {
+  const paid = (model: string) => `${modelName(model)} (paid)`;
+  if (!running.api_key_set) {
+    return [
+      { name: paid("claude-haiku-5-5"), ok: "off", state: "Off: no Anthropic key, so reasons aren't checked" },
+      { name: paid("claude-sonnet-5-5"), ok: "off", state: "Off: no Anthropic key, so everything runs on this device" },
+    ];
+  }
+  const rows: Row[] = [running.check_model
+    ? { name: paid(running.check_model), ok: true, state: "Only checks each message's reason is sendable" }
+    : { name: paid("claude-haiku-5-5"), ok: "off", state: "Off in .env: reasons aren't checked" }];
+  const writes = "writes a message or eBay listing, or reads a listing or its photos";  // the colour look too
+  if (running.fix_model && running.fix_model === running.api_model) {
+    rows.push({ name: paid(running.api_model), ok: true,
+      state: `Writes when this device's models can't: fixes a reason the check flags, ${writes}` });
+  } else {
+    rows.push({ name: paid(running.api_model), ok: true, state: `Writes when this device's models can't: ${writes}` });
+    if (running.fix_model) rows.push({ name: paid(running.fix_model), ok: true, state: "Fixes a reason the check flags" });
+  }
+  return rows;
+}
+
+export function runningRows(running: Running): Row[] {
   if (running === null) return [{ name: "FlipAssist's API", state: "Checking…", ok: true }];
   if (running === "down") {
     return [{ name: "FlipAssist's API", state: "Not running: start it with .venv/bin/uvicorn flip.api:app", ok: false }];
   }
   return [
-    ollamaRow(running),
-    { name: "Claude Haiku 5.5 and Claude Sonnet 5.5 (paid)", ok: running.api_key_set,
-      state: running.api_key_set ? "Ready: checks each reason, and writes when this Mac's models can't"
-        : "No key: everything stays on this Mac" },
-    { name: "API key", ok: running.flip_api_key_set, state: running.flip_api_key_set ? "Set" : "Missing: every draft is refused" },
+    ...ollamaRows(running),
+    ...paidRows(running),
+    { name: "AlertFlip API", ok: !!running.prices_api_set,
+      state: running.prices_api_set ? "Fresh local sales data for the UK price estimate"
+        : "Not set: add PRICES_URL and PRICES_KEY to .env" },
+    { name: "FlipAssist API key", ok: running.flip_api_key_set,
+      state: running.flip_api_key_set ? "Set" : "Missing: every draft is refused" },
   ];
 }

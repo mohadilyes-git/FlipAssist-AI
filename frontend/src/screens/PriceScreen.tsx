@@ -1,5 +1,5 @@
 // AI UK price estimate: what an iPhone, a Samsung phone or a MacBook sells for in the UK, cut for its flaws (4 Oct,
-// its own tab). The seller's description is read for its flaws as a draft's is (flip-reader-5 on this Mac), then the
+// its own tab). The seller's description is read for its flaws as a draft's is (flip-reader-5 on this device), then the
 // AlertFlip app's prices API prices it: the middle price of clean ones of the same model and size (sales Claude Haiku
 // 5.5 sorted), cut for the kinds of flaw found, or what for-parts ones sell for when it's locked or for parts.
 import { useState } from "react";
@@ -95,11 +95,12 @@ export function PriceScreen() {
               <li>The middle price of clean ones, same model and size, is <strong>sent here</strong>. The cheapest
                 quarter is left out, as those often hide flaws.</li>
               {/* no amounts here: the prices API's cut table is its own and can change */}
-              <li><strong>flip-reader-5</strong>, our AI on this Mac, reads the title and description for flaws (if its
-                reading fails our checks, Claude Haiku 5.5 reads it instead, a paid call). <strong>flip-kinds-1</strong>,
-                our flaw-sorting AI on this Mac, sorts each flaw into a kind (code's rules do when it isn't installed),
-                and the price is cut by amounts measured on phone listings: any flaw takes a small cut, damage
-                and faults cut the most, and different kinds' cuts multiply. A locked or for-parts one is priced at what
+              <li><strong>flip-reader-5</strong>, our AI on this device, reads the title and description for flaws (if its
+                reading fails our checks, Claude Sonnet 5.5 reads it instead, a paid call). <strong>flip-kinds-1</strong>,
+                our flaw-sorting AI on this device, sorts each flaw into a kind (code's rules do when it isn't installed),
+                and the price is cut by amounts measured on phone listings: any flaw takes a small cut, faults cut
+                the most, and different kinds' cuts multiply. Damage is cut by how bad it is (minor, moderate or
+                severe) and how pricey the model is, as measured on 1,697 damaged iPhone, Samsung and MacBook listings. A locked or for-parts one is priced at what
                 for-parts ones of the same model and size sell for, or at a rough guess when too few have sold, with its
                 other flaws not cut on top.</li>
             </ol>
@@ -154,11 +155,25 @@ export function cautions(e: PriceEstimate, title?: string): string[] {
     const hard = (e.kinds ?? []).filter((k) => HARD_TO_PRICE.includes(k));
     if (hard.length) said.push(`Rough: ${hard.join(" and ")} ${hard.length > 1 ? "are" : "is"} hard to price`);
   }
-  // only when a flaw cut was used: a MacBook's own for-parts price wasn't measured on phones
-  if (mac && (e.cuts ?? []).length && !e.parts_price) {
+  // only when a flaw cut the prices API measured on phones was used: the damage cut is measured on MacBooks too
+  if (mac && (e.cuts ?? []).filter((c) => !(e.damage && c === "damage")).length && !e.parts_price) {
     said.push("Rough for a MacBook: the flaw cuts were measured on phones");
   }
   return said;
+}
+
+const TIERS: Record<string, string> = { bottom: "cheaper", middle: "mid-priced", top: "pricier" };
+const NOUNS: Record<string, string> = { iphone: "iPhone", samsung: "Samsung", macbook: "MacBook" };
+
+/** The damage cut FlipAssist measured, in words: "Damage counted as moderate: −30% for a mid-priced iPhone, from 191
+ * listings like it", and where a rough one came from. */
+export function damageLine(e: PriceEstimate): string {
+  const d = e.damage;
+  if (!d) return "";
+  const where = !d.rough ? "" : d.from?.includes("the US") ? " (rough: from US sales)"
+    : d.from?.includes("the iPhone") ? " (rough: from iPhones)" : " (rough: few listings, pooled with a group next to it)";
+  return `Damage counted as ${d.level}: −${Math.round(-d.cut * 100)}% for ${TIERS[d.tier] ? `a ${TIERS[d.tier]}` : "this"} `
+    + `${NOUNS[e.kind ?? ""] ?? "item"}, from ${d.n} listings like it${where}`;
 }
 
 /** After "counted as": a locked or for-parts one is priced as that, so its other flaws aren't cut on top of it */
@@ -220,6 +235,7 @@ function Estimated({ estimate, title }: { estimate: PriceEstimate; title: string
           {flaws.length ? sortedBy(estimate.sorted_by) : ""}
           {notCutOnTop(estimate)}
         </p>
+        {estimate.damage && <p className="sub" aria-label="Damage cut">{damageLine(estimate)}</p>}
       </section>
     </>
   );
