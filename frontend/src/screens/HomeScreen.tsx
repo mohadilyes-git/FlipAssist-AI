@@ -61,8 +61,11 @@ export function HomeScreen({ go, count, running, reload }: Props) {
       <Head icon={<GaugeIcon />} title="FlipAssist"
         sub={checks ? "Code first · AI on this device · Claude Haiku 5.5 checks each reason" : "Code first · AI on this device"} />
       {error && <p className="error" role="alert">{error}</p>}
-      <div className="split tight">
-        <section className="hero" aria-label="Done on this device">
+      {/* the blue card with who did the work under it and what's running beside them, so a tall Running card leaves
+          no gap (14 Oct); one column when it's narrow: the blue card, Running, then who did the work */}
+      <div className="home">
+        <div className="home-grid">
+        <section className="hero home-hero" aria-label="Done on this device">
           <p className="caps">Done on this device</p>
           <p className="hero-big">{stats ? percent(stats.done_on_this_device) : "–"}</p>
           <p className="sub">of drafts used no paid AI at any step</p>
@@ -82,7 +85,7 @@ export function HomeScreen({ go, count, running, reload }: Props) {
           </div>
         </section>
 
-        <section className="card" aria-label="Running">
+        <section className="card home-running" aria-label="Running">
           <p className="caps">Running</p>
           {runningRows(running).map((row) => (
             <div className={row.model ? "running model-line" : "running"} key={`${row.name} ${row.state}`}>
@@ -95,7 +98,7 @@ export function HomeScreen({ go, count, running, reload }: Props) {
           ))}
         </section>
 
-        <section className="card" aria-label="Who did the work">
+        <section className="card home-work" aria-label="Who did the work">
           <p className="caps">Who did the work</p>
           {stats?.models.length ? stats.models.map((m) => (
             <div className="model" key={`${m.model} ${m.job}`}>
@@ -108,6 +111,7 @@ export function HomeScreen({ go, count, running, reload }: Props) {
             </div>
           )) : <p className="sub">Nothing drafted yet.</p>}
         </section>
+        </div>
       </div>
     </>
   );

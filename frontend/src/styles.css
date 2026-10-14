@@ -1826,3 +1826,39 @@ textarea.input {
 .input.asking {
   max-width: calc(50% - 5px);
 }
+
+/* Home's layout (14 Oct): the blue card with who did the work under it, and what's running beside both, so a tall
+   Running card leaves no gap under the blue card; one column when it's narrow (as .split goes, under 736px): the blue
+   card, Running, then who did the work */
+.home {
+  container-type: inline-size;
+}
+
+.home-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  grid-template-areas: "hero running" "work running";
+  gap: 16px;
+  align-items: start;
+}
+
+.home-hero {
+  grid-area: hero;
+}
+
+.home-running {
+  grid-area: running;
+}
+
+.home-work {
+  grid-area: work;
+}
+
+@container (max-width: 735px) {
+  .home-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas: "hero" "running" "work";
+  }
+}
