@@ -458,10 +458,20 @@ def quoted(point):
     return " and ".join(f'"{s}"' for s in point["says"])
 
 
-def reason_for_ai(point):
-    """What the AI is told to give as the reason: the reason flip.wording worded and checked, to use as it is, or the
-    listing's own words (quoted)."""
-    return f'"{point["worded"]}" (use this reason as it is)' if point.get("worded") else quoted(point)
+# where the AI writer puts the reason flip.wording worded: code puts the checked clause in, word for word (14 Oct:
+# "flip-wording spots it, then the AI writes around it"; Gemma had pasted the seller's sentence over it)
+REASON_MARK = "[REASON]"
+REASON_SENTENCE = {"lower": "I'm offering that because [REASON].", "asking": "I don't mind that [REASON]."}
+
+
+def reason_for_ai(point, kind="lower"):
+    """What the AI is told to give as the reason: for a reason flip.wording worded and checked, the mark [REASON]
+    where it goes, which code fills with that reason word for word (the AI is shown it, to write around it); else
+    the listing's own words (quoted)."""
+    if not point.get("worded"):
+        return quoted(point)
+    return (f'{REASON_MARK}, written exactly like that, in a sentence of its own: "{REASON_SENTENCE.get(kind, REASON_SENTENCE["lower"])}" '
+            f'FlipAssist puts in the checked reason word for word: "{point["worded"]}"')
 
 
 def question_for(kind, point):

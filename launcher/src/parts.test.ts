@@ -49,9 +49,19 @@ test("FlipAssist opens with the models every draft uses loaded, each with the wo
 });
 
 test("the launch screen names what's ready and says a model that isn't installed (6 Oct review)", () => {
+  const all = ["gemma3:4b", "flip-reader-5:latest", "flip-wording-4b:latest", "flip-kinds-1:latest", "flip-style-1b:latest",
+    "flip-wording-3:latest", "flip-kinds-2:latest"];
+  // every model FlipAssist uses, by the app's names (14 Oct), and none it doesn't (flip-wording-3, flip-kinds-2)
+  assert.equal(readyWords(all, ""), "flip-reader-5, flip-wording-4b, flip-kinds-1, flip-style-1b and Gemma 3 4B are ready");
+  assert.equal(readyWords(["gemma3:4b", "flip-reader-5:latest", "flip-kinds-1:latest", "flip-style-1b:latest"], ""),
+    "flip-reader-5, flip-kinds-1, flip-style-1b and Gemma 3 4B are ready; flip-wording-4b isn't installed, so code words "
+    + "the reason");
+  assert.equal(readyWords(["gemma3:4b"], "FLIP_WORDING_MODEL=\nFLIP_KINDS_MODEL=\nFLIP_STYLE_AI="),
+    "Gemma 3 4B is ready; flip-reader-5 isn't installed, so Gemma 3 4B reads");
   assert.equal(readyWords(["gemma3:4b", "flip-reader-5:latest", "flip-wording-4b:latest"], ""),
+    "flip-reader-5, flip-wording-4b and Gemma 3 4B are ready; flip-kinds-1 isn't installed, so code's rules sort the "
+    + "flaws; flip-style-1b isn't installed, so code reads your style alone");
+  // switched off in .env, or by what's set already, as the API reads them; plain Gemma 3 4B reading your style is one
+  assert.equal(readyWords(all, "FLIP_KINDS_MODEL=", { FLIP_STYLE_AI: "gemma3:4b" }),
     "flip-reader-5, flip-wording-4b and Gemma 3 4B are ready");
-  assert.equal(readyWords(["gemma3:4b", "flip-reader-5:latest"], ""),
-    "flip-reader-5 and Gemma 3 4B are ready; flip-wording-4b isn't installed, so code words the reason");
-  assert.equal(readyWords(["gemma3:4b"], "FLIP_WORDING_MODEL="), "Gemma 3 4B is ready; flip-reader-5 isn't installed, so Gemma reads");
 });

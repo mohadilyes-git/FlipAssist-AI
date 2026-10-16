@@ -1070,7 +1070,7 @@ def describe(card, words=None):
     return lines
 
 
-def learned(card, removed=()):
+def learned(card, removed=(), finder=""):
     """Everything your style puts in a message, one row each, for you to keep
     or remove: [{"key": "greeting:hi mate", "what": "Opens with", "value":
     "Hi mate", "used": True}, ...]. removed: the keys you removed (used is
@@ -1078,7 +1078,8 @@ def learned(card, removed=()):
     put back. How long your messages are isn't on it: that's not a thing it
     puts in. Neither is the offer question you ask every time, a question or
     an emoji already in one of your sentences, or an opener that's only your
-    greeting."""
+    greeting. finder: the model that found what code didn't (flip-style-1b), as
+    the app names it: "Signs off with (found by flip-style-1b)"."""
     card = card or {}
     rows, keys = [], set()
 
@@ -1089,7 +1090,7 @@ def learned(card, removed=()):
 
     phrases = card.get("phrases") or {}
     ai = set(card.get("ai_found") or ())
-    marked = lambda what, part: f"{what} (found by our AI)" if part in ai else what
+    marked = lambda what, part: f"{what} (found by {finder or 'the style reader'})" if part in ai else what
     if card.get("greeting"):
         add(f"greeting:{card['greeting'].lower()}", marked("Opens with", "greeting"), card["greeting"])
     for habit, name in HABIT_NAMES.items():
@@ -1569,9 +1570,12 @@ class StyleBook:
             return {key for (key,) in self.db.execute("select key from removed")}
 
     def learned(self):
-        """What your style puts in a message, each with whether you still use it (learned)."""
+        """What your style puts in a message, each with whether you still use it (learned), what our AI found named
+        by the model that found it."""
+        from flip.ai import shown_name
         with self.lock:
-            return learned(self.learned_card(), self.removed())
+            row = self.db.execute("select model from ai_style order by rowid desc limit 1").fetchone()
+            return learned(self.learned_card(), self.removed(), finder=shown_name(row[0]) if row and row[0] else "")
 
     def use(self, key, used):
         """Keep (used) or remove one thing your style learned, by its key in

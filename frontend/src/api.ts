@@ -181,8 +181,10 @@ export type Stats = {
   drafts: number;
   ready: number;
   needs_you: number;
-  /** the share of drafts that used no paid AI at any step: reading, the reason's check or fix, writing (14 Oct) */
-  done_on_this_device: number;
+  /** successful outputs (answers that passed their checks) made on this device, free, and all of them, the paid ones
+   * too (14 Oct) */
+  outputs_here: number;
+  outputs: number;
   /** each model once for each job it did: "read", "draft" (writing), "reason" or "colour" */
   models: { model: string; job: string; attempts: number; passed: number; cost_pence: number }[];
   cost_pence: number;

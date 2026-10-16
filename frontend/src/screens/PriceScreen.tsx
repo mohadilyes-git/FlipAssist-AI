@@ -89,15 +89,16 @@ export function PriceScreen() {
           <section className="card" aria-label="How it works">
             <p className="caps">How it works</p>
             <ol className="how-it-works">
-              <li><strong>AlertFlip prices API</strong> keeps recent UK sales of iPhones, Samsung phones and MacBooks.</li>
+              <li><strong>AlertFlip API</strong> keeps recent UK sales of iPhones, Samsung phones and MacBooks.</li>
               <li><strong>Claude Haiku 5.5</strong> organises that sales data: each sale's model, storage, a MacBook's RAM,
                 condition and flaws.</li>
               <li>The middle price of clean ones, same model and size, is <strong>sent here</strong>. The cheapest
                 quarter is left out, as those often hide flaws.</li>
               {/* no amounts here: the prices API's cut table is its own and can change */}
-              <li><strong>flip-reader-5</strong>, our AI on this device, reads the title and description for flaws (if its
-                reading fails our checks, Claude Sonnet 5.5 reads it instead, a paid call). <strong>flip-kinds-1</strong>,
-                our flaw-sorting AI on this device, sorts each flaw into a kind (code's rules do when it isn't installed),
+              <li><strong>flip-reader-5</strong>, FlipAssist's own model on this device, reads the title and description
+                for flaws (if its reading fails code's checks, Claude Sonnet 5.5 reads it instead, a paid
+                call). <strong>flip-kinds-1</strong>, FlipAssist's own flaw-sorting model on this device, sorts each flaw
+                into a kind (code's rules do when it isn't installed),
                 and the price is cut by amounts measured on phone listings: any flaw takes a small cut, faults cut
                 the most, and different kinds' cuts multiply. Damage is cut by how bad it is (minor, moderate or
                 severe) and how pricey the model is, as measured on 1,697 damaged iPhone, Samsung and MacBook listings. A locked or for-parts one is priced at what

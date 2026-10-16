@@ -1099,8 +1099,8 @@ REFUSED = {
     "UNAVAILABLE": "Price checks are busy or paused for a moment: try again shortly",
     "DAILY_LIMIT": "Today's price checks are used up: try again tomorrow",
     "CAP": "This month's price checks are used up",
-    "UNAUTHORIZED": "The prices API refused the key (PRICES_KEY in .env)",
-    "BAD_REQUEST": "The prices API couldn't use this request",
+    "UNAUTHORIZED": "The AlertFlip API refused the key (PRICES_KEY in .env)",
+    "BAD_REQUEST": "The AlertFlip API couldn't use this request",
 }
 # the API's monthly cap is an UNAVAILABLE too, said in its message ("New price checks are paused until next month."):
 # not a moment's wait, and what it saved still prices the models checked before
@@ -1115,8 +1115,8 @@ def refused(code, status=None, message=None):
     """The API's refusal (its code, the HTTP status and its own message) in FlipAssist's words."""
     if code == "UNAVAILABLE" and isinstance(message, str) and "next month" in message.lower():
         return {"error": MONTHLY_CAP}
-    return {"error": REFUSED.get(code) or (f"The prices API couldn't price it ({code})" if code
-                                           else f"The prices API answered {status}")}
+    return {"error": REFUSED.get(code) or (f"The AlertFlip API couldn't price it ({code})" if code
+                                           else f"The AlertFlip API answered {status}")}
 
 
 def sorted_kinds(flaws, text, title, description, sorter=None):
@@ -1155,7 +1155,7 @@ def estimate(title, flaws=(), country="uk", opener=None, description=None, sorte
         return {"skipped": SKIPPED}
     url, key = settings()
     if not url or not key:
-        return {"skipped": "No prices API set (PRICES_URL and PRICES_KEY in .env)"}
+        return {"skipped": "The AlertFlip API isn't set: add PRICES_URL and PRICES_KEY to .env"}
     title = title.strip()
     flaws = [f.strip() for f in flaws or [] if isinstance(f, str) and f.strip()]
     # the listing the flaws are judged in: the title and the description, as the reader read them
@@ -1193,7 +1193,7 @@ def estimate(title, flaws=(), country="uk", opener=None, description=None, sorte
         said = said if isinstance(said, dict) else {}
         return refused(said.get("code"), e.code, said.get("message"))
     except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
-        return {"error": f"Couldn't reach the prices API ({type(e).__name__})"}
+        return {"error": f"Couldn't reach the AlertFlip API ({type(e).__name__})"}
     if not isinstance(answer, dict) or "price" not in answer:
         said = answer.get("error") if isinstance(answer, dict) else None
         said = said if isinstance(said, dict) else {}

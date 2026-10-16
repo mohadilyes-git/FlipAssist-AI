@@ -111,13 +111,18 @@ def api_model(name, thinking=None):
                     thinking=thinking)
 
 
-def asked(model, system, user, schema):
-    """model.ask, never raising: a check that can't run (no API key, a network fault, a bug) is a failed check, and
-    the reason goes out as flip-wording wrote it."""
+# what a step that can't run says, by the step (14 Oct: flip-wording's own fault said "the check couldn't run")
+STEP_FAILED = {"word": "couldn't word the reason", "check": "the check couldn't run", "fix": "the fix couldn't run"}
+
+
+def asked(model, system, user, schema, step="check"):
+    """model.ask, never raising: a step that can't run (no API key, a network fault, a bug) is a failed step, and
+    the reason goes out as flip-wording wrote it. step: "word" (flip-wording), "check" (Claude Haiku 5.5) or "fix"
+    (Claude Sonnet 5.5), for what the failure says."""
     try:
         return model.ask(system, user, [], schema)
     except Exception as error:  # noqa: BLE001 - any failure here must fall back, not stop the draft
-        return Reply(getattr(model, "name", "unknown"), error=f"the check couldn't run ({type(error).__name__})",
+        return Reply(getattr(model, "name", "unknown"), error=f"{STEP_FAILED[step]} ({type(error).__name__})",
                      reachable=False)
 
 
@@ -155,7 +160,7 @@ def check_reason(title, flaws, clause, by, models=None, result=None, log=None):
     fix = models["fix"] if "fix" in models else api_model(names["fix"]) if names["fix"] else None
     if fix is None:
         return {**out, "checked": "flagged, kept"}
-    fixed = asked(fix, cached(CHECKER), fix_text(title, flaws, clause), FIX)
+    fixed = asked(fix, cached(CHECKER), fix_text(title, flaws, clause), FIX, step="fix")
     better = tidy(fixed.answer.get("clause")) if fixed.answer else ""
     tried(fixed, [fixed.error] if fixed.answer is None else [])
     if fixed.answer is None or fixed.answer.get("verdict") != "fix" or not better or better == clause:
@@ -181,7 +186,7 @@ def worded_reason(title, flaws, mode="auto", models=None, result=None, log=None,
         LocalModel(names["wording"], timeout=60, max_tokens=160, num_ctx=2048) if names["wording"] else None
     if wording is None:
         return None
-    reply = asked(wording, SYSTEM, flaw_lines(title, flaws), WORDING)
+    reply = asked(wording, SYSTEM, flaw_lines(title, flaws), WORDING, step="word")
     clause = tidy(reply.answer.get("reason")) if reply.answer else ""
     recorder(result, log)(reply, [reply.error] if reply.answer is None else [] if clause else ["no reason in the answer"])
     if not clause:

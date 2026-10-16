@@ -2,7 +2,8 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App, markShell, SETUP_DONE, THEME } from "../App";
-import type { ListingDraft, MessageDraft, PriceEstimate, Style } from "../api";
+import type { Attempt, ListingDraft, MessageDraft, PriceEstimate, Style } from "../api";
+import { Steps } from "../ui";
 import { ListingScreen } from "../screens/ListingScreen";
 import { HomeScreen, ollamaRows, paidRows, runningRows } from "../screens/HomeScreen";
 import { MessageScreen } from "../screens/MessageScreen";
@@ -33,7 +34,7 @@ const HEALTH = { local_model: "gemma3:4b", local_running: true, api_model: "clau
     { job: "sorts price flaws", name: "flip-kinds-1", installed: true },
     { job: "reads your style", name: "flip-style-1b", installed: true },
     { job: "writes messages", name: "gemma3:4b", installed: true }] };
-const STATS = { drafts: 2, ready: 2, needs_you: 0, done_on_this_device: 0.8, models: [], cost_pence: 0,
+const STATS = { drafts: 2, ready: 2, needs_you: 0, outputs_here: 40, outputs: 50, models: [], cost_pence: 0,
   cost_per_100_drafts_pence: 0, approved: 0, edited_before_sending: 0 };
 
 type Answer = [number, unknown];
@@ -277,7 +278,7 @@ describe("AI message", () => {
     await fill(user);
     await user.click(screen.getByRole("button", { name: "Write my message" }));
     const box = await screen.findByDisplayValue(DRAFT.message!);
-    expect(screen.getByText("Reason by flip-wording-3 · checking…")).toBeTruthy();
+    expect(screen.getByText("Reason by flip-wording-3 · Claude Haiku 5.5 checking…")).toBeTruthy();
     await user.type(box, " Thanks");
     release();
     expect(await screen.findByText("Reason flagged by Claude Haiku 5.5, fixed by Claude Sonnet 5.5")).toBeTruthy();
@@ -297,10 +298,12 @@ describe("AI message", () => {
   it("calls the no-AI writer what it is: the AI still reads the listing", () => {
     render(<MessageScreen />);
     const chip = screen.getByRole("button", { name: "No AI writing" });
-    expect(chip.getAttribute("title")).toBe("The AI still reads the listing's flaws; your sentences (or AlertFlip's) "
-      + "write the message");
+    expect(chip.getAttribute("title")).toBe("flip-reader-5 still reads the listing's flaws and flip-wording-4b words the "
+      + "reason (Claude Haiku 5.5 checks it); your sentences (or AlertFlip's) write the rest");
     expect(screen.queryByRole("button", { name: "No AI" })).toBeNull();
-    expect(screen.getByRole("button", { name: "AI writer" }).getAttribute("title")).toContain("Gemma 3 4B");
+    expect(screen.getByRole("button", { name: "AI writer" }).getAttribute("title")).toBe("Gemma 3 4B writes the message on "
+      + "this device, around the reason flip-wording-4b words; Claude Sonnet 5.5 (paid) writes it when Gemma 3 4B's drafts "
+      + "fail code's checks");
   });
 
   it("shows why, step by step", async () => {
@@ -309,7 +312,9 @@ describe("AI message", () => {
     render(<MessageScreen />);
     await draft(user);
     await user.click(screen.getByRole("button", { name: /Why · 2 steps/ }));
-    expect(screen.getByText("Gemma 3 4B (on this device) passed")).toBeTruthy();
+    // each step by its job and who did it (14 Oct): the reading first, then the writing
+    expect(screen.getByText("Reading the listing · Gemma 3 4B (on this device) passed")).toBeTruthy();
+    expect(screen.getByText("Writing the message · No AI writing passed")).toBeTruthy();
     expect(screen.getByText("1.2s · free")).toBeTruthy();
   });
 
@@ -490,7 +495,7 @@ describe("AI UK price estimate", () => {
     expect(flaws.textContent).toContain("Read by flip-reader-5 (on this device) · counted as damage");
     const how = within(screen.getByLabelText("How it works")).getAllByRole("listitem").map((li) => li.textContent);
     expect(how.map((step) => step.split(/[,:.]| keeps| organises| reads/)[0])).toEqual(
-      ["AlertFlip prices API", "Claude Haiku 5", "The middle price of clean ones", "flip-reader-5"]);
+      ["AlertFlip API", "Claude Haiku 5", "The middle price of clean ones", "flip-reader-5"]);
     expect(screen.queryAllByRole("paragraph").filter((p) => p.className === "warn-row")).toHaveLength(0);
     expect(document.body.textContent).not.toMatch(/ebay/i);
     expect(sent(fetch, "POST /api/prices/estimate")).toEqual(
@@ -658,8 +663,9 @@ describe("AI UK price estimate", () => {
   it("says how flaws cut the price as the prices API does it, with no amounts that could go stale", () => {
     render(<PriceScreen />);
     const step = within(screen.getByLabelText("How it works")).getAllByRole("listitem")[3].textContent;
-    expect(step).toBe("flip-reader-5, our AI on this device, reads the title and description for flaws (if its reading "
-      + "fails our checks, Claude Sonnet 5.5 reads it instead, a paid call). flip-kinds-1, our flaw-sorting AI on this device, "
+    expect(step).toBe("flip-reader-5, FlipAssist's own model on this device, reads the title and description for flaws (if "
+      + "its reading fails code's checks, Claude Sonnet 5.5 reads it instead, a paid call). flip-kinds-1, FlipAssist's own "
+      + "flaw-sorting model on this device, "
       + "sorts each flaw into a kind (code's rules do when it isn't installed), and the price is cut by amounts measured on phone listings: any flaw takes a small cut, faults cut the most, "
       + "and different kinds' cuts multiply. Damage is cut by how bad it is (minor, moderate or severe) and how pricey the "
       + "model is, as measured on 1,697 damaged iPhone, Samsung and MacBook listings. A locked or for-parts one is priced at what for-parts ones of the same model "
@@ -785,7 +791,8 @@ describe("List on eBay", () => {
     await screen.findByText("Midnight (from the photos, by Claude Haiku 5.5)");
     expect(screen.getByText(/^Gemma 3 4B \(on this device\) ·/)).toBeTruthy(); // Gemma wrote it; Haiku only looked at the colour
     await user.click(screen.getByRole("button", { name: "Why" }));
-    expect(screen.getByText("Claude Haiku 5.5, colour only: passed")).toBeTruthy();
+    expect(screen.getByText("Looking at the colour · Claude Haiku 5.5 (paid) passed")).toBeTruthy();
+    expect(screen.getByText("Writing the listing · Gemma 3 4B (on this device) passed")).toBeTruthy();
   });
 
   it("leaves out a photo too big to send, or a file that isn't a photo, and says so", async () => {
@@ -1042,7 +1049,7 @@ describe("the app", () => {
     expect(await screen.findByText("Learning from 14 of your messages")).toBeTruthy();
     await user.click(within(screen.getByRole("navigation")).getByText("Home"));
     expect(await screen.findByText("Done on this device")).toBeTruthy();
-    expect(await screen.findByText("80%")).toBeTruthy();
+    expect(await screen.findByText("40")).toBeTruthy();
     expect(window.location.hash).toBe("#home");
     expect(screen.getByText("FlipAssist · Home")).toBeTruthy();
     await user.click(within(screen.getByRole("navigation")).getByText("AI message"));
@@ -1102,11 +1109,12 @@ describe("Home (fix 2, 14 Oct)", () => {
     return reload;
   };
 
-  it("says how many drafts used no paid AI at any step, with no Refresh and no buttons at the bottom", async () => {
+  it("counts the successful outputs made on this device, with no Refresh and no buttons at the bottom", async () => {
     const reload = home();
     const hero = within(screen.getByRole("region", { name: "Done on this device" }));
-    expect(await hero.findByText("80%")).toBeTruthy();
-    expect(hero.getByText("of drafts used no paid AI at any step")).toBeTruthy();
+    expect(await hero.findByText("40")).toBeTruthy();
+    expect(hero.getByText("successful outputs, all free · 80% of the 50 in total")).toBeTruthy();
+    expect(screen.queryByText(/no paid AI/)).toBeNull(); // 14 Oct: the paid check runs on purpose
     expect(hero.getByText("edited · none sent yet")).toBeTruthy();
     expect(screen.queryByText(/never needed the paid backup/)).toBeNull();
     expect(screen.queryByRole("button", { name: /Refresh/ })).toBeNull();
@@ -1118,7 +1126,7 @@ describe("Home (fix 2, 14 Oct)", () => {
 
   it("loads again by itself when you come back to the window", async () => {
     const reload = home();
-    await screen.findByText("80%");
+    await screen.findByText("40");
     window.dispatchEvent(new Event("focus"));
     await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(2));
   });
@@ -1138,8 +1146,8 @@ describe("Home (fix 2, 14 Oct)", () => {
       ["flip-style-1b", "reads your style", true, true],
       ["Gemma 3 4B", "the AI writer: writes messages and eBay listings", true, true],
       ["Claude Haiku 5.5 (paid)", "Only checks each message's reason is sendable", true, false],
-      ["Claude Sonnet 5.5 (paid)", "Writes when this device's models can't: fixes a reason the check flags, writes a "
-        + "message or eBay listing, or reads a listing or its photos", true, false],
+      ["Claude Sonnet 5.5 (paid)", "Fixes a reason Claude Haiku 5.5 flags; when this device's models can't, writes a "
+        + "message or eBay listing, reads a listing, or looks at the photos for the colour", true, false],
       ["AlertFlip API", "Fresh local sales data for the UK price estimate", true, false],
       ["FlipAssist API key", "Set", true, false],
     ]);
@@ -1172,8 +1180,9 @@ describe("Home (fix 2, 14 Oct)", () => {
       { name: "Claude Sonnet 5.5 (paid)", ok: "off", state: "Off: no Anthropic key, so everything runs on this device" }]);
     expect(paidRows({ ...HEALTH, api_model: "claude-haiku-5-5" }).map((r) => [r.name, r.state])).toEqual([
       ["Claude Haiku 5.5 (paid)", "Only checks each message's reason is sendable"],
-      ["Claude Haiku 5.5 (paid)", "Writes when this device's models can't: writes a message or eBay listing, or reads a listing or its photos"],
-      ["Claude Sonnet 5.5 (paid)", "Fixes a reason the check flags"]]);
+      ["Claude Haiku 5.5 (paid)", "When this device's models can't: writes a message or eBay listing, reads a listing, or "
+        + "looks at the photos for the colour"],
+      ["Claude Sonnet 5.5 (paid)", "Fixes a reason Claude Haiku 5.5 flags"]]);
   });
 
   it("says when the AlertFlip API or the key isn't set, and the API's own state before it answers", () => {
@@ -1206,5 +1215,53 @@ describe("the damage cut by how bad (fix 1, 14 Oct)", () => {
     expect(cautions(mac, "MacBook Air M1").some((c) => c.includes("measured on phones"))).toBe(false);
     expect(cautions({ ...mac, cuts: ["damage", "fault"], kinds: ["damage", "fault"] }, "MacBook Air M1")
       .some((c) => c.includes("measured on phones"))).toBe(true);
+  });
+});
+
+describe("the steps behind a draft, by job and who did it (14 Oct)", () => {
+  const step = (model: string, more: Partial<Attempt> = {}): Attempt =>
+    ({ model, problems: [], seconds: 1, cost_pence: 0, ...more });
+  const said = () => screen.getAllByRole("listitem").map((li) => li.querySelector("span")?.textContent);
+
+  it("names each step by its job: reading, wording, checking, fixing, writing", () => {
+    render(<Steps readings={1} attempts={[step("flip-reader-5"), step("flip-wording-4b", { job: "reason" }),
+      step("claude-haiku-5-5", { job: "reason" }), step("claude-sonnet-5-5", { job: "reason" }), step("gemma3:4b"),
+      step("claude-sonnet-5-5", { problems: ["no answer"] })]} />);
+    expect(said()).toEqual([
+      "Reading the listing · flip-reader-5 (on this device) passed",
+      "Wording the reason · flip-wording-4b (on this device) passed",
+      "Checking the reason · Claude Haiku 5.5 (paid) passed",
+      "Fixing the reason · Claude Sonnet 5.5 (paid) passed",
+      "Writing the message · Gemma 3 4B (on this device) passed",
+      "Writing the message · Claude Sonnet 5.5 (paid) failed: no answer"]);
+  });
+
+  it("says Claude Haiku 5.5 flagged the reason when it did, not that it passed", () => {
+    render(<Steps flagged attempts={[step("flip-wording-4b", { job: "reason" }), step("claude-haiku-5-5", { job: "reason" }),
+      step("claude-sonnet-5-5", { job: "reason" })]} />);
+    expect(said()).toEqual(["Wording the reason · flip-wording-4b (on this device) passed",
+      "Checking the reason · Claude Haiku 5.5 (paid) flagged it", "Fixing the reason · Claude Sonnet 5.5 (paid) passed"]);
+  });
+
+  it("calls an eBay listing's writing what it is, and a look at the colour a look", () => {
+    render(<Steps writing="listing" attempts={[step("gemma3:4b"), step("claude-sonnet-5-5", { colour_only: true })]} />);
+    expect(said()).toEqual(["Writing the listing · Gemma 3 4B (on this device) passed",
+      "Looking at the colour · Claude Sonnet 5.5 (paid) passed"]);
+  });
+
+  it("shows Claude Haiku 5.5's flag on the AI message when the reason was fixed", async () => {
+    const fixed = { ...DRAFT, reason: { clause: "the black dot on the screen", by: "claude-sonnet-5-5", checked: "fixed" },
+      attempts: [step("flip-wording-4b", { job: "reason" }), step("claude-haiku-5-5", { job: "reason" }),
+        step("claude-sonnet-5-5", { job: "reason" }), ...DRAFT.attempts] };
+    serve({ "POST /api/messages/draft": [200, fixed] });
+    const user = userEvent.setup();
+    render(<MessageScreen />);
+    await user.type(screen.getByRole("textbox", { name: "Listing title" }), "iPhone 13");
+    await user.type(screen.getByPlaceholderText("£220"), "220");
+    await user.click(screen.getByRole("button", { name: "1 flaw only" }));
+    await user.click(screen.getByRole("button", { name: "Write my message" }));
+    await user.click(await screen.findByRole("button", { name: /Why · 5 steps/ }));
+    expect(screen.getByText("Checking the reason · Claude Haiku 5.5 (paid) flagged it")).toBeTruthy();
+    expect(screen.getByText("Reason flagged by Claude Haiku 5.5, fixed by Claude Sonnet 5.5")).toBeTruthy();
   });
 });

@@ -356,7 +356,7 @@ def test_when_the_message_without_ai_fails_a_check_the_ai_gets_its_turn(monkeypa
     assert (result["status"], result["writer"], result["reasons"]) == ("ready", "gemma3:4b", [])
     # told to write without AI, it asks no AI: the draft is yours to look at
     only = draft_message(LISTING, style_card(PAST), local=FakeModel("gemma3:4b"), writer="template")
-    assert (only["status"], only["reasons"]) == ("needs you", ["the message written without AI didn't pass the checks"])
+    assert (only["status"], only["reasons"]) == ("needs you", ["No AI writing's message didn't pass the checks"])
 
 
 def test_a_message_never_promises_collecting_or_cash_your_messages_dont(tmp_path):
@@ -558,7 +558,7 @@ def test_with_no_ai_a_rewrite_gives_your_message_back_and_says_why():
     yours = draft_message(LISTING, style_card(PAST))["answer"]["message"]
     result = draft_message(LISTING, style_card(PAST), writer="template", rewrite_of=yours)
     assert (result["status"], result["answer"]["message"]) == ("ready", yours)
-    assert result["warnings"] == ["The added sentences (no AI) say this one way only: choose AI for other words"]
+    assert result["warnings"] == ["No AI writing says this one way only: pick the AI writer (Gemma 3 4B) for other words"]
 
 
 def test_when_no_other_wording_passes_your_own_message_stays():
@@ -634,12 +634,13 @@ def test_with_no_past_messages_the_ai_is_given_alertflips_rules():
     ai_draft(LISTING, local=local)
     user, system = local.asked[0]["user"], local.asked[0]["system"]
     # a lower offer on Facebook: code adds the cash-and-collect sentence, so the AI is told to leave it out
-    assert "Buying: don't mention cash, collecting or postage: a sentence saying cash and collecting is added after yours" in user
+    assert "Buying: don't mention cash, collecting or postage\n" in user  # not why: Gemma copied that (14 Oct)
     assert '- Opens with "Hi"' in user and "- One or two short sentences, under 220 characters" in user
     assert "- At most two questions" in user and "- No emojis and no sign-off" in user
     assert '(none yet). The shape of a good one, not their words: "Hi, would you take £[OFFER] for it?"' in user
-    assert user.endswith("- Ask nothing about the item itself.\n- Be one or two short sentences, the greeting and the "
-                         "offer: the rest is added after yours.")
+    assert user.endswith("- Ask nothing about the item itself.\n- Be one or two short sentences: the greeting and the "
+                         "offer.")
+    assert "added after" not in user and "added at the end" not in user
     assert "Your message must:\n- Start with \"Hi\".\n- Ask if they'd take £170, under their asking price: " \
            "\"would you take £170 for it?\"" in user
     assert "iCloud" not in system and "I'll pay ... I'll pay" not in system  # not named unless the listing does
@@ -761,7 +762,7 @@ def test_one_free_retry_on_this_mac_before_haiku_told_what_was_turned_down():
     retry = local.asked[1]["user"]
     assert 'Your last try was: "Hi, would you take £160 for it?"' in retry  # its own words, not code's
     assert "It was turned down: the message must offer exactly £170.00 and no other price" in retry
-    assert retry.endswith("Code adds the reason and the cash-and-collect sentence after yours.")
+    assert retry.endswith("changing only what was turned down.") and "Code adds" not in retry
     down = Reply("gemma3:4b", error="the local model isn't running (connection refused)", reachable=False)
     local = FakeModel("gemma3:4b", down)
     assert ai_draft(CRACKED, local=local, api=FakeModel("claude-haiku-5-5"), offer=17000)["status"] == "needs you"

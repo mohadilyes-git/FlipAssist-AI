@@ -50,7 +50,7 @@ def draft_listing(entry, catalogue, conditions, local=None, api=None, mode="auto
         mode, {"local": local, "api": api},
         ask=lambda ai: ai.ask(system, user, list(photos), schema),
         check=lambda answer: check_listing_answer(answer, item, catalogue, allowed, sources, notes),
-        result=result, log=log)
+        result=result, log=log, job="listing")  # its own job in the audit log: Home says "writing the eBay listing"
 
     # a colour the AI picked from the photos, once checked, completes the item; one code read stays.
     # With no photos it had nothing to look at, so its pick is a guess: the colour stays for you

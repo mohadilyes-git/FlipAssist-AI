@@ -30,8 +30,15 @@ export type Warm = { model: string; numCtx: number };
 // flip-wording words the offer's reason (flip.wording). A setting in .env renames one, or turns it off when empty.
 export const READER = { setting: "FLIP_READER_MODEL", model: "flip-reader-5", numCtx: 8192 };
 export const WORDING = { setting: "FLIP_WORDING_MODEL", model: "flip-wording-4b", numCtx: 2048 }; // flip-wording-3 before 6 Oct
-// Gemma reads when the reader isn't there, and writes when the AI writes (the AI writer, Rewrite)
+// ...and the two the price tab and Your style use (6 Oct): flip-kinds sorts a UK price's flaws (flip.kinds), and
+// flip-style reads your style (flip.style_ai). The API reads the same settings: an empty one switches it off
+export const KINDS = { setting: "FLIP_KINDS_MODEL", model: "flip-kinds-1" };
+export const STYLE = { setting: "FLIP_STYLE_AI", model: "flip-style-1b" };
+// Gemma 3 4B reads when the reader isn't there, and writes when the AI writes (the AI writer, Rewrite, eBay listings)
 export const GEMMA = { model: "gemma3:4b", numCtx: 8192 };
+// each model as the app names it (14 Oct): FlipAssist's own by their names, Gemma 3 4B in full
+const SHOWN: Record<string, string> = { [GEMMA.model]: "Gemma 3 4B" };
+const shown = (model: string) => SHOWN[model] ?? model;
 
 /** The models to load when FlipAssist opens, from the names Ollama has (its /api/tags) and the repo's .env:
  * flip-wording when it's there and on, then the reader (or Gemma, which reads when the reader isn't there or is
@@ -59,15 +66,22 @@ function hasIn(installed: string[]): (model: string) => boolean {
   return (model) => installed.some((name) => name === model || name === `${model}:latest`);
 }
 
-/** What the launch screen says once Ollama has Gemma: the models found, by name, and any of the two every draft uses
- * that isn't installed, with what does its job instead (6 Oct review: it named them without looking). */
+/** What the launch screen says once Ollama has Gemma 3 4B: every model FlipAssist uses that Ollama has, by the name
+ * the app shows (flip-reader-5, flip-wording-4b, flip-kinds-1, flip-style-1b, Gemma 3 4B), and any of FlipAssist's
+ * own that isn't installed, with what does its job instead (6 Oct review: it named them without looking; 14 Oct: all
+ * five, not the reader and the wording model alone). A model switched off in .env isn't named. */
 export function readyWords(installed: string[], env: string, set: Record<string, string | undefined> = {}): string {
   const has = hasIn(installed);
-  const reader = named(READER, env, set);
-  const wording = named(WORDING, env, set);
-  const ready = [reader, wording].filter((model) => model && has(model)).concat(has(GEMMA.model) ? ["Gemma 3 4B"] : []);
-  const missing = [reader && !has(reader) ? `${reader} isn't installed, so Gemma reads` : "",
-    wording && !has(wording) ? `${wording} isn't installed, so code words the reason` : ""].filter(Boolean);
+  const own: [string, string][] = [
+    [named(READER, env, set), "so Gemma 3 4B reads"],
+    [named(WORDING, env, set), "so code words the reason"],
+    [named(KINDS, env, set), "so code's rules sort the flaws"],
+    [named(STYLE, env, set), "so code reads your style alone"],
+  ];
+  const ready = [...new Set([...own.map(([model]) => model), GEMMA.model].filter((model) => model && has(model))
+    .map(shown))];
+  const missing = own.filter(([model]) => model && !has(model))
+    .map(([model, instead]) => `${shown(model)} isn't installed, ${instead}`);
   const list = ready.length > 1 ? `${ready.slice(0, -1).join(", ")} and ${ready[ready.length - 1]}` : ready[0] ?? "";
   return [list ? `${list} ${ready.length > 1 ? "are" : "is"} ready` : "", ...missing].filter(Boolean).join("; ");
 }

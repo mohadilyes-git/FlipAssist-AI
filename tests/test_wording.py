@@ -159,9 +159,31 @@ def test_the_checks_take_a_worded_reason_as_the_listings_own_words():
 
 
 def test_the_ai_writer_is_given_the_worded_reason_to_use_as_it_is():
+    """14 Oct: the AI writes around the reason flip-wording worded: it places [REASON], which code fills word for word."""
     point = {"about": "flaw", "says": READING["flaws"], "worded": CLAUSE}
     system, user = message_prompt(LISTING, 17000, [], [], "lower", point)
-    assert f'"{CLAUSE}" (use this reason as it is)' in system + user
+    assert '"I\'m offering that because [REASON]."' in user and f'word for word: "{CLAUSE}"' in user
+
+
+def test_the_ai_writers_reason_mark_is_filled_with_the_checked_reason(tmp_path):
+    from flip.message_drafter import draft_message
+    from tests.fakes import FakeModel
+    listing = {"title": "iPhone 13 128GB", "asking_price": "220", "marketplace": "facebook",
+               "description": "Back glass cracked in the corner. Collection from Leeds LS6."}
+    reading = {"flaws": ["Back glass cracked in the corner"], "pickup": "Leeds LS6", "no_offers": "", "read_by": "x",
+               "attempts": []}
+    wording = {"wording": FakeModel("flip-wording-4b", {"reason": "the back glass is cracked in the corner"})}
+    pasted = {"message": "Hi, would you take £185 for it? Back glass cracked in the corner. I can pay cash and come and "
+                         "collect it."}  # the seller's words pasted in: turned down
+    marked = {"message": "Hi, would you take £185 for it? I'm offering that because [reason]. I can pay cash and come "
+                         "and collect it."}
+    local = FakeModel("gemma3:4b", pasted, marked)
+    result = draft_message(listing, None, None, local, None, "local", None, kind="lower", mention=True, reading=reading,
+                           writer="ai", wording=wording)
+    assert result["answer"]["message"] == ("Hi, would you take £185 for it? I'm offering that because the back glass is "
+                                           "cracked in the corner. I can pay cash and come and collect it.")
+    gemma = [a["problems"] for a in result["attempts"] if a["model"] == "gemma3:4b"]
+    assert len(gemma) == 2 and "the message doesn't give the checked reason" in gemma[0][0] and gemma[1] == []
 
 
 def test_a_quote_cut_at_a_colon_gets_the_rest_of_its_sentence():

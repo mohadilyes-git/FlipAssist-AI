@@ -80,11 +80,12 @@ function open(): BrowserWindow {
   return window;
 }
 
-// each model by its real name (4 Oct): Ollama runs flip-reader-5, flip-wording-4b (6 Oct) and Gemma 3 4B on this Mac
+// each model by its real name (4 Oct): Ollama runs flip-reader-5, flip-wording-4b, flip-kinds-1, flip-style-1b (6 Oct)
+// and Gemma 3 4B on this device; once it's up, the launch screen names the ones it really has (parts.readyWords)
 const GEMMA_WORDS: Record<Gemma, string> = {
-  "ready": "flip-reader-5, flip-wording-4b and Gemma 3 4B are ready",
+  "ready": "flip-reader-5, flip-wording-4b, flip-kinds-1, flip-style-1b and Gemma 3 4B are ready",
   "no ollama": "Ollama isn't installed: drafts use code only",
-  "no model": "Gemma 3 4B isn't downloaded: the AI can't write messages or listings",
+  "no model": "Gemma 3 4B isn't downloaded: the AI writer can't write messages or eBay listings",
   "failed": `Ollama didn't start: drafts use code only (${LOGS}/ollama.log)`,
 };
 

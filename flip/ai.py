@@ -1,9 +1,10 @@
 """The two AI models behind one small plug: ask(system, user, photos, schema)
 returns a Reply, whichever model answers.
 
-The local model (Gemma 3 4B through Ollama) runs on this Mac: free, and nothing
-leaves the machine. The API model (Claude Haiku) is paid and only gets items
-whose local answer failed the checks. "Couldn't be reached" and "answered
+The local model (Gemma 3 4B through Ollama) runs on this device: free, and
+nothing leaves the machine. The API model (Claude Sonnet 5.5 since 14 Oct,
+BACKUP_MODEL; Claude Haiku before) is paid and only gets items whose local
+answer failed the checks. "Couldn't be reached" and "answered
 wrongly" are kept apart, because only a wrong answer may go on to the API.
 """
 
@@ -14,6 +15,8 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+
+import os
 
 import anthropic
 
@@ -119,27 +122,30 @@ class LocalModel:
         request = urllib.request.Request(f"{self.url}/api/chat", data=json.dumps(body).encode(),
                                          headers={"Content-Type": "application/json"})
         started = time.monotonic()
+        # each error names the model, as the app names it ("Gemma 3 4B took too long", 14 Oct): it shows on its own
+        # under the message and on List on eBay
+        name = shown_name(self.name)
+        except_seconds = lambda: time.monotonic() - started
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 data = json.load(response)
         except urllib.error.HTTPError as e:  # e.g. the model isn't downloaded
-            return Reply(self.name, error=f"the local model refused ({e.code}): {said(e)}",
-                         reachable=False, seconds=time.monotonic() - started)
-        except urllib.error.URLError as e:
-            return Reply(self.name, error=f"the local model isn't running ({e.reason})", reachable=False,
-                         seconds=time.monotonic() - started)
+            return Reply(self.name, error=f"Ollama refused {name} ({e.code}): {said(e)}", reachable=False,
+                         seconds=except_seconds())
+        except urllib.error.URLError as e:  # nothing answers on Ollama's port
+            return Reply(self.name, error=f"Ollama isn't running on this device, so {name} can't answer ({e.reason})",
+                         reachable=False, seconds=except_seconds())
         except TimeoutError:  # minutes with no answer: as good as not running, so it isn't sent to the API instead
-            return Reply(self.name, error="the local model took too long", reachable=False,
-                         seconds=time.monotonic() - started)
+            return Reply(self.name, error=f"{name} took too long", reachable=False, seconds=except_seconds())
         except (ConnectionError, http.client.HTTPException) as e:  # it quit, restarted or crashed mid-answer
-            return Reply(self.name, error=f"the local model stopped answering ({type(e).__name__})", reachable=False,
-                         seconds=time.monotonic() - started)
+            return Reply(self.name, error=f"{name} stopped answering ({type(e).__name__})", reachable=False,
+                         seconds=except_seconds())
         except (OSError, ValueError, RecursionError):  # not Ollama's JSON: something else is on its port
-            return Reply(self.name, error="the local model's answer couldn't be read", reachable=False,
-                         seconds=time.monotonic() - started)
+            return Reply(self.name, error=f"{name}'s answer couldn't be read", reachable=False,
+                         seconds=except_seconds())
         if not ollama_shaped(data):
-            return Reply(self.name, error="the local model's answer couldn't be read", reachable=False,
-                         seconds=time.monotonic() - started)
+            return Reply(self.name, error=f"{name}'s answer couldn't be read", reachable=False,
+                         seconds=except_seconds())
         reply = Reply(self.name, tokens_in=count(data.get("prompt_eval_count")), tokens_out=count(data.get("eval_count")),
                       seconds=time.monotonic() - started)
         if data.get("done_reason") == "length":
@@ -149,9 +155,29 @@ class LocalModel:
         return reply
 
 
+# the paid model that reads or writes when this device's models can't (14 Oct; Claude Haiku 5.5 before, which now only
+# checks each offer's reason): FLIP_BACKUP_MODEL in .env names another
+BACKUP_MODEL = "claude-sonnet-5-5"
+
+
+def backup_model():
+    """The paid fallback's name: FLIP_BACKUP_MODEL from the environment (or .env), else Claude Sonnet 5.5."""
+    return os.environ.get("FLIP_BACKUP_MODEL", "").strip() or BACKUP_MODEL
+
+
+# each model as the app names it (frontend/src/format.ts), for a message the API writes itself (14 Oct)
+SHOWN_NAMES = {"gemma3:4b": "Gemma 3 4B", "claude-haiku-5-5": "Claude Haiku 5.5",
+               "claude-sonnet-5-5": "Claude Sonnet 5.5"}
+
+
+def shown_name(model):
+    """A model as the app names it: "claude-sonnet-5-5" -> "Claude Sonnet 5.5", "flip-style-1b" as it is."""
+    return SHOWN_NAMES.get(model, model)
+
+
 class ApiModel:
     """A Claude model through the Anthropic API: the paid fallback for answers this device's models got wrong
-    (Claude Sonnet 5.5 since 14 Oct, flip.api.BACKUP_MODEL), and the reason's check and fix (flip.wording)."""
+    (Claude Sonnet 5.5 since 14 Oct, BACKUP_MODEL), and the reason's check and fix (flip.wording)."""
 
     def __init__(self, name="claude-haiku-5-5", client=None, thinking=None):
         self.name, self.client = name, client  # the client is made on first use

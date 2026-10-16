@@ -105,11 +105,12 @@ def test_a_fix_that_cant_go_in_leaves_the_message_and_says_why(client):
     draft = drafted(client, models())
     reworded = {**draft, "message": "Hi, would you take £185? There's a little chip and the battery is at 81%."}
     done = checked(client, reworded, models(check="fix", fix=("fix", BETTER)))
-    assert not done["changed"] and done["problems"] == ["the message words the reason its own way, so the fix wasn't put in"]
+    assert not done["changed"] and done["problems"] == \
+        ["the message words the reason its own way, so Claude Sonnet 5.5's fix wasn't put in"]  # named (14 Oct)
     # the reason says what the message gives: flip-wording's, flagged and kept, not Sonnet's (3 Oct review)
     assert done["reason"] == {"clause": CLAUSE, "by": "flip-wording-3", "checked": "flagged, kept"}
     none = checked(client, draft, models(check="fix", fix=("fix", "none")))
-    assert not none["changed"] and "nothing here is a flaw" in none["problems"][0]
+    assert not none["changed"] and none["problems"][0].startswith("Claude Sonnet 5.5 says nothing here is a flaw")
     assert none["reason"]["checked"] == "flagged, kept"
 
 

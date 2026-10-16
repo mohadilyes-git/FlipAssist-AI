@@ -59,7 +59,8 @@ export function HomeScreen({ go, count, running, reload }: Props) {
   return (
     <>
       <Head icon={<GaugeIcon />} title="FlipAssist"
-        sub={checks ? "Code first · AI on this device · Claude Haiku 5.5 checks each reason" : "Code first · AI on this device"} />
+        sub={`Code first · FlipAssist's models and Gemma 3 4B on this device${checks
+          ? ` · ${modelName((running as Health).check_model ?? "")} checks each reason` : ""}`} />
       {error && <p className="error" role="alert">{error}</p>}
       {/* the blue card with who did the work under it and what's running beside them, so a tall Running card leaves
           no gap (14 Oct); one column when it's narrow: the blue card, Running, then who did the work */}
@@ -67,8 +68,13 @@ export function HomeScreen({ go, count, running, reload }: Props) {
         <div className="home-grid">
         <section className="hero home-hero" aria-label="Done on this device">
           <p className="caps">Done on this device</p>
-          <p className="hero-big">{stats ? percent(stats.done_on_this_device) : "–"}</p>
-          <p className="sub">of drafts used no paid AI at any step</p>
+          {/* the successful outputs made here, free (14 Oct: not the drafts that used no paid AI, as the paid check
+              runs on purpose every time) */}
+          <p className="hero-big">{stats ? stats.outputs_here.toLocaleString("en-GB") : "–"}</p>
+          <p className="sub">
+            {stats ? `successful outputs, all free · ${percent(stats.outputs_here, stats.outputs)} of the `
+              + `${stats.outputs.toLocaleString("en-GB")} in total` : "successful outputs, all free"}
+          </p>
           <a className="hero-pill" href="#style" onClick={link("style")}>
             <PenIcon size={12} stroke={2.4} />
             Learning from {count} of your messages
@@ -146,13 +152,15 @@ export function paidRows(running: Health): Row[] {
   const rows: Row[] = [running.check_model
     ? { name: paid(running.check_model), ok: true, state: "Only checks each message's reason is sendable" }
     : { name: paid("claude-haiku-5-5"), ok: "off", state: "Off in .env: reasons aren't checked" }];
-  const writes = "writes a message or eBay listing, or reads a listing or its photos";  // the colour look too
+  // the checker by name: it flags the reasons the fixer rewrites (Claude Haiku 5.5 unless .env names another)
+  const checker = modelName(running.check_model || "claude-haiku-5-5");
+  const writes = "writes a message or eBay listing, reads a listing, or looks at the photos for the colour";
   if (running.fix_model && running.fix_model === running.api_model) {
     rows.push({ name: paid(running.api_model), ok: true,
-      state: `Writes when this device's models can't: fixes a reason the check flags, ${writes}` });
+      state: `Fixes a reason ${checker} flags; when this device's models can't, ${writes}` });
   } else {
-    rows.push({ name: paid(running.api_model), ok: true, state: `Writes when this device's models can't: ${writes}` });
-    if (running.fix_model) rows.push({ name: paid(running.fix_model), ok: true, state: "Fixes a reason the check flags" });
+    rows.push({ name: paid(running.api_model), ok: true, state: `When this device's models can't: ${writes}` });
+    if (running.fix_model) rows.push({ name: paid(running.fix_model), ok: true, state: `Fixes a reason ${checker} flags` });
   }
   return rows;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { modelName, readBy, reasonLine, writerName } from "../format";
+import { jobName, modelName, readBy, reasonLine, writerName } from "../format";
 
 describe("who read the listing", () => {
   it("names FlipAssist's own reader", () => {
@@ -18,8 +18,16 @@ describe("reasonLine", () => {
   it("says who worded the offer's reason and who checked it", () => {
     expect(reasonLine({ by: "flip-wording-3", checked: "ok" })).toBe("Reason by flip-wording-3 · checked by Claude Haiku 5.5");
     expect(reasonLine({ by: "claude-sonnet-5-5", checked: "fixed" })).toBe("Reason flagged by Claude Haiku 5.5, fixed by Claude Sonnet 5.5");
-    expect(reasonLine({ by: "flip-wording-3", checked: "flagged, kept" })).toBe("Reason by flip-wording-3 · flagged, kept as written");
+    expect(reasonLine({ by: "flip-wording-3", checked: "flagged, kept" })).toBe("Reason by flip-wording-3 · flagged by Claude Haiku 5.5, kept as written");
     expect(reasonLine({ by: "flip-wording-3", checked: "not checked" })).toBe("Reason by flip-wording-3 · not checked");
-    expect(reasonLine({ by: "flip-wording-3", checked: "pending" })).toBe("Reason by flip-wording-3 · checking…");
+    expect(reasonLine({ by: "flip-wording-3", checked: "pending" })).toBe("Reason by flip-wording-3 · Claude Haiku 5.5 checking…");
+  });
+});
+
+describe("what each model did, on Home", () => {
+  it("calls an eBay listing's writing what it is (14 Oct)", () => {
+    expect(jobName("gemma3:4b", "listing")).toBe("writing the eBay listing");
+    expect(jobName("gemma3:4b", "draft")).toBe("writing the message");
+    expect(jobName("claude-haiku-5-5", "reason")).toBe("checking the reason is sendable");
   });
 });

@@ -20,8 +20,8 @@ export function reasonLine(reason: { by: string; checked: string }): string {
   if (reason.checked === "fixed") return `Reason flagged by ${checker}, fixed by ${modelName(reason.by)}`;
   const by = `Reason by ${modelName(reason.by)}`;
   if (reason.checked === "ok") return `${by} · checked by ${checker}`;
-  if (reason.checked === "flagged, kept") return `${by} · flagged, kept as written`;
-  if (reason.checked === "pending") return `${by} · checking…`;
+  if (reason.checked === "flagged, kept") return `${by} · flagged by ${checker}, kept as written`;
+  if (reason.checked === "pending") return `${by} · ${checker} checking…`;
   return `${by} · not checked`;
 }
 
@@ -30,6 +30,7 @@ export function jobName(model: string, job: string): string {
   if (job === "read") return "reading the listing";
   if (job === "price") return "reading for a UK price";
   if (job === "colour") return "checking the colour";
+  if (job === "listing") return "writing the eBay listing";  // a listing's own job since 14 Oct
   if (job === "reason") {
     return model.startsWith("claude-haiku") ? "checking the reason is sendable" : model.startsWith("claude-sonnet") ? "fixing the reason"
       : "wording the reason";

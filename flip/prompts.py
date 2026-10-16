@@ -119,13 +119,13 @@ NO_CONDITION = "don't mention it"
 # after, as its own sentence, which reads better than "would you take £380 cash and come and collect it?")
 BUYING_LOCAL = 'the reseller pays cash and comes to collect: say both in one sentence with the offer, like "I can ' \
                'pay {offer} cash and come and collect it"'
-BUYING_LOCAL_ADDED = "don't mention cash, collecting or postage: a sentence saying cash and collecting is added " \
-                     "after yours"
+# ...and when code adds it, only what not to say: told why ("a sentence saying cash and collecting is added after
+# yours"), Gemma wrote "Cash and collecting is arranged separately." into the message (14 Oct, 3 of 6 live drafts)
+BUYING_LOCAL_ADDED = "don't mention cash, collecting or postage"
 # a listing that says no cash: collecting only
 BUYING_NO_CASH = 'the listing says no cash, so never mention cash; the reseller comes to collect: say it in one ' \
                  'sentence with the offer, like "I can pay {offer} and come and collect it"'
-BUYING_NO_CASH_ADDED = "the listing says no cash: never mention cash, nor collecting: a sentence about collecting " \
-                       "is added after yours"
+BUYING_NO_CASH_ADDED = "the listing says no cash: never mention cash, nor collecting"
 BUYING_POSTED = "don't mention cash, collecting or postage"  # "it's paid through the site" got copied into a message
 # ...and once they do, only the way their own messages do (flip.checks.check_no_unasked_promises)
 BUYING_YOURS = "say it only the way their own messages do: {habits}"
@@ -259,7 +259,7 @@ def message_prompt(listing, offer, style_lines, examples, kind="lower", point=No
         f"Marketplace: {listing.get('marketplace') or 'not given'}",
         "",
         f"Offer: {(POSTED_ASKING if kind == 'asking' and not local else OFFER_LINES[kind]).format(offer=offer_words(offer))}",
-        f"Condition: {CONDITION_LINES[kind].format(says=reason_for_ai(point)) if point else NO_CONDITION}",
+        f"Condition: {CONDITION_LINES[kind].format(says=reason_for_ai(point, kind)) if point else NO_CONDITION}",
         *([f"Buying: {buying}"] if buying else []),
         *([f"Pickup: {pickup}, where the listing says to collect"] if pickup else []),
         *(longer_lines(longer) if longer else []),
@@ -280,22 +280,21 @@ def message_prompt(listing, offer, style_lines, examples, kind="lower", point=No
 def must_lines(kind, offer, local, point, added, limit, cash=True):
     """What a message must do, before you have past messages: the last thing
     the model reads, in plain steps."""
-    condition = f"{CONDITION_LINES[kind].format(says=reason_for_ai(point))}." if point else \
-        "Say nothing about its condition: the reason is added after yours." if "the reason" in added else \
+    condition = f"{CONDITION_LINES[kind].format(says=reason_for_ai(point, kind))}." if point else \
+        "Say nothing about its condition." if "the reason" in added else \
         "Say nothing about its condition."
-    buying = "Say nothing about cash, collecting or postage: that sentence is added after yours." if \
+    buying = "Say nothing about cash, collecting or postage." if \
         "cash and collecting" in added else "Say you can pay cash and come and collect it, in the same sentence as the offer." if local else \
         "Say nothing about cash, collecting or postage."
     if local and not cash:  # the listing says no cash
-        buying = "Never mention cash, and say nothing about collecting or postage: that sentence is added after " \
-                 "yours." if \
+        buying = "Never mention cash, and say nothing about collecting or postage." if \
             "cash and collecting" in added else "Never mention cash; say you can come and collect it, in the same " \
                                                 "sentence as the offer."
     return ["", "Your message must:", '- Start with "Hi".', f"- {MUST_OFFER[kind].format(offer=offer_words(offer))}",
             f"- {buying}", f"- {condition[:1].upper()}{condition[1:]}", "- Ask nothing about the item itself.",
             # you write the reason, code adds only the cash-and-collect sentence, at the end: your part leaves room
             # for it (26 Sep: told 220 with 40 added, a right answer failed the 250 check)
-            f"- Be two short sentences, the offer and its reason, under {limit} characters: a "
-            "sentence about cash and collecting is added at the end." if added and point and "the reason" not in added
-            else "- Be one or two short sentences, the greeting and the offer: the rest is added after yours." if added
+            f"- Be two short sentences, the offer and its reason, under {limit} characters." if added and point and
+            "the reason" not in added
+            else "- Be one or two short sentences: the greeting and the offer." if added
             else f"- Be two or three short sentences, under {limit} characters."]

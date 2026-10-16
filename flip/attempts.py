@@ -8,6 +8,7 @@ the API in its place, so an item only leaves this Mac when a local answer has
 failed the checks.
 """
 
+from flip.ai import backup_model, shown_name
 from flip.costs import cost_pence
 
 MODES = {"local": ["local"], "api": ["api"], "auto": ["local", "api"]}
@@ -30,10 +31,14 @@ def try_models(mode, models, ask, check, result, log=None, again=None, job="draf
             log.attempt(result["item_id"], reply, problems, cost, job=job)  # "read" for reading the listing
         return problems
 
+    # the paid model as the app names it ("Claude Sonnet 5.5 (paid)", 14 Oct): these reasons show under the message
+    # and on List on eBay
+    paid = f"{shown_name(getattr(models.get('api'), 'name', None) or backup_model())} (paid)"
     for name in MODES[mode]:
         model = models.get(name)
         if model is None:
-            result["reasons"].append(f"no {name} model is set up")
+            result["reasons"].append(f"{paid} is off: no Anthropic key" if name == "api"
+                                     else "no model on this device is set up")
             if name == "local":
                 return None  # never the API in place of a missing local model
             continue
@@ -42,7 +47,7 @@ def try_models(mode, models, ask, check, result, log=None, again=None, job="draf
         if not problems:
             return reply.answer
         if name == "local" and not reply.reachable:
-            result["reasons"].append(f"{reply.error}, and nothing was sent to the API instead")
+            result["reasons"].append(f"{reply.error}, and nothing was sent to {paid} instead")
             return None
         if name == "local" and again is not None and reply.answer is not None:
             reply = again(model, reply.answer, problems)

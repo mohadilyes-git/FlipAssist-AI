@@ -174,7 +174,7 @@ def test_nothing_goes_to_the_api_when_the_local_model_isnt_running():
     result = draft(local=FakeModel("gemma3:4b", down), api=api)
     assert api.asked == []
     assert result["status"] == "needs you"
-    assert "nothing was sent to the API instead" in result["reasons"][0]
+    assert "nothing was sent to Claude Haiku 5.5 (paid) instead" in result["reasons"][0]  # named (14 Oct)
     assert draft(local=None, api=FakeModel("claude-haiku-5-5", GOOD))["attempts"] == []  # no local model at all
 
 
@@ -364,19 +364,20 @@ def test_gemma_unsure_of_the_colour_gets_haikus_look_at_the_colour_alone(tmp_pat
 
 
 def test_a_colour_look_is_paid_ai_but_doesnt_count_as_writing_the_draft(tmp_path):
-    """The test agents' (14 Sep): a look at the colour alone isn't the paid model writing the draft. Since 14 Oct "done
-    on this device" counts drafts with no paid step at all, so a paid look at the colour counts against it."""
+    """The test agents' (14 Sep): a look at the colour alone isn't the paid model writing the draft; it's a paid
+    output of its own, not one made on this device (Home's "done on this device", 14 Oct)."""
     log = AuditLog(tmp_path / "audit.sqlite3")
     for n, look in enumerate(({"colour": "Midnight"}, {"colour": "unsure"})):  # each draft its own item, as in the app
         draft({**ENTRY, "id": f"t{n}"}, local=FakeModel("gemma3:4b", UNSURE_GEMMA), api=FakeModel("claude-haiku-5-5", look),
               log=log)
     draft({**ENTRY, "id": "t2"}, local=FakeModel("gemma3:4b", GOOD), log=log)  # a colour the listing settles: no look
     stats = log.stats()
-    assert stats["done_on_this_device"] == 0.333  # 1 of 3 drafts used no paid AI
-    assert {m["model"]: m["job"] for m in stats["models"]}["gemma3:4b"] == "draft"  # Gemma wrote all three
+    assert (stats["outputs_here"], stats["outputs"]) == (3, 5)  # Gemma's 3 drafts here, and the 2 paid looks
+    assert {m["model"]: m["job"] for m in stats["models"]}["gemma3:4b"] == "listing"  # Gemma wrote all three
     haiku = next(m for m in stats["models"] if m["model"] == "claude-haiku-5-5")
     assert (haiku["attempts"], haiku["cost_pence"] > 0) == (2, True)  # its looks are still counted, and paid for
-    assert [job for (job,) in log.db.execute("select job from attempts order by id")] == ["draft", "colour"] * 2 + ["draft"]
+    assert [job for (job,) in log.db.execute("select job from attempts order by id")] == \
+        ["listing", "colour"] * 2 + ["listing"]  # an eBay listing's own job (14 Oct)
 
 
 def test_haiku_unsure_too_or_failing_leaves_the_colour_for_you():
@@ -439,7 +440,7 @@ def answering(monkeypatch, answer):
 def test_a_reply_that_isnt_ollamas_is_as_good_as_no_model(monkeypatch, answer):
     answering(monkeypatch, answer)
     reply = LocalModel().ask("system", "user", [], {})
-    assert (reply.answer, reply.reachable, reply.error) == (None, False, "the local model's answer couldn't be read")
+    assert (reply.answer, reply.reachable, reply.error) == (None, False, "Gemma 3 4B's answer couldn't be read")
 
 
 @pytest.mark.parametrize("failure", [TimeoutError("timed out"), http.client.RemoteDisconnected("gone"),
@@ -448,7 +449,7 @@ def test_a_local_model_that_stops_answering_is_never_swapped_for_the_api(monkeyp
     answering(monkeypatch, failure)
     result = draft(local=LocalModel(), api=FakeModel("claude-haiku-5-5"))  # asking it would fail: it has no answers
     assert result["status"] == "needs you" and [a["model"] for a in result["attempts"]] == ["gemma3:4b"]
-    assert "nothing was sent to the API instead" in result["reasons"][0]
+    assert "nothing was sent to Claude Haiku 5.5 (paid) instead" in result["reasons"][0]
 
 
 @pytest.mark.parametrize("page", [io.BytesIO("modèle introuvable".encode("latin-1")), None])
@@ -458,7 +459,7 @@ def test_an_error_page_is_read_whatever_its_encoding_or_skipped(monkeypatch, pag
             raise ConnectionResetError("reset")
     answering(monkeypatch, urllib.error.HTTPError("http://127.0.0.1:11434", 404, "Not Found", {}, page or HangsUp()))
     reply = LocalModel().ask("system", "user", [], {})
-    assert reply.error.startswith("the local model refused (404)") and not reply.reachable
+    assert reply.error.startswith("Ollama refused Gemma 3 4B (404)") and not reply.reachable
 
 
 def test_token_counts_that_cant_be_are_counted_as_none(monkeypatch):

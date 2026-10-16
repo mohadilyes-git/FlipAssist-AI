@@ -5,7 +5,6 @@ ended up ready or with you. It also keeps what you actually sent for a draft
 (flip.api's approve), so the results can count how often a draft was right as
 it was, and it adds it all up for the cost meter (stats)."""
 
-import bisect
 import json
 import sqlite3
 import threading
@@ -129,11 +128,12 @@ class AuditLog:
     def stats(self):
         """The cost meter: how drafts ended, which model did the work, what it
         cost, and how often you changed a draft before sending it. "Done on
-        this device" is the share of drafts that used no paid AI at any step:
-        not to read the listing, nor to check or fix the reason, nor to write
-        it (14 Oct: the reason's paid check is part of drafting, not a backup,
-        so a draft it checked counts as one that used paid AI). Each model is
-        counted once for each job it did."""
+        this device" counts the successful outputs (answers that passed their
+        checks) made here, by FlipAssist's models, Gemma or No AI writing, for
+        free, against every successful output, the paid ones (Claude's check,
+        fix and fallback) included (14 Oct: the paid check runs on purpose, so
+        it isn't counted against a draft). Each model is counted once for each
+        job it did."""
         with self.lock:
             ended = dict(self.db.execute("select status, count(*) from drafts group by status").fetchall())
             rows = self.db.execute("select model, problems, cost_pence, coalesce(job, 'draft') from attempts").fetchall()
@@ -141,9 +141,6 @@ class AuditLog:
             approved, edited = self.db.execute(
                 "select count(*), coalesce(sum(edited), 0) from approvals"
                 " where id in (select max(id) from approvals group by draft_id)").fetchone()
-            made = self.db.execute("select at, item_id from drafts order by at, id").fetchall()
-            paid_steps = self.db.execute("select at, item_id, coalesce(job, 'draft') from attempts where model like"
-                                         " 'claude%' and coalesce(job, 'draft') != 'price'").fetchall()
         # each model by the job it did (4 Oct: Claude Haiku checking a reason isn't Claude Sonnet writing a message)
         models = {}
         for model, problems, cost, job in rows:
@@ -152,27 +149,14 @@ class AuditLog:
             use["attempts"] += 1
             use["passed"] += problems == "[]"
             use["cost_pence"] += pence(cost)
-        # the drafts that used paid AI at some step: by their item; a step logged with no item is the draft's it
-        # belongs to by time: a reason's check (before 14 Oct) the draft made just before it, as the app checks a
-        # reason straight after drafting it; any other step the draft it's part of, which is logged once it's made
-        times, drafts_of = [at for at, _ in made], {}
-        for n, (_, item) in enumerate(made):
-            if item is not None:
-                drafts_of.setdefault(item, []).append(n)
-        paid = set()
-        for at, item, job in paid_steps:
-            if item is not None:
-                paid.update(drafts_of.get(item, []))
-                continue
-            n = bisect.bisect_right(times, at) - 1 if job == "reason" else bisect.bisect_left(times, at)
-            if 0 <= n < len(made):
-                paid.add(n)
-        free = len(made) - len(paid)
+        # the successful outputs: made on this device (free), and all of them
+        outputs = sum(m["passed"] for m in models.values())
+        here = sum(m["passed"] for m in models.values() if not m["model"].startswith("claude"))
         drafts, cost = sum(ended.values()), sum(m["cost_pence"] for m in models.values())
         # a UK price check's reading (job "price") isn't a draft's: left out of the cost per 100 drafts (4 Oct)
         drafted = sum(m["cost_pence"] for m in models.values() if m["job"] != "price")
         return {"drafts": drafts, "ready": ended.get("ready", 0), "needs_you": ended.get("needs you", 0),
-                "done_on_this_device": round(free / len(made), 3) if made else 0.0,
+                "outputs_here": here, "outputs": outputs,
                 "models": [{**m, "cost_pence": float(round(m["cost_pence"], 4))} for m in models.values()],
                 "cost_pence": float(round(cost, 4)),
                 "cost_per_100_drafts_pence": float(round(100 * drafted / drafts, 4)) if drafts else 0.0,

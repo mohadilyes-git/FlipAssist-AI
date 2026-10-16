@@ -270,24 +270,25 @@ def test_the_cost_meter_adds_it_all_up(client):
     client.post(f"/drafts/{first['draft_id']}/approve", json={"sent": first["message"]})
     stats = client.get("/stats").json()
     assert (stats["drafts"], stats["ready"], stats["needs_you"]) == (2, 2, 0)
-    assert stats["done_on_this_device"] == 1.0 and stats["cost_pence"] == 0
+    assert (stats["outputs_here"], stats["outputs"], stats["cost_pence"]) == (4, 4, 0)  # 2 readings, 2 messages
     assert {m["model"] for m in stats["models"]} == {"gemma3:4b", "template"}
     assert (stats["approved"], stats["edited_before_sending"]) == (1, 0)
 
 
-def test_a_draft_any_paid_step_ran_on_isnt_done_on_this_device(client):
-    """14 Oct: the reason's paid check is part of drafting, not a backup: a draft it checked used paid AI."""
+def test_done_on_this_device_counts_the_successful_outputs_made_here(client):
+    """14 Oct: Home's blue card counts the outputs that passed their checks made on this device (free), against all
+    of them: the paid check runs on purpose, so it's counted as the paid model's output, not against a draft."""
     client.use(local=FakeModel("gemma3:4b", READ, READ, READ), messages=PAST)
     drafts = [client.post("/messages/draft", json={"listing": LISTING, "mention": True}).json() for _ in range(3)]
     log = api.app.dependency_overrides[api.audit]()
-    assert client.get("/stats").json()["done_on_this_device"] == 1.0
+    stats = client.get("/stats").json()
+    assert (stats["outputs_here"], stats["outputs"]) == (6, 6)  # 3 readings and 3 messages, all here
     log.attempt(log.item_of(drafts[0]["draft_id"]), Reply("claude-haiku-5-5", answer={"verdict": "ok"}), [], "0.01",
                 job="reason")
-    assert client.get("/stats").json()["done_on_this_device"] == 0.667
-    # a check logged before 14 Oct has no item: it's the draft made just before it
-    log.attempt(None, Reply("claude-haiku-5-5", answer={"verdict": "ok"}), [], "0.01", job="reason")
-    assert client.get("/stats").json()["done_on_this_device"] == 0.333
-    assert log.item_of(10**6) is None
+    log.attempt(None, Reply("claude-sonnet-5-5", answer={}), ["no clause"], "0.1", job="reason")  # failed: not counted
+    stats = client.get("/stats").json()
+    assert (stats["outputs_here"], stats["outputs"]) == (6, 7)
+    assert log.item_of(drafts[0]["draft_id"]).startswith("api-") and log.item_of(10**6) is None
 
 
 def test_the_reasons_check_counts_for_its_draft(client, monkeypatch):
@@ -664,7 +665,7 @@ def test_with_no_prices_api_set_the_listing_isnt_read(client, monkeypatch):
     local = FakeModel("gemma3:4b", READ)
     client.use(local=local)
     found = client.post("/prices/estimate", json={"title": "iPhone 13 128GB", "description": "Cracked back"}).json()
-    assert found["skipped"].startswith("No prices API set") and local.asked == []
+    assert found["skipped"].startswith("The AlertFlip API isn't set") and local.asked == []
 
 
 def test_the_price_tab_asks_for_the_kinds_and_the_size_the_listing_gives(client, monkeypatch, prices_api):

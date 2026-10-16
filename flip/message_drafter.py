@@ -249,7 +249,6 @@ LOCAL_HABITS = {"collecting", "cash"}
 CASH_AND_COLLECT = {frozenset({"cash", "collecting"}): "I can pay cash and come and collect it.",
                     frozenset({"collecting"}): "I can come and collect it.", frozenset({"cash"}): "I can pay cash."}
 # what code adds, as the retry tells the AI
-ADDED_NAMES = {"the reason": "the reason", "cash and collecting": "the cash-and-collect sentence"}
 # a message that won't collect: asking the seller to bring or post it, or saying collecting can't be done. Code
 # adds no "I can come and collect it." to one of these: the checks say what's wrong instead
 WONT_COLLECT = re.compile(r"\byou (?:to )?(?:drop|bring|deliver|post|send)\b|\b(?:drop|bring) (?:it|them) (?:round|over|to me)\b|"
@@ -631,9 +630,10 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
             result.update(answer=None, status="needs you", writer=None)
         elif ready or writer == "template":
             if not ready:
-                result["reasons"].append("the message written without AI didn't pass the checks")
+                result["reasons"].append("No AI writing's message didn't pass the checks")
             elif again:
-                result["warnings"].append("The added sentences (no AI) say this one way only: choose AI for other words")
+                result["warnings"].append("No AI writing says this one way only: pick the AI writer (Gemma 3 4B) for "
+                                          "other words")
             if log:
                 log.draft(result)
             return result
@@ -644,7 +644,8 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     # the frame at the top" is longer than code says back, and with the AI told code adds it, nothing passed: 26 Sep)
     code_reason = reason_sentence(point) if mention and point else None
     # ...and only one that says the listing's point once written: "it's screen" doesn't say "Its screen is cracked"
-    added = ([*(["the reason"] if code_reason and says_point(code_reason, point) else []),
+    # ...but a reason flip.wording worded is the AI's to place, as [REASON], which code fills in (14 Oct)
+    added = ([*(["the reason"] if code_reason and says_point(code_reason, point) and not point.get("worded") else []),
               *(["cash and collecting"] if in_person else [])]
              if not card and kind == "lower" and length == "usual" else [])
     system, user = message_prompt(listing, offer, describe(card, longer["words"] if longer else None), shown,
@@ -656,6 +657,10 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
 
     def finished(reply):
         message = reply.answer.get("message") if isinstance(reply.answer, dict) else None
+        if isinstance(message, str) and point and point.get("worded") and REASON_MARKED.search(message):
+            # [REASON] where the AI put it: the reason flip.wording worded and Haiku checks, word for word
+            message = REASON_MARKED.sub(lambda _: point["worded"], message)
+            reply.answer = {**reply.answer, "message": message}
         if isinstance(message, str) and STRAY_QUOTES.search(message):  # "...sell it to me.”": a quote mark left over
             message = STRAY_QUOTES.sub("", message).strip()
             reply.answer = {**reply.answer, "message": message}
@@ -679,13 +684,29 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
 
     def again(ai, answer, problems):  # one free try on this Mac, told what was turned down
         told = RETRY.format(tried=written.get("message") or answer.get("message"), problems="; ".join(problems),
-                            added=f" Code adds {' and '.join(ADDED_NAMES[a] for a in added)} after yours." if added else "")
+                            added="")  # not what code adds: Gemma wrote that into its message (14 Oct)
         return finished(ai.ask(system, f"{user}\n\n{told}", [], MESSAGE_SCHEMA, vary=bool(rewrite_of)))
+
+    def ai_check(answer, *more, **options):
+        """The AI's message (14 Oct: Gemma pasted the seller's "It's a good condition overall, screen is burnt and
+        there's some small scratches" over the checked reason): it gives the reason flip-wording worded and Haiku
+        checks word for word, and a lower offer never praises the condition."""
+        problems = check(answer, *more, **options)
+        message = answer.get("message") if isinstance(answer, dict) else None
+        if not isinstance(message, str):
+            return problems
+        worded = point.get("worded") if mention and point else None
+        if worded and not gives_word_for_word(message, worded):
+            problems.append("the message doesn't give the checked reason: write [REASON] where it goes, and code puts "
+                            "it in")
+        if kind == "lower" and praises_condition(message, offer):
+            problems.append("a lower offer praises the condition")
+        return problems
 
     result["answer"] = try_models(
         mode, {"local": local, "api": api},
         ask=lambda ai: finished(ai.ask(system, user, [], MESSAGE_SCHEMA, vary=bool(rewrite_of))),
-        check=check, result=result, log=log, again=again)
+        check=ai_check, result=result, log=log, again=again)
     if result["answer"] is not None:
         result["status"], result["writer"] = "ready", result["attempts"][-1]["model"]
         result["answer"] = in_your_case(result["answer"], card, offer, kind,
@@ -696,6 +717,25 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     if log:
         log.draft(result)
     return result
+
+
+# the AI's mark for the reason, however it typed it: "[REASON]", "[reason]", "{REASON}", "[ the reason ]"
+REASON_MARKED = re.compile(r"[\[{(]\s*(?:the\s+)?reason\s*[\]})]", re.IGNORECASE)
+
+
+def gives_word_for_word(message, clause):
+    """Whether a message gives a reason's clause as it was worded (case, curly apostrophes and spaces aside)."""
+    plain = lambda text: re.sub(r"\s+", " ", re.sub(r"[’‘ʼ]", "'", text)).strip(" .").lower()
+    return plain(clause) in plain(message)
+
+
+def praises_condition(message, offer=None):
+    """Whether a message states the item is in good condition ("It's a good condition overall"): a lower offer that
+    does argues against itself. Not minding it ("happy with the condition") and questions ("Is it in good condition?")
+    are fine."""
+    from flip.offers import GOOD_LEVELS, NOT_MINDING, condition_said, said_in
+    return any(set(condition_said(part, typos=True)) & set(GOOD_LEVELS) and not NOT_MINDING.search(part)
+               for part in said_in(message, offer))
 
 
 def code_sentences(message, point, in_person, cash=True):

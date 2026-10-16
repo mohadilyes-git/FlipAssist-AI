@@ -145,7 +145,7 @@ export function ListingScreen() {
             <div className="empty">
               <span className="tile"><TagIcon size={20} /></span>
               <strong>Your eBay draft shows here</strong>
-              <p className="sub">Add photos and notes, then Draft listing. Code fills the specs, AI writes the rest.</p>
+              <p className="sub">Add photos and notes, then Draft listing. Code fills the specs, Gemma 3 4B writes the rest.</p>
             </div>
           )}
         </div>
@@ -232,7 +232,7 @@ function Drafted({ draft, ebayTitle, setEbayTitle, text, setText, specifics, set
             <button type="button" className="link" aria-expanded={why} onClick={() => setWhy(!why)}>Why</button>
           )}
         </p>
-        {why && <Steps attempts={draft.attempts} />}
+        {why && <Steps attempts={draft.attempts} writing="listing" />}
       </div>
     </section>
   );

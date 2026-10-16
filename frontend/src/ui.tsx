@@ -3,7 +3,7 @@
 // the orange warning row, the steps behind a draft, and the line icons.
 import { type KeyboardEvent, type PointerEvent, type ReactNode, useRef } from "react";
 import type { Attempt } from "./api";
-import { cost, modelName, writerName } from "./format";
+import { cost, writerName } from "./format";
 import { money } from "./prices";
 
 export function Head({ icon, title, sub, right }: { icon: ReactNode; title: string; sub: string; right?: ReactNode }) {
@@ -100,15 +100,34 @@ export function PriceSlider({ value, min, max, step, label, onChange }: {
 }
 
 /** Each step behind a draft: who tried it, whether the checks passed it, and what it took. */
-export function Steps({ attempts }: { attempts: Attempt[] }) {
+/** One step behind a draft by its job and who did it (14 Oct): "Reading the listing · flip-reader-5 (on this
+ * device)", "Wording the reason · flip-wording-4b (on this device)", "Checking the reason · Claude Haiku 5.5 (paid)",
+ * "Fixing the reason · Claude Sonnet 5.5 (paid)", "Looking at the colour · …", "Writing the message · …" (or the
+ * listing, on List on eBay). reading: the step read the listing. */
+export function stepName(a: Attempt, reading: boolean, writing: "message" | "listing" = "message"): string {
+  const who = writerName(a.model);
+  if (reading) return `Reading the listing · ${who}`;
+  if (a.colour_only) return `Looking at the colour · ${who}`;
+  if (a.job === "reason") {
+    const what = a.model.startsWith("claude-haiku") ? "Checking the reason" : a.model.startsWith("claude-sonnet")
+      ? "Fixing the reason" : "Wording the reason";
+    return `${what} · ${who}`;
+  }
+  return `Writing the ${writing} · ${who}`;
+}
+
+/** The steps behind a draft. readings: how many of the first attempts read the listing; flagged: Claude Haiku 5.5
+ * flagged the reason (it was fixed, or kept as written), so its check says that, not "passed". */
+export function Steps({ attempts, readings = 0, flagged = false, writing = "message" }: { attempts: Attempt[];
+  readings?: number; flagged?: boolean; writing?: "message" | "listing" }) {
   return (
     <ol className="steps">
       {attempts.map((a, i) => (
         <li key={i}>
           <span className={a.problems.length ? "failed" : "passed"}>
-            {a.colour_only ? `${modelName(a.model)}, colour only:` : a.job === "reason" ? `Reason · ${writerName(a.model)}`
-              : writerName(a.model)}{" "}
-            {a.problems.length ? `failed: ${a.problems.join("; ")}` : "passed"}
+            {stepName(a, i < readings, writing)}{" "}
+            {a.problems.length ? `failed: ${a.problems.join("; ")}`
+              : flagged && a.job === "reason" && a.model.startsWith("claude-haiku") ? "flagged it" : "passed"}
           </span>
           <span className="meta">{a.seconds.toFixed(1)}s · {cost(a.cost_pence)}</span>
         </li>

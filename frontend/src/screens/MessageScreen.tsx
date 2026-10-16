@@ -17,10 +17,10 @@ const COUNTS: { said: FlawsSaid; label: string }[] = [{ said: 1, label: "1 flaw 
   { said: 3, label: "3 flaws only" }, { said: "all", label: "All flaws" }];
 // who writes the message (14 Oct: the AI writer, or no AI writing; no "Auto")
 const WRITERS: { writer: Writer; label: string; hint: string }[] = [
-  { writer: "ai", label: "AI writer", hint: "Gemma 3 4B writes the whole message on this device; Claude Sonnet 5.5 "
-    + "(paid) writes it when Gemma's drafts fail the checks" },
-  { writer: "template", label: "No AI writing", hint: "The AI still reads the listing's flaws; your sentences (or "
-    + "AlertFlip's) write the message" },
+  { writer: "ai", label: "AI writer", hint: "Gemma 3 4B writes the message on this device, around the reason "
+    + "flip-wording-4b words; Claude Sonnet 5.5 (paid) writes it when Gemma 3 4B's drafts fail code's checks" },
+  { writer: "template", label: "No AI writing", hint: "flip-reader-5 still reads the listing's flaws and flip-wording-4b "
+    + "words the reason (Claude Haiku 5.5 checks it); your sentences (or AlertFlip's) write the rest" },
 ];
 // the listing's marketplace, now there's none to pick (14 Oct): written for a listing you collect and pay cash for,
 // unless its description says it's posted ("Postage only"), which the API reads from the description itself
@@ -323,7 +323,8 @@ function Drafted({ draft, text, setText, busy, approval, longer, rewrites, onLen
             <ChevronIcon size={12} stroke={2.6} />
           </button>
         )}
-        {why && <Steps attempts={steps} />}
+        {why && <Steps attempts={steps} readings={reading.attempts.length}
+          flagged={draft.reason?.checked === "fixed" || draft.reason?.checked === "flagged, kept"} />}
       </div>
 
       <div className="buttons">

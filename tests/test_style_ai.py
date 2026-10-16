@@ -47,7 +47,7 @@ def test_the_book_learns_with_our_ai_once_and_lists_what_it_found(tmp_path):
     assert not book.learn_with_ai() and len(ai.asked) == 1  # read once for these messages
     rows = {r["key"]: (r["what"], r["value"]) for r in book.learned()}
     assert rows["shortcut:you"] == ('Writes "you" as', "u")  # code's
-    assert rows["signature"] == ("Signs off with (found by our AI)", "ta jo x")
+    assert rows["signature"] == ("Signs off with (found by Gemma 3 4B)", "ta jo x")  # named (14 Oct)
     assert rows["phrase:closing:can collect 2day."] == ("Closing", "can collect 2day.")  # code's, its sign-off once
     assert StyleBook(tmp_path / "plain.sqlite3").learn_with_ai() is False  # no AI: code alone
 

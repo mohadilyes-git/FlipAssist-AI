@@ -37,7 +37,8 @@ from pydantic import BaseModel, Field
 from starlette.datastructures import Headers
 from starlette.responses import JSONResponse
 
-from flip.ai import ApiModel, LocalModel, whole_text
+# BACKUP_MODEL and backup_model are flip.api's too: the paid fallback, used where the API is set up and in /health
+from flip.ai import BACKUP_MODEL, ApiModel, LocalModel, backup_model, shown_name, whole_text  # noqa: F401
 from flip.audit import AuditLog
 from flip.catalogue import load_catalogue, load_conditions
 from flip.draft import load_env
@@ -64,7 +65,6 @@ MAX_ID = 2**63 - 1  # the biggest id SQLite keeps
 OPEN = {"/health", "/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json"}  # no key: they call nothing
 MONEY = r"^\d{1,6}(?:\.\d{1,2})?$"  # pounds, as written: "220" or "219.99"
 Mode = Literal["auto", "local", "api"]
-BACKUP_MODEL = "claude-sonnet-5-5"  # reads or writes when this device's models can't (14 Oct; Claude Haiku before)
 
 load_env()  # FLIP_API_KEY and ANTHROPIC_API_KEY, from .env; nothing already set is overwritten
 
@@ -293,7 +293,8 @@ class StyleMessage(BaseModel):
 
 class ModelUse(BaseModel):
     model: str
-    job: str = Field("draft", description='"read", "draft" (writing), "reason" or "colour"')
+    job: str = Field("draft", description='"read", "price", "draft" (writing a message), "listing" (writing an eBay '
+                                          'listing), "reason" or "colour"')
     attempts: int
     passed: int
     cost_pence: float
@@ -303,8 +304,9 @@ class Stats(BaseModel):
     drafts: int
     ready: int
     needs_you: int
-    done_on_this_device: float = Field(description="share of drafts that used no paid AI at any step (reading, the "
-                                                   "reason's check or fix, writing)")
+    outputs_here: int = Field(description="successful outputs (answers that passed their checks) made on this "
+                                          "device, free: FlipAssist's models, Gemma 3 4B and No AI writing")
+    outputs: int = Field(description="every successful output, the paid ones (Claude's check, fix and fallback) too")
     models: list[ModelUse]
     cost_pence: float
     cost_per_100_drafts_pence: float
@@ -367,12 +369,6 @@ class Setup:
 @lru_cache
 def audit():
     return AuditLog()
-
-
-def backup_model():
-    """The paid model that reads a listing, writes a message or a listing, or looks at the colour when this device's
-    models can't: FLIP_BACKUP_MODEL, else Claude Sonnet 5.5 (14 Oct: Claude Haiku 5.5 only checks each reason)."""
-    return os.environ.get("FLIP_BACKUP_MODEL", "").strip() or BACKUP_MODEL
 
 
 @lru_cache
@@ -711,17 +707,21 @@ def check_a_reason(request: ReasonCheckRequest, s: Setup = Depends(setup)):
     message, problems = request.message, []
     if checked["checked"] == "fixed":
         new = checked["clause"]
+        fixer = shown_name(checked["by"])  # the model whose fix it is, as the app names it (Claude Sonnet 5.5)
         at = request.message.lower().find(request.clause.lower())
         if new == "none":
-            problems.append("Sonnet says nothing here is a flaw: the message still gives the reason, for you to judge")
+            problems.append(f"{fixer} says nothing here is a flaw: the message still gives the reason, for you to "
+                            "judge")
         elif at < 0:
-            problems.append("the message words the reason its own way, so the fix wasn't put in")
+            problems.append(f"the message words the reason its own way, so {fixer}'s fix wasn't put in")
         else:
             fixed = request.message[:at] + new + request.message[at + len(request.clause):]
             sources = f"{request.listing.title}. {request.listing.description}\n{new}"
             point = {"about": "flaw", "says": request.flaws, "worded": new}
             problems = check_condition_talk(fixed, sources, point, True, request.kind, request.offer_pence) + \
                 check_battery_reason(fixed, point, request.offer_pence, sources, request.listing.title, request.kind)
+            # what's said is about the message with the fix put in, which isn't the one on screen (14 Oct)
+            problems = [f"{fixer}'s fix wasn't put in: with it, {problem}" for problem in problems]
             if not problems:
                 message = fixed
                 if s.log:
