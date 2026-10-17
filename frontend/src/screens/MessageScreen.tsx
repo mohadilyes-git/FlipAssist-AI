@@ -1,10 +1,11 @@
 // AI message: the listing on the left; on the right your price (three cards
-// and a line to slide it along), how it's written, and the message. Code sets
-// the starting prices and checks every draft; your own sentences (or the AI
-// writer) write it. Nothing is sent from here: you copy it into the marketplace,
-// and approving it teaches your style.
+// and a line to slide it along), whether to say the flaw, and the message. Code
+// sets the starting prices and checks every draft; your own sentences (or
+// AlertFlip's) write it, with no AI, around the reason flip-wording-4b words.
+// Only Rewrite has an AI write: Gemma 3 4B rewords it (14 Oct). Nothing is sent
+// from here: you copy it into the marketplace, and approving it teaches your style.
 import { useEffect, useMemo, useState } from "react";
-import { api, type FlawsSaid, type Kind, type Length, type Listing, type MessageDraft, type Writer } from "../api";
+import { api, type FlawsSaid, type Kind, type Length, type Listing, type MessageDraft } from "../api";
 import { cost, readBy, reasonLine, seconds, writerName } from "../format";
 import { gapOf, lowerPrice, money, morePrice, sliderRange, toPence } from "../prices";
 import { CheckIcon, ChevronIcon, Chip, Head, PriceSlider, SparkleIcon, Steps, Warn, WarningIcon } from "../ui";
@@ -15,13 +16,9 @@ const LABEL: Record<Kind, string> = { lower: "Offer lower", asking: "Pay asking"
 // how many of the listing's flaws an offer lower gives as its reason, the worst first (14 Oct): yours to pick
 const COUNTS: { said: FlawsSaid; label: string }[] = [{ said: 1, label: "1 flaw only" }, { said: 2, label: "2 flaws only" },
   { said: 3, label: "3 flaws only" }, { said: "all", label: "All flaws" }];
-// who writes the message (14 Oct: the AI writer, or no AI writing; no "Auto")
-const WRITERS: { writer: Writer; label: string; hint: string }[] = [
-  { writer: "ai", label: "AI writer", hint: "Gemma 3 4B writes the message on this device, around the reason "
-    + "flip-wording-4b words; Claude Sonnet 5.5 (paid) writes it when Gemma 3 4B's drafts fail code's checks" },
-  { writer: "template", label: "No AI writing", hint: "flip-reader-5 still reads the listing's flaws and flip-wording-4b "
-    + "words the reason (Claude Haiku 5.5 checks it); your sentences (or AlertFlip's) write the rest" },
-];
+// Rewrite's AI (14 Oct: every message is written with no AI; only Rewrite rewords it with an AI)
+const REWRITE_HINT = "Gemma 3 4B rewords it on this device, keeping the price, the facts and the checked reason word "
+  + "for word; Claude Sonnet 5.5 (paid) does it when Gemma 3 4B's tries fail code's checks";
 // the listing's marketplace, now there's none to pick (14 Oct): written for a listing you collect and pay cash for,
 // unless its description says it's posted ("Postage only"), which the API reads from the description itself
 const MARKETPLACE = "facebook";
@@ -37,7 +34,6 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
   const [mention, setMention] = useState<Mention>("yes"); // the flaw is said unless you pick otherwise (3 Oct)
   const [flaws, setFlaws] = useState<FlawsSaid | null>(null); // how many: none picked until you pick (14 Oct)
   const [pickFlaws, setPickFlaws] = useState(false); // you wrote without picking how many: the row turns red
-  const [writer, setWriter] = useState<Writer>("template");
   const [draft, setDraft] = useState<MessageDraft | null>(null);
   const [draftedFor, setDraftedFor] = useState(""); // the title and description the draft on screen was made from
   const [text, setText] = useState("");
@@ -92,7 +88,8 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
         flaws_said: saysFlaws ? flaws : null,
         length: asked,
         previous: overrides.previous ?? null,
-        writer,
+        // no AI writing, except Rewrite: Gemma 3 4B rewords the message on screen (14 Oct)
+        writer: overrides.rewrite_of ? "ai" : "template",
         rewrite_of: overrides.rewrite_of ?? null,
         check_later: true,
         // Make it longer and Rewrite keep the reason the message on screen gives (it may be Sonnet's fix), but only for
@@ -240,17 +237,11 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
                 {pickFlaws && <span className="flaw-pick" role="alert">Pick how many flaws to say</span>}
               </div>
             )}
-            <div className="chips" role="group" aria-label="Writer">
-              <span className="label">Writer</span>
-              {WRITERS.map((w) => (
-                <Chip key={w.writer} on={writer === w.writer} label={w.label} hint={w.hint} onClick={() => setWriter(w.writer)} />
-              ))}
-            </div>
           </div>
 
           {shown ? (
             <Drafted draft={shown} text={text} setText={setText} busy={busy} approval={approval}
-              longer={length === "longer"} rewrites={writer === "ai"}
+              longer={length === "longer"}
               onLength={() => void (length === "longer" ? write("usual") : write("longer", { previous: text }))}
               onRewrite={() => void write(length, { rewrite_of: text })} onApprove={() => void approve()} />
           ) : (
@@ -279,14 +270,12 @@ type DraftedProps = {
   busy: boolean;
   approval: Approval | null;
   longer: boolean;
-  /** the AI writer is picked: with no AI writing your sentences say it one way only, so there's nothing to rewrite */
-  rewrites: boolean;
   onLength: () => void;
   onRewrite: () => void;
   onApprove: () => void;
 };
 
-function Drafted({ draft, text, setText, busy, approval, longer, rewrites, onLength, onRewrite, onApprove }: DraftedProps) {
+function Drafted({ draft, text, setText, busy, approval, longer, onLength, onRewrite, onApprove }: DraftedProps) {
   const [why, setWhy] = useState(false);
   const reading = draft.reading;
   const steps = [...reading.attempts, ...draft.attempts];
@@ -328,10 +317,9 @@ function Drafted({ draft, text, setText, busy, approval, longer, rewrites, onLen
       </div>
 
       <div className="buttons">
-        <button type="button" className="second" aria-busy={busy} disabled={busy || !rewrites} onClick={onRewrite}
-          title={rewrites ? undefined : "Pick the AI writer to rewrite it: your sentences say it one way only"}>
+        <button type="button" className="second" aria-busy={busy} disabled={busy} onClick={onRewrite} title={REWRITE_HINT}>
           <SparkleIcon size={16} />
-          {busy ? "Writing…" : rewrites ? "Rewrite" : "Rewrite (AI writer only)"}
+          {busy ? "Writing…" : "Rewrite"}
         </button>
         <button type="button" className="main" disabled={busy || !text.trim()} onClick={onApprove}>Copy &amp; approve</button>
       </div>

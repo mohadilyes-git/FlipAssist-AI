@@ -266,3 +266,17 @@ def test_a_reason_from_other_lines_is_worded_again_not_kept():
         result = draft_message(LISTING, {}, kind="lower", mention=True, reading=READING, writer="template",
                                wording=used, rewrite_of=shown, reason_on_screen=reason)
         assert used["wording"].asked and result["reason"]["checked"] == "ok"  # worded and checked afresh
+
+
+def test_a_rewrite_keeps_the_checked_reason_as_reason_and_rewords_the_rest():
+    """14 Oct: Rewrite is the only time the app's AI writes: it's told to keep the price and facts, keep [REASON] (the
+    checked reason, shown as the mark) and reword only the rest, adding nothing new."""
+    from flip.prompts import rewrite_lines
+    on_screen = ("Hi, would you take £125 cash for it? I'm offering that because the screen is burnt and there are some "
+                 "very small scratches on the back. I can come and collect.")
+    told = rewrite_lines(on_screen, {"worded": "the screen is burnt and there are some very small scratches on the back"})
+    assert '"Hi, would you take £125 cash for it? I\'m offering that because [REASON]. I can come and collect."' in told
+    assert "Keep [REASON] exactly as it is" in told and "the same price written the same way" in told
+    assert "Add nothing new" in told and "very small scratches" not in told
+    plain = rewrite_lines("Hi, would you take £255? Can collect today.")
+    assert "[REASON]" not in plain and "Word every other sentence differently" in plain

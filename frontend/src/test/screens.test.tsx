@@ -174,22 +174,25 @@ describe("AI message", () => {
     expect(screen.getByRole("button", { name: "Yes" }).getAttribute("aria-pressed")).toBe("true"); // back again
   });
 
-  it("writes with the AI writer or with no AI writing, and only the AI writer rewrites", async () => {
-    const fetch = serve({ "POST /api/messages/draft": [[200, DRAFT], [200, { ...DRAFT, draft_id: 8, message: "reworded" }]] });
+  it("writes every message with no AI, and only Rewrite has Gemma 3 4B reword it (14 Oct)", async () => {
+    const fetch = serve({ "POST /api/messages/draft": [[200, DRAFT], [200, { ...DRAFT, draft_id: 8, message: "reworded" }],
+      [200, { ...DRAFT, draft_id: 9 }]] });
     const user = userEvent.setup();
     render(<MessageScreen />);
-    const writers = within(screen.getByRole("group", { name: "Writer" }));
-    expect(writers.getAllByRole("button").map((b) => [b.textContent, b.getAttribute("aria-pressed")])).toEqual(
-      [["AI writer", "false"], ["No AI writing", "true"]]);
-    expect(screen.queryByRole("button", { name: "Auto" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Writer" })).toBeNull(); // no writer to pick
+    expect(screen.queryByRole("button", { name: /AI writer|No AI writing|Auto/ })).toBeNull();
     await draft(user);
     expect(sent(fetch, "POST /api/messages/draft").writer).toBe("template");
-    expect(screen.getByRole("button", { name: "Rewrite (AI writer only)" }).hasAttribute("disabled")).toBe(true);
-    await user.click(screen.getByRole("button", { name: "AI writer" }));
-    await user.click(screen.getByRole("button", { name: "Rewrite" }));
+    const rewriteButton = screen.getByRole("button", { name: "Rewrite" });
+    expect(rewriteButton.hasAttribute("disabled")).toBe(false);
+    expect(rewriteButton.getAttribute("title")).toBe("Gemma 3 4B rewords it on this device, keeping the price, the facts "
+      + "and the checked reason word for word; Claude Sonnet 5.5 (paid) does it when Gemma 3 4B's tries fail code's checks");
+    await user.click(rewriteButton);
     expect(await screen.findByDisplayValue("reworded")).toBeTruthy();
     const rewrite = sent(fetch, "POST /api/messages/draft", 1);
     expect([rewrite.writer, rewrite.rewrite_of]).toEqual(["ai", DRAFT.message]);
+    await user.click(screen.getByRole("button", { name: "Make it longer" }));
+    expect(sent(fetch, "POST /api/messages/draft", 2).writer).toBe("template"); // longer is your sentences again
   });
 
   it("shows the draft at once, then the reason's check, and a fix replaces the message only if you haven't edited it", async () => {
@@ -295,15 +298,13 @@ describe("AI message", () => {
     expect(await screen.findByText(/^No draft passed · /)).toBeTruthy();
   });
 
-  it("calls the no-AI writer what it is: the AI still reads the listing", () => {
+  it("names who writes it: your sentences with no AI, and Gemma 3 4B only to reword", async () => {
+    serve({ "POST /api/messages/draft": [200, DRAFT] });
+    const user = userEvent.setup();
     render(<MessageScreen />);
-    const chip = screen.getByRole("button", { name: "No AI writing" });
-    expect(chip.getAttribute("title")).toBe("flip-reader-5 still reads the listing's flaws and flip-wording-4b words the "
-      + "reason (Claude Haiku 5.5 checks it); your sentences (or AlertFlip's) write the rest");
-    expect(screen.queryByRole("button", { name: "No AI" })).toBeNull();
-    expect(screen.getByRole("button", { name: "AI writer" }).getAttribute("title")).toBe("Gemma 3 4B writes the message on "
-      + "this device, around the reason flip-wording-4b words; Claude Sonnet 5.5 (paid) writes it when Gemma 3 4B's drafts "
-      + "fail code's checks");
+    await draft(user);
+    expect(screen.getByText(/^No AI writing · /)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Rewrite" }).getAttribute("title")).toMatch(/^Gemma 3 4B rewords it/);
   });
 
   it("shows why, step by step", async () => {
@@ -379,7 +380,6 @@ describe("AI message", () => {
       [200, { ...DRAFT, draft_id: 10 }]] });
     const user = userEvent.setup();
     render(<MessageScreen />);
-    await user.click(screen.getByRole("button", { name: "AI writer" })); // a rewrite is the AI writer's
     await draft(user);
     await user.click(screen.getByRole("button", { name: "Make it longer" }));
     expect(await screen.findByDisplayValue(LONGER.message!)).toBeTruthy();
@@ -398,7 +398,6 @@ describe("AI message", () => {
       written_by: null, reasons: ["no answer passed the checks"] }]] });
     const user = userEvent.setup();
     render(<MessageScreen />);
-    await user.click(screen.getByRole("button", { name: "AI writer" }));
     await draft(user);
     expect(screen.getByText(/The title says iPhone 15 Pro Max but the description says iPhone 14/)).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Rewrite" }));
@@ -1144,7 +1143,7 @@ describe("Home (fix 2, 14 Oct)", () => {
       ["flip-wording-4b", "words the offer's reason", true, true],
       ["flip-kinds-1", "sorts the flaws for the UK price", true, true],
       ["flip-style-1b", "reads your style", true, true],
-      ["Gemma 3 4B", "the AI writer: writes messages and eBay listings", true, true],
+      ["Gemma 3 4B", "rewords a message when you click Rewrite, and writes eBay listings", true, true],
       ["Claude Haiku 5.5 (paid)", "Only checks each message's reason is sendable", true, false],
       ["Claude Sonnet 5.5 (paid)", "Fixes a reason Claude Haiku 5.5 flags; when this device's models can't, writes a "
         + "message or eBay listing, reads a listing, or looks at the photos for the colour", true, false],

@@ -20,7 +20,7 @@ const JOBS: Record<string, string> = {
   "words the reason": "words the offer's reason",
   "sorts price flaws": "sorts the flaws for the UK price",
   "reads your style": "reads your style",
-  "writes messages": "the AI writer: writes messages and eBay listings",
+  "writes messages": "rewords a message when you click Rewrite, and writes eBay listings",
 };
 // ...and what does that job when the model isn't installed
 const INSTEAD: Record<string, string> = {
@@ -28,7 +28,7 @@ const INSTEAD: Record<string, string> = {
   "words the reason": "code words the reason instead",
   "sorts price flaws": "code's rules sort the flaws instead",
   "reads your style": "code reads your style alone",
-  "writes messages": "the AI writer can't run on this device",
+  "writes messages": "Rewrite and List on eBay can't run on this device",
 };
 
 export function HomeScreen({ go, count, running, reload }: Props) {

@@ -160,9 +160,17 @@ DEFAULT_STYLE_KIND = {"lower": "If the condition line gives a reason, says it in
                                "\"I'm offering that because ...\"",
                       "asking": "May open by asking if it's still available",
                       "more": "Doesn't say why they'll pay more"}
+# Rewrite (14 Oct: the only time the app's AI writes, Gemma 3 4B; every first draft is the reseller's own sentences):
+# the message is shown with its checked reason as [REASON], so the reason stays word for word and the rest is reworded
 REWRITE = ('This is a rewrite: the reseller has seen this message and wants another version of it: "{previous}"\n'
-           "Say the same things, but word every sentence differently, the way the reseller might have written it "
-           "another day.")
+           "Rewrite it in other words, the way the reseller might have written it another day:\n"
+           "- Keep the same offer, the same price written the same way, and the same facts: cash, collecting, where "
+           "and when, and any question it asks. Keep it about the same length.\n"
+           "{reason}"
+           "- Word every other sentence differently, in their style: another way to greet, to ask and to close.\n"
+           "- Add nothing new: no other flaw, no praise, no story, no day, time or place the message doesn't give.")
+REWRITE_REASON = ("- Keep [REASON] exactly as it is, in a sentence of its own: it's the checked reason, and code puts "
+                  "it back word for word.\n")
 # a longer message says more only with what code allows: the reseller's usual
 # points and questions the listing doesn't answer (flip.questions)
 LONGER = "Length: about {words} words, longer than usual. Keep their greeting and tone, and say more only with " \
@@ -272,9 +280,20 @@ def message_prompt(listing, offer, style_lines, examples, kind="lower", point=No
           or [f'(none yet). The shape of a good one, not their words: "{example}"' if shape else "(none yet)"]),
         *(must_lines(kind, offer, local, point, added, limit, cash) if shape else []),
         # last, where a small model can't miss it: in the middle, Gemma wrote the same message again 5 times in 5
-        *(["", REWRITE.format(previous=rewrite_of)] if rewrite_of else []),
+        *(["", rewrite_lines(rewrite_of, point)] if rewrite_of else []),
     ]
     return MESSAGE_SYSTEM.replace("{locks}", LOCKS_LISTED if locks else ""), "\n".join(lines)
+
+
+def rewrite_lines(previous, point=None):
+    """What a rewrite is told: the message on screen, its checked reason shown as [REASON] (so the reason is kept word
+    for word, and only the rest reworded), and how to reword it (REWRITE)."""
+    worded = (point or {}).get("worded")
+    if worded:
+        at = previous.lower().replace("’", "'").find(worded.lower().replace("’", "'"))
+        if at >= 0:
+            previous = f"{previous[:at]}[REASON]{previous[at + len(worded):]}"
+    return REWRITE.format(previous=previous, reason=REWRITE_REASON if worded else "")
 
 
 def must_lines(kind, offer, local, point, added, limit, cash=True):

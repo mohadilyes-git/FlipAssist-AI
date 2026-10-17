@@ -537,8 +537,12 @@ def test_a_rewrite_asks_for_other_words_and_refuses_the_same_message():
     assert result["attempts"][0]["problems"] == ["it's the message on screen again: a rewrite says it in other words"]
     assert (result["status"], result["answer"], result["writer"]) == ("ready", REWORDED, "claude-haiku-5-5")
     assert local.asked[0]["vary"] is True
-    assert local.asked[0]["user"].endswith(f'wants another version of it: "{ON_SCREEN}"\nSay the same things, but word '
-                                           f'every sentence differently, the way the reseller might have written it another day.')
+    told = local.asked[0]["user"]
+    assert f'wants another version of it: "{ON_SCREEN}"\nRewrite it in other words, the way the reseller might have ' \
+           'written it another day:' in told
+    assert told.endswith("- Add nothing new: no other flaw, no praise, no story, no day, time or place the message "
+                         "doesn't give.")
+    assert "Keep the same offer, the same price written the same way" in told and "[REASON]" not in told.split("rewrite")[-1]
 
 
 def test_a_first_draft_is_the_same_every_time():
