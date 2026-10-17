@@ -724,3 +724,24 @@ def test_the_price_tab_says_the_monthly_cap_and_skips_a_charger(client, monkeypa
                                                   "description": "Genuine Apple 61W, works."}).json()
     assert found["skipped"] == "Estimates are for iPhones, Samsung phones and MacBooks only"
     assert (len(asked), local.asked) == (1, [])
+
+
+@pytest.mark.parametrize("kind, said, given", [
+    ("asking", 1, ["Face ID not working"]),
+    ("more", "all", ["Back glass cracked in the top right corner", "Face ID not working", "Battery 79%"]),
+])
+def test_at_or_over_asking_you_can_say_you_dont_mind_the_flaws_you_pick(client, kind, said, given):
+    """14 Oct: Pay asking and Offer more can say the flaws you don't mind, the worst first, as many as you pick; Offer
+    more still says why it pays more (it's if they take the listing down)."""
+    client.use(local=FakeModel("gemma3:4b", READ3, READ3), messages=PAST)
+    draft = client.post("/messages/draft", json={"listing": LISTING3, "kind": kind, "mention": True, "writer": "template",
+                                                 "flaws_said": said}).json()
+    assert draft["status"] == "ready" and draft["point"] == given and draft["mentioned"] is True
+    message = draft["message"]
+    assert "don't mind" in message.lower() and "Face ID" in message
+    assert ("glass" in message.lower()) is (said == "all")
+    if kind == "more":
+        assert "listing down" in message or "hold it" in message
+    plain = client.post("/messages/draft", json={"listing": LISTING3, "kind": kind, "mention": None if kind == "more"
+                                                 else False, "writer": "template"}).json()
+    assert "mind" not in plain["message"].lower() and "Face ID" not in plain["message"]

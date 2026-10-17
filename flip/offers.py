@@ -461,7 +461,8 @@ def quoted(point):
 # where the AI writer puts the reason flip.wording worded: code puts the checked clause in, word for word (14 Oct:
 # "flip-wording spots it, then the AI writes around it"; Gemma had pasted the seller's sentence over it)
 REASON_MARK = "[REASON]"
-REASON_SENTENCE = {"lower": "I'm offering that because [REASON].", "asking": "I don't mind that [REASON]."}
+REASON_SENTENCE = {"lower": "I'm offering that because [REASON].", "asking": "I don't mind that [REASON].",
+                   "more": "I don't mind that [REASON]."}  # Offer more: a flaw you don't mind (14 Oct)
 
 
 def reason_for_ai(point, kind="lower"):
@@ -749,7 +750,7 @@ def check_condition_talk(message, listing_text, point, mention, kind="lower", of
             problems.append(f"the message leaves out what the listing says: {quoted(point)}")
         elif not says_point(". ".join(statements), point):
             problems.append(f"the message asks about {quoted(point)} instead of saying it")
-        elif kind == "asking" and not DONT_MIND.search(message):
+        elif (kind == "asking" or kind == "more" and point.get("about") != "condition") and not DONT_MIND.search(message):
             problems.append(f"the message names {quoted(point)} but doesn't say you don't mind it")
     elif stated or said_point or vaguely_said(message, statements):
         problems.append("the message talks about the condition, but this draft leaves that out")

@@ -267,7 +267,7 @@ def message_prompt(listing, offer, style_lines, examples, kind="lower", point=No
         f"Marketplace: {listing.get('marketplace') or 'not given'}",
         "",
         f"Offer: {(POSTED_ASKING if kind == 'asking' and not local else OFFER_LINES[kind]).format(offer=offer_words(offer))}",
-        f"Condition: {CONDITION_LINES[kind].format(says=reason_for_ai(point, kind)) if point else NO_CONDITION}",
+        f"Condition: {CONDITION_LINES[condition_key(kind, point)].format(says=reason_for_ai(point, kind)) if point else NO_CONDITION}",
         *([f"Buying: {buying}"] if buying else []),
         *([f"Pickup: {pickup}, where the listing says to collect"] if pickup else []),
         *(longer_lines(longer) if longer else []),
@@ -285,6 +285,12 @@ def message_prompt(listing, offer, style_lines, examples, kind="lower", point=No
     return MESSAGE_SYSTEM.replace("{locks}", LOCKS_LISTED if locks else ""), "\n".join(lines)
 
 
+def condition_key(kind, point):
+    """Which condition line: at Offer more a flaw you don't mind is said as at Pay asking (14 Oct), not as the praise
+    that's Offer more's own reason."""
+    return "asking" if kind == "more" and point and point.get("about") != "condition" else kind
+
+
 def rewrite_lines(previous, point=None):
     """What a rewrite is told: the message on screen, its checked reason shown as [REASON] (so the reason is kept word
     for word, and only the rest reworded), and how to reword it (REWRITE)."""
@@ -299,7 +305,7 @@ def rewrite_lines(previous, point=None):
 def must_lines(kind, offer, local, point, added, limit, cash=True):
     """What a message must do, before you have past messages: the last thing
     the model reads, in plain steps."""
-    condition = f"{CONDITION_LINES[kind].format(says=reason_for_ai(point, kind))}." if point else \
+    condition = f"{CONDITION_LINES[condition_key(kind, point)].format(says=reason_for_ai(point, kind))}." if point else \
         "Say nothing about its condition." if "the reason" in added else \
         "Say nothing about its condition."
     buying = "Say nothing about cash, collecting or postage." if \

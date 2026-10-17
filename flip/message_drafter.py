@@ -453,19 +453,25 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     # the reader's whole sentences (V8: a long one is split, never dropped; reader-5's 12-word cut gave some messages
     # no reason at all); flip-wording words the reason from these same sentences when it's on (flip/wording.py)
     point = point_for(kind, sources, reading["flaws"], battery_in(sources, model))
+    # Offer more (14 Oct): when you choose to say you don't mind the flaw (a count picked), the listing's flaws are its
+    # point, said as Pay asking says them ("I don't mind that ..."), not the good condition it may praise
+    flaw_kind = "asking" if kind == "more" else kind
+    if kind == "more" and mention is True and flaws_said is not None:
+        point = point_for(flaw_kind, sources, reading["flaws"], battery_in(sources, model))
     # the reader's whole sentences, which flip-wording words the reason from (when it's on)
     lines = reading.get("quotes") or reading["flaws"]
-    # how many flaws a lower offer gives, when you picked (14 Oct): the worst first, so flip-wording words only those,
-    # Haiku checks only those, and the message may say no other (left_out); "all" lifts code's own two
+    # how many flaws an offer gives (a lower offer's reason, or what you don't mind at or over asking), when you picked
+    # (14 Oct): the worst first, so flip-wording words only those, Haiku checks only those, and the message may say no
+    # other (left_out); "all" lifts code's own two
     left_out = []
-    if kind == "lower" and point and point["about"] == "flaw" and flaws_said is not None:
+    if point and point["about"] == "flaw" and flaws_said is not None:
         if flaws_said == "all":
-            point = point_for(kind, sources, reading["flaws"], battery_in(sources, model), most=None) or point
+            point = point_for(flaw_kind, sources, reading["flaws"], battery_in(sources, model), most=None) or point
         else:  # code's own sentence (when flip-wording can't) gives the same number, picked the same way
             picked, left_out = pick_flaws(lines, sources, flaws_said)
             said = pick_flaws(reading["flaws"], sources, flaws_said)[0] if left_out else reading["flaws"]
             lines = picked if left_out else lines
-            point = point_for(kind, sources, said, battery_in(sources, model), most=flaws_said) or point
+            point = point_for(flaw_kind, sources, said, battery_in(sources, model), most=flaws_said) or point
     style_decides = mention is None
     if style_decides:  # your style decides; before you have one, AlertFlip's: a lower offer gives its reason
         mention = says_point(previous, point) if previous and point else \
@@ -528,7 +534,7 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
         [q.strip() for q in reason_on_screen.get("quotes") or []] == [q.strip() for q in lines if q.strip()]
     kept = reason_on_screen if reason_on_screen and same_lines and on_screen and reason_on_screen.get("clause") and \
         reason_on_screen["clause"].lower() != "none" and reason_on_screen["clause"].lower() in on_screen else None
-    if wording is not None and point and mention and point["about"] == "flaw" and kind in ("lower", "asking"):
+    if wording is not None and point and mention and point["about"] == "flaw" and kind in ("lower", "asking", "more"):
         worded = {k: kept[k] for k in ("clause", "by", "checked")} if kept else \
             worded_reason(title, completed(lines, listing.get("description") or ""),
                           mode, models=None if wording == "settings" else wording, result=result, log=log,
@@ -570,6 +576,13 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
         not usual or bool(ends_asking(usual) or ASKS_OFFER.search(usual))  # a card made by hand: as its sentence does
     own = your_sentences(card, offer, pickup)  # your phrasebook's sentences: the checks for the AI's slips don't read them
 
+    def picked_room():
+        """The flaws you picked to say, past one, aren't held against AlertFlip's usual 250 characters: you asked for
+        them (14 Oct: All flaws at Pay asking came to 255 and nothing was written)."""
+        if flaws_said in (None, 1) or not (mention and point and point.get("about") == "flaw"):
+            return 0
+        return max(0, len(point.get("worded") or " and ".join(point.get("says") or [])) - 60)
+
     def check(answer, rewrite=True, extra=0):  # extra: what code's own message may run over the 250 (the_added)
         message = answer.get("message")
         problems = check_message(message, offer, sources, asking, kind, at_least, ebay=not in_person, own=own) + \
@@ -591,8 +604,9 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
                 usual=length == "usual", short=not card and length == "usual",
                 must=sorted(allowed) if not card and in_person else (),
                 cash=not posted, emoji=bool(card.get("emoji")),
-                praise=kind == "more" and mention, locks=locks, no_cash=no_cash, no_collecting=no_collecting,
-                pay_first=not posted, title=title, short_extra=written.get("added", 0) + extra)
+                praise=kind == "more" and mention and bool(point) and point.get("about") == "condition", locks=locks,
+                no_cash=no_cash, no_collecting=no_collecting,
+                pay_first=not posted, title=title, short_extra=written.get("added", 0) + extra + picked_room())
             problems += check_not_removed(message, card)
             sentences = re.split(r"(?<=[.!?])\s+|\n+", message)
             if model and any(names_other_model(words(sentence), model, catalogue) for sentence in sentences):
@@ -606,7 +620,8 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
                          for m in [META_TALK.search(s)] if m), None)
             if meta:  # "Cash and collecting is arranged separately.", "as noted in the listing" (26 Sep)
                 problems.append(f"the message talks about the listing or itself, not to the seller: \"{meta.group()}\"")
-            if kind == "more" and not HOLD.search(message) and not (point and mention):
+            # ...a flaw you don't mind isn't why you'd pay more: that's still the hold, or taking it down
+            if kind == "more" and not HOLD.search(message) and not (point and mention and point.get("about") == "condition"):
                 problems.append("an offer over asking says why: that it's if they'll hold it for you")
             made_up = [m.group(1) for m in COLLECT_FROM.finditer(message) if not in_listing(m.group(1), sources)]
             # ...and a place written in lower case ("can collect from rotherham 2nite"), as a lower-case writer's is

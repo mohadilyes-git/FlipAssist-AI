@@ -13,7 +13,8 @@ import { CheckIcon, ChevronIcon, Chip, Head, PriceSlider, SparkleIcon, Steps, Wa
 type Mention = "yes" | "no";
 const KINDS: Kind[] = ["lower", "asking", "more"];
 const LABEL: Record<Kind, string> = { lower: "Offer lower", asking: "Pay asking", more: "Offer more" };
-// how many of the listing's flaws an offer lower gives as its reason, the worst first (14 Oct): yours to pick
+// how many of the listing's flaws an offer gives, the worst first (14 Oct): a lower offer's reason, or at Pay asking
+// and Offer more the flaws you say you don't mind ("I don't mind that the screen is burnt"); yours to pick
 const COUNTS: { said: FlawsSaid; label: string }[] = [{ said: 1, label: "1 flaw only" }, { said: 2, label: "2 flaws only" },
   { said: 3, label: "3 flaws only" }, { said: "all", label: "All flaws" }];
 // Rewrite's AI (14 Oct: every message is written with no AI; only Rewrite rewords it with an AI)
@@ -31,8 +32,14 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
   const [description, setDescription] = useState("");
   const [kind, setKind] = useState<Kind>("lower");
   const [moved, setMoved] = useState<Partial<Record<Kind, number>>>({});
-  const [mention, setMention] = useState<Mention>("yes"); // the flaw is said unless you pick otherwise (3 Oct)
-  const [flaws, setFlaws] = useState<FlawsSaid | null>(null); // how many: none picked until you pick (14 Oct)
+  // each card's own choice (14 Oct): a lower offer says its flaw unless you pick otherwise (3 Oct); at Pay asking and
+  // Offer more saying you don't mind it is yours to choose, so it starts at No
+  const [mentions, setMentions] = useState<Record<Kind, Mention>>({ lower: "yes", asking: "no", more: "no" });
+  const [counts, setCounts] = useState<Record<Kind, FlawsSaid | null>>({ lower: null, asking: null, more: null });
+  const mention = mentions[kind];
+  const flaws = counts[kind]; // how many: none picked until you pick (14 Oct)
+  const setMention = (m: Mention) => setMentions((now) => ({ ...now, [kind]: m }));
+  const setFlaws = (said: FlawsSaid) => setCounts((now) => ({ ...now, [kind]: said }));
   const [pickFlaws, setPickFlaws] = useState(false); // you wrote without picking how many: the row turns red
   const [draft, setDraft] = useState<MessageDraft | null>(null);
   const [draftedFor, setDraftedFor] = useState(""); // the title and description the draft on screen was made from
@@ -65,7 +72,7 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
   }, [askingPence, moved]);
   const range = prices && kind !== "asking" ? sliderRange(prices.asking, kind) : null;
   // only an offer lower gives a flaw as its reason (14 Oct): paying asking or more never names one
-  const saysFlaws = kind === "lower" && mention === "yes";
+  const saysFlaws = mention === "yes";
 
   async function write(asked: Length, overrides: { previous?: string; rewrite_of?: string } = {}) {
     if (!prices) return;
@@ -84,7 +91,9 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
         kind,
         offer: (prices[kind] / 100).toFixed(2),
         // lower: Yes or No; asking: never the flaw; more: your style decides whether to say it's in good condition
-        mention: kind === "lower" ? mention === "yes" : kind === "asking" ? false : null,
+        // Yes: the flaws (at or over asking, as ones you don't mind); No: none, and at Offer more your style decides
+        // whether to say it's in good condition
+        mention: mention === "yes" ? true : kind === "more" ? null : false,
         flaws_said: saysFlaws ? flaws : null,
         length: asked,
         previous: overrides.previous ?? null,
@@ -217,13 +226,13 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
 
           <div className="how-written">
             <div className="chips" role="group" aria-label="Say the flaw">
-              <span className="label">Say the flaw</span>
-              {kind === "lower" ? (["yes", "no"] as Mention[]).map((m) => (
+              <span className="label">{kind === "lower" ? "Say the flaw" : "Say you don't mind the flaw"}</span>
+              {(["yes", "no"] as Mention[]).map((m) => (
                 <Chip key={m} on={mention === m} label={m === "yes" ? "Yes" : "No"} onClick={() => {
                   setMention(m);
                   if (m === "no") setPickFlaws(false);
                 }} />
-              )) : <span className="chips-note">Not said when paying asking or more</span>}
+              ))}
             </div>
             {saysFlaws && (
               <div className={pickFlaws ? "chips flaw-counts missing" : "chips flaw-counts"} role="group"

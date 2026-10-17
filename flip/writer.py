@@ -1344,6 +1344,8 @@ def with_reason(sentence, kind, point):
     (flaw_words, good_words), or your sentence gives a reason about the
     condition this can't swap or take out ("given the cracked screen"): the AI
     words that one, never with a second reason after it (26 Sep)."""
+    if kind == "more" and point and point.get("about") != "condition":
+        kind = "asking"  # a flaw you don't mind at Offer more is said as at Pay asking: "I don't mind that..." (14 Oct)
     core, sign = split_sign_off(sentence)
     tail = f" {sign}" if sign else ""
     end = core[-1] if core[-1:] in (".", "?", "!") else ""
@@ -1805,8 +1807,10 @@ def write_offer(card, kind, offer, point=None, questions=(), at_least=0, item="i
             core = f"{core.rstrip(' .!?')} {TAKE_IT_DOWN}"
         offer_sentence = f"{core.rstrip(' .!?')}.{' ' + sign if sign else ''}"
         closing = " ".join(s.strip() for s in SENTENCES.split(closing) if s.strip() and not HELD.search(s))
-    elif kind == "more" and not point and not HOLD.search(offer_sentence) and not HELD.search(closing):
-        offer_sentence = held(offer_sentence)  # paying over asking says why, once (not again if your closing asks it)
+    elif kind == "more" and not (point and point.get("about") == "condition") and not HOLD.search(offer_sentence) \
+            and not HELD.search(closing):
+        # paying over asking says why, once (not again if your closing asks it); a flaw you don't mind isn't why (14 Oct)
+        offer_sentence = held(offer_sentence)
     greeting, rest = split_greeting(offer_sentence)
     if opener and LEADING_GREETING.match(opener) and greeting:  # one greeting: the opener's ("Hi mate, hi mate, would...")
         offer_sentence = rest[:1].upper() + rest[1:]

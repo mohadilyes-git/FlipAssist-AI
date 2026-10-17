@@ -153,25 +153,39 @@ describe("AI message", () => {
     expect([body.mention, body.flaws_said]).toEqual([false, null]);
   });
 
-  it("never says a flaw when paying asking or more: a flaw is a lower offer's reason", async () => {
-    const fetch = serve({ "POST /api/messages/draft": [[200, { ...DRAFT, kind: "asking" }], [200, { ...DRAFT, kind: "more" }]] });
+  it("lets you say you don't mind the flaw when paying asking or more, and starts at No there", async () => {
+    const fetch = serve({ "POST /api/messages/draft": [[200, { ...DRAFT, kind: "asking" }], [200, { ...DRAFT, kind: "more" }],
+      [200, { ...DRAFT, kind: "asking" }], [200, { ...DRAFT, kind: "more" }]] });
     const user = userEvent.setup();
     render(<MessageScreen />);
     await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
     await user.type(screen.getByLabelText("Asking price"), "£220");
     for (const card of ["Pay asking", "Offer more"]) {
       await user.click(screen.getByRole("radio", { name: new RegExp(card) }));
-      expect(screen.queryByRole("button", { name: "Yes" })).toBeNull();
+      expect(screen.getByText("Say you don't mind the flaw")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "No" }).getAttribute("aria-pressed")).toBe("true"); // your choice
       expect(screen.queryByRole("group", { name: "How many flaws to say" })).toBeNull();
-      expect(screen.getByText("Not said when paying asking or more")).toBeTruthy();
-      await user.click(screen.getByRole("button", { name: "Write my message" })); // no count to pick
+      await user.click(screen.getByRole("button", { name: "Write my message" }));
       await screen.findByDisplayValue(DRAFT.message!);
     }
     const [asking, more] = [sent(fetch, "POST /api/messages/draft", 0), sent(fetch, "POST /api/messages/draft", 1)];
     expect([asking.kind, asking.mention, asking.flaws_said]).toEqual(["asking", false, null]);
     expect([more.kind, more.mention, more.flaws_said]).toEqual(["more", null, null]); // your style: good condition
+    // Yes: pick how many, and they're said as flaws you don't mind
+    for (const [card, n] of [["Pay asking", 2], ["Offer more", 3]] as const) {
+      await user.click(screen.getByRole("radio", { name: new RegExp(card) }));
+      await user.click(screen.getByRole("button", { name: "Yes" }));
+      await user.click(screen.getByRole("button", { name: `${n} flaws only` }));
+      await user.click(screen.getByRole("button", { name: /Write my message|Rewrite/ }).textContent === "Rewrite"
+        ? screen.getByRole("button", { name: "Rewrite" }) : screen.getByRole("button", { name: "Write my message" }));
+    }
+    await vi.waitFor(() => expect(fetch.mock.calls.filter(([url]) => url === "/api/messages/draft").length).toBe(4));
+    const [askingYes, moreYes] = [sent(fetch, "POST /api/messages/draft", 2), sent(fetch, "POST /api/messages/draft", 3)];
+    expect([askingYes.kind, askingYes.mention, askingYes.flaws_said]).toEqual(["asking", true, 2]);
+    expect([moreYes.kind, moreYes.mention, moreYes.flaws_said]).toEqual(["more", true, 3]);
     await user.click(screen.getByRole("radio", { name: /Offer lower/ }));
-    expect(screen.getByRole("button", { name: "Yes" }).getAttribute("aria-pressed")).toBe("true"); // back again
+    expect(screen.getByText("Say the flaw")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Yes" }).getAttribute("aria-pressed")).toBe("true"); // each card its own
   });
 
   it("writes every message with no AI, and only Rewrite has Gemma 3 4B reword it (14 Oct)", async () => {
@@ -1047,8 +1061,8 @@ describe("the app", () => {
     expect(await screen.findByText("Ollama running")).toBeTruthy();
     expect(await screen.findByText("Learning from 14 of your messages")).toBeTruthy();
     await user.click(within(screen.getByRole("navigation")).getByText("Home"));
-    expect(await screen.findByText("Done on this device")).toBeTruthy();
-    expect(await screen.findByText("40")).toBeTruthy();
+    expect(await screen.findByText("Done by the models")).toBeTruthy();
+    expect(await screen.findByText("50")).toBeTruthy();
     expect(window.location.hash).toBe("#home");
     expect(screen.getByText("FlipAssist · Home")).toBeTruthy();
     await user.click(within(screen.getByRole("navigation")).getByText("AI message"));
@@ -1108,11 +1122,12 @@ describe("Home (fix 2, 14 Oct)", () => {
     return reload;
   };
 
-  it("counts the successful outputs made on this device, with no Refresh and no buttons at the bottom", async () => {
+  it("counts the successful outputs across all the models, with no Refresh and no buttons at the bottom", async () => {
     const reload = home();
-    const hero = within(screen.getByRole("region", { name: "Done on this device" }));
-    expect(await hero.findByText("40")).toBeTruthy();
-    expect(hero.getByText("successful outputs, all free · 80% of the 50 in total")).toBeTruthy();
+    const hero = within(screen.getByRole("region", { name: "Done by the models" }));
+    expect(await hero.findByText("50")).toBeTruthy(); // every model's, the paid ones too
+    expect(hero.getByText("successful outputs across all the models")).toBeTruthy();
+    expect(hero.queryByText(/all free|in total/)).toBeNull(); // 14 Oct: just the count
     expect(screen.queryByText(/no paid AI/)).toBeNull(); // 14 Oct: the paid check runs on purpose
     expect(hero.getByText("edited · none sent yet")).toBeTruthy();
     expect(screen.queryByText(/never needed the paid backup/)).toBeNull();
@@ -1125,7 +1140,7 @@ describe("Home (fix 2, 14 Oct)", () => {
 
   it("loads again by itself when you come back to the window", async () => {
     const reload = home();
-    await screen.findByText("40");
+    await screen.findByText("50");
     window.dispatchEvent(new Event("focus"));
     await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(2));
   });
@@ -1262,5 +1277,24 @@ describe("the steps behind a draft, by job and who did it (14 Oct)", () => {
     await user.click(await screen.findByRole("button", { name: /Why · 5 steps/ }));
     expect(screen.getByText("Checking the reason · Claude Haiku 5.5 (paid) flagged it")).toBeTruthy();
     expect(screen.getByText("Reason flagged by Claude Haiku 5.5, fixed by Claude Sonnet 5.5")).toBeTruthy();
+  });
+});
+
+describe("Home's numbers add up (14 Oct)", () => {
+  it("shows the same total on the blue card as Who did the work's passed ones add up to", async () => {
+    const models = [{ model: "flip-reader-5", job: "read", attempts: 23, passed: 23, cost_pence: 0 },
+      { model: "template", job: "draft", attempts: 19, passed: 19, cost_pence: 0 },
+      { model: "claude-haiku-5-5", job: "reason", attempts: 8, passed: 8, cost_pence: 0.126 },
+      { model: "claude-sonnet-5-5", job: "draft", attempts: 2, passed: 1, cost_pence: 0.5 }];
+    const stats = { ...STATS, models, outputs: 51, outputs_here: 42 };
+    serve({ "GET /api/stats": [200, stats] });
+    render(<HomeScreen go={vi.fn()} count={0} running={HEALTH} reload={vi.fn(async () => undefined)} />);
+    const hero = within(screen.getByRole("region", { name: "Done by the models" }));
+    expect(await hero.findByText("51")).toBeTruthy();
+    const work = within(screen.getByRole("region", { name: "Who did the work" }));
+    expect(work.getByText("51 passed in all")).toBeTruthy();
+    const passed = work.getAllByText(/^\d+ of \d+ passed$/).map((p) => Number(p.textContent!.split(" ")[0]));
+    expect(passed.reduce((a, b) => a + b, 0)).toBe(51);
+    expect(work.getByText("Claude Sonnet 5.5 · writing the message as a backup")).toBeTruthy();
   });
 });

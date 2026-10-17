@@ -27,6 +27,12 @@ export function reasonLine(reason: { by: string; checked: string }): string {
 
 /** What a model did, for Home's "who did the work": "reading the listing", "checking the reason". */
 export function jobName(model: string, job: string): string {
+  // a paid model reads or writes only when this device's models can't (14 Oct): say so
+  const backup = model.startsWith("claude") && job !== "reason" ? " as a backup" : "";
+  return doing(model, job) + backup;
+}
+
+function doing(model: string, job: string): string {
   if (job === "read") return "reading the listing";
   if (job === "price") return "reading for a UK price";
   if (job === "colour") return "checking the colour";

@@ -66,15 +66,12 @@ export function HomeScreen({ go, count, running, reload }: Props) {
           no gap (14 Oct); one column when it's narrow: the blue card, Running, then who did the work */}
       <div className="home">
         <div className="home-grid">
-        <section className="hero home-hero" aria-label="Done on this device">
-          <p className="caps">Done on this device</p>
-          {/* the successful outputs made here, free (14 Oct: not the drafts that used no paid AI, as the paid check
-              runs on purpose every time) */}
-          <p className="hero-big">{stats ? stats.outputs_here.toLocaleString("en-GB") : "–"}</p>
-          <p className="sub">
-            {stats ? `successful outputs, all free · ${percent(stats.outputs_here, stats.outputs)} of the `
-              + `${stats.outputs.toLocaleString("en-GB")} in total` : "successful outputs, all free"}
-          </p>
+        <section className="hero home-hero" aria-label="Done by the models">
+          <p className="caps">Done by the models</p>
+          {/* every successful output (an answer that passed its checks), by every model, paid ones too: the "passed"
+              numbers in Who did the work add up to it (14 Oct) */}
+          <p className="hero-big">{stats ? stats.outputs.toLocaleString("en-GB") : "–"}</p>
+          <p className="sub">successful outputs across all the models</p>
           <a className="hero-pill" href="#style" onClick={link("style")}>
             <PenIcon size={12} stroke={2.4} />
             Learning from {count} of your messages
@@ -105,7 +102,10 @@ export function HomeScreen({ go, count, running, reload }: Props) {
         </section>
 
         <section className="card home-work" aria-label="Who did the work">
-          <p className="caps">Who did the work</p>
+          <p className="card-head">
+            <span className="caps">Who did the work</span>
+            {stats ? <span>{stats.outputs.toLocaleString("en-GB")} passed in all</span> : null}
+          </p>
           {stats?.models.length ? stats.models.map((m) => (
             <div className="model" key={`${m.model} ${m.job}`}>
               <p className="model-head">
