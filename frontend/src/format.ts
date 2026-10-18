@@ -37,6 +37,7 @@ function doing(model: string, job: string): string {
   if (job === "price") return "reading for a UK price";
   if (job === "colour") return "checking the colour";
   if (job === "listing") return "writing the eBay listing";  // a listing's own job since 14 Oct
+  if (job === "rewrite") return "rewording the message";  // Rewrite, the only time the app's AI writes (14 Oct)
   if (job === "reason") {
     return model.startsWith("claude-haiku") ? "checking the reason is sendable" : model.startsWith("claude-sonnet") ? "fixing the reason"
       : "wording the reason";

@@ -724,7 +724,8 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     result["answer"] = try_models(
         mode, {"local": local, "api": api},
         ask=lambda ai: finished(ai.ask(system, user, [], MESSAGE_SCHEMA, vary=bool(rewrite_of))),
-        check=ai_check, result=result, log=log, again=again)
+        check=ai_check, result=result, log=log, again=again,
+        job="rewrite" if rewrite_of else "draft")  # Rewrite's own job (14 Oct): Home says "rewording the message"
     if result["answer"] is not None:
         result["status"], result["writer"] = "ready", result["attempts"][-1]["model"]
         result["answer"] = in_your_case(result["answer"], card, offer, kind,

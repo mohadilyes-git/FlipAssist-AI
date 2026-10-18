@@ -113,6 +113,7 @@ export function stepName(a: Attempt, reading: boolean, writing: "message" | "lis
       ? "Fixing the reason" : "Wording the reason";
     return `${what} · ${who}`;
   }
+  if (a.job === "rewrite") return `Rewording the message · ${who}`;
   return `Writing the ${writing} · ${who}`;
 }
 

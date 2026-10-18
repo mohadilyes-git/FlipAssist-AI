@@ -71,6 +71,7 @@ describe("AI message", () => {
   async function fill(user: ReturnType<typeof userEvent.setup>, title = "iPhone 13 128GB Blue", price = "£220") {
     await user.type(screen.getByLabelText("Listing title"), title);
     await user.type(screen.getByLabelText("Asking price"), price);
+    await user.click(screen.getByRole("button", { name: "Yes" })); // the counts come once you click Yes (14 Oct)
     await user.click(screen.getByRole("button", { name: "All flaws" }));
   }
   async function draft(user: ReturnType<typeof userEvent.setup>) {
@@ -100,17 +101,26 @@ describe("AI message", () => {
     expect(screen.queryByRole("combobox")).toBeNull();
   });
 
-  it("says the flaw only once you pick how many: none picked turns the row red and writes nothing", async () => {
+  it("asks Yes or No first, shows the counts once you click Yes, and writes nothing until you pick", async () => {
     const fetch = serve({ "POST /api/messages/draft": [200, DRAFT] });
     const user = userEvent.setup();
     render(<MessageScreen />);
-    expect(screen.getByRole("button", { name: "Yes" }).getAttribute("aria-pressed")).toBe("true"); // the flaw is said
+    // nothing picked to start with, and no counts until you click Yes (14 Oct)
+    expect(["Yes", "No"].map((n) => screen.getByRole("button", { name: n }).getAttribute("aria-pressed")))
+      .toEqual(["false", "false"]);
+    expect(screen.queryByRole("group", { name: "How many flaws to say" })).toBeNull();
     expect(screen.queryByRole("button", { name: "My style" })).toBeNull();
+    await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
+    await user.type(screen.getByLabelText("Asking price"), "£220");
+    await user.click(screen.getByRole("button", { name: "Write my message" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("Pick Yes or No");
+    expect(screen.getByRole("group", { name: "Say the flaw" }).className).toContain("missing");
+    expect(fetch).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Yes" }));
+    expect(screen.queryByRole("alert")).toBeNull(); // picking clears the red
     const counts = within(screen.getByRole("group", { name: "How many flaws to say" }));
     expect(counts.getAllByRole("button").map((b) => [b.textContent, b.getAttribute("aria-pressed")])).toEqual(
       [["1 flaw only", "false"], ["2 flaws only", "false"], ["3 flaws only", "false"], ["All flaws", "false"]]);
-    await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
-    await user.type(screen.getByLabelText("Asking price"), "£220");
     await user.click(screen.getByRole("button", { name: "Write my message" }));
     expect((await screen.findByRole("alert")).textContent).toBe("Pick how many flaws to say");
     expect(screen.getByRole("group", { name: "How many flaws to say" }).className).toContain("missing");
@@ -130,6 +140,7 @@ describe("AI message", () => {
     render(<MessageScreen />);
     await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
     await user.type(screen.getByLabelText("Asking price"), "£220");
+    await user.click(screen.getByRole("button", { name: "Yes" }));
     await user.click(screen.getByRole("button", { name: label as string }));
     await user.click(screen.getByRole("button", { name: "Write my message" }));
     await screen.findByDisplayValue(DRAFT.message!);
@@ -185,7 +196,8 @@ describe("AI message", () => {
     expect([moreYes.kind, moreYes.mention, moreYes.flaws_said]).toEqual(["more", true, 3]);
     await user.click(screen.getByRole("radio", { name: /Offer lower/ }));
     expect(screen.getByText("Say the flaw")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Yes" }).getAttribute("aria-pressed")).toBe("true"); // each card its own
+    expect(screen.getByRole("button", { name: "Yes" }).getAttribute("aria-pressed")).toBe("false"); // each card its own:
+    expect(screen.getByRole("button", { name: "No" }).getAttribute("aria-pressed")).toBe("false"); // yours to pick here
   });
 
   it("writes every message with no AI, and only Rewrite has Gemma 3 4B reword it (14 Oct)", async () => {
@@ -446,6 +458,7 @@ describe("the price line", () => {
     render(<MessageScreen />);
     await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
     await user.type(screen.getByLabelText("Asking price"), "220");
+    await user.click(screen.getByRole("button", { name: "Yes" }));
     await user.click(screen.getByRole("button", { name: "All flaws" }));
     const line = screen.getByRole("slider", { name: "Offer lower price" });
     const at = () => ["aria-valuemin", "aria-valuemax", "aria-valuenow", "aria-valuetext"].map((a) => line.getAttribute(a));
@@ -1272,6 +1285,7 @@ describe("the steps behind a draft, by job and who did it (14 Oct)", () => {
     render(<MessageScreen />);
     await user.type(screen.getByRole("textbox", { name: "Listing title" }), "iPhone 13");
     await user.type(screen.getByPlaceholderText("£220"), "220");
+    await user.click(screen.getByRole("button", { name: "Yes" }));
     await user.click(screen.getByRole("button", { name: "1 flaw only" }));
     await user.click(screen.getByRole("button", { name: "Write my message" }));
     await user.click(await screen.findByRole("button", { name: /Why · 5 steps/ }));

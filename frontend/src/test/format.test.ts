@@ -31,3 +31,10 @@ describe("what each model did, on Home", () => {
     expect(jobName("claude-haiku-5-5", "reason")).toBe("checking the reason is sendable");
   });
 });
+
+describe("Rewrite's own job (14 Oct)", () => {
+  it("says Gemma 3 4B was rewording the message, and a paid model doing it was a backup", () => {
+    expect(jobName("gemma3:4b", "rewrite")).toBe("rewording the message");
+    expect(jobName("claude-sonnet-5-5", "rewrite")).toBe("rewording the message as a backup");
+  });
+});

@@ -32,15 +32,16 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
   const [description, setDescription] = useState("");
   const [kind, setKind] = useState<Kind>("lower");
   const [moved, setMoved] = useState<Partial<Record<Kind, number>>>({});
-  // each card's own choice (14 Oct): a lower offer says its flaw unless you pick otherwise (3 Oct); at Pay asking and
-  // Offer more saying you don't mind it is yours to choose, so it starts at No
-  const [mentions, setMentions] = useState<Record<Kind, Mention>>({ lower: "yes", asking: "no", more: "no" });
+  // each card's own choice (14 Oct): at Offer lower you pick Yes or No yourself, and the counts come once you click
+  // Yes; at Pay asking and Offer more saying you don't mind it is optional, so it starts at No
+  const [mentions, setMentions] = useState<Record<Kind, Mention | null>>({ lower: null, asking: "no", more: "no" });
   const [counts, setCounts] = useState<Record<Kind, FlawsSaid | null>>({ lower: null, asking: null, more: null });
   const mention = mentions[kind];
   const flaws = counts[kind]; // how many: none picked until you pick (14 Oct)
   const setMention = (m: Mention) => setMentions((now) => ({ ...now, [kind]: m }));
   const setFlaws = (said: FlawsSaid) => setCounts((now) => ({ ...now, [kind]: said }));
   const [pickFlaws, setPickFlaws] = useState(false); // you wrote without picking how many: the row turns red
+  const [pickMention, setPickMention] = useState(false); // you wrote without picking Yes or No: that row turns red
   const [draft, setDraft] = useState<MessageDraft | null>(null);
   const [draftedFor, setDraftedFor] = useState(""); // the title and description the draft on screen was made from
   const [text, setText] = useState("");
@@ -76,6 +77,10 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
 
   async function write(asked: Length, overrides: { previous?: string; rewrite_of?: string } = {}) {
     if (!prices) return;
+    if (mention === null) {
+      setPickMention(true); // nothing is written until you pick Yes or No
+      return;
+    }
     if (saysFlaws && flaws === null) {
       setPickFlaws(true); // nothing is written until you pick how many flaws to say
       return;
@@ -225,14 +230,17 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
           {kind === "lower" && draft?.reading.no_offers && <Warn>The seller says no offers</Warn>}
 
           <div className="how-written">
-            <div className="chips" role="group" aria-label="Say the flaw">
+            <div className={pickMention && mention === null ? "chips flaw-counts missing" : "chips"} role="group"
+              aria-label="Say the flaw">
               <span className="label">{kind === "lower" ? "Say the flaw" : "Say you don't mind the flaw"}</span>
               {(["yes", "no"] as Mention[]).map((m) => (
                 <Chip key={m} on={mention === m} label={m === "yes" ? "Yes" : "No"} onClick={() => {
                   setMention(m);
+                  setPickMention(false);
                   if (m === "no") setPickFlaws(false);
                 }} />
               ))}
+              {pickMention && mention === null && <span className="flaw-pick" role="alert">Pick Yes or No</span>}
             </div>
             {saysFlaws && (
               <div className={pickFlaws ? "chips flaw-counts missing" : "chips flaw-counts"} role="group"
