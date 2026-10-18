@@ -716,6 +716,9 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
                             "it in")
         if kind == "lower" and praises_condition(message, offer):
             problems.append("a lower offer praises the condition")
+        twice = said_twice(message, own)
+        if twice:  # 14 Oct, Rewrite: "I'm happy to collect. I can come and collect."
+            problems.append(f"the message says {' and '.join(twice)} twice: say it once")
         return problems
 
     result["answer"] = try_models(
@@ -736,6 +739,23 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
 
 # the AI's mark for the reason, however it typed it: "[REASON]", "[reason]", "{REASON}", "[ the reason ]"
 REASON_MARKED = re.compile(r"[\[{(]\s*(?:the\s+)?reason\s*[\]})]", re.IGNORECASE)
+
+
+# what an AI-written message says once (14 Oct, Rewrite: "I'm happy to collect. I can come and collect."): each in one
+# statement, unless your own sentences say it twice; a question about it isn't saying it ("Could you hold it for me?")
+SAID_ONCE = (("that you'll come and collect", HABIT_WORDS["collecting"]), ("cash", re.compile(r"\bcash\b", re.IGNORECASE)),
+             ("the hold", HOLD), ("taking the listing down",
+                                  re.compile(r"\btake (?:it|the (?:ad|advert|listing|post)) down\b", re.IGNORECASE)))
+
+
+def said_twice(message, own=()):
+    """What an AI-written message says in two of its statements, by name ("that you'll come and collect"), or []: not
+    when both are your own sentences (own: your_sentences), which say it the way you do."""
+    mine = {tuple(words(s)) for s in own}
+    statements = [s for s in SENTENCES.split(message.strip()) if s.strip() and not ends_asking(s)]
+    return [name for name, pattern in SAID_ONCE
+            if len(saying := [s for s in statements if pattern.search(s)]) > 1
+            and any(tuple(words(s)) not in mine for s in saying)]
 
 
 def gives_word_for_word(message, clause):

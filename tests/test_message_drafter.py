@@ -213,7 +213,8 @@ def test_a_longer_draft_that_isnt_longer_gets_one_try_on_the_api():
 
 def test_a_longer_draft_can_start_from_the_one_on_screen():
     on_screen = "Hi mate, is this still available? Would you take £170 cash? Can collect today or tomorrow, whenever."
-    local = FakeModel("gemma3:4b", {"message": LONG["message"] + " Could collect tomorrow evening too if easier."})
+    # (14 Oct: not a second sentence about collecting, which the AI's message isn't let say twice)
+    local = FakeModel("gemma3:4b", {"message": LONG["message"] + " Tomorrow evening works too if easier."})
     result = ai_draft(LISTING, style_card(PAST), local=local, length="longer", previous=on_screen)
     assert result["words"] == 34  # its 17 words, not the style's 12: twice that
     assert result["status"] == "ready"
@@ -779,3 +780,21 @@ def test_code_sentences_go_right_after_the_offer():
     assert result["answer"]["message"] == ("Hi, would you take £170 for it? I'm offering that because the back glass is "
                                            "cracked. I can pay cash and come and collect it. Just checking that's "
                                            "agreeable. Let me know.")
+
+
+def test_the_ais_message_doesnt_say_collecting_or_cash_twice_unless_your_sentences_do():
+    """14 Oct (Rewrite): "I'm happy to collect. I can pay cash and come and collect it." says collecting twice. Your own
+    sentences may (they're how you write); a question about it isn't saying it."""
+    from flip.message_drafter import said_twice
+    assert said_twice("Hi, would you take £125? I'm happy to collect. I can pay cash and come and collect it.") == \
+        ["that you'll come and collect"]
+    assert said_twice("Hi, I'll pay £160 cash if you take the listing down and sell it to me. I can pay cash.") == ["cash"]
+    assert said_twice("Hi, would you take £125 cash? Could you hold it for me? I can come and collect.") == []
+    yours = ("Hi mate, can collect today.", "Can collect from Leeds LS6.")
+    assert said_twice("Hi mate, can collect today. Would you take £185? Can collect from Leeds LS6.", yours) == []
+    twice = {"message": "Hi, would you take £170 for it? I'm happy to collect. I can pay cash and come and collect it."}
+    once = {"message": "Hi, would you take £170 for it? I can pay cash and come and collect it."}
+    local = FakeModel("gemma3:4b", twice, once)
+    result = ai_draft(LISTING, local=local, rewrite_of="Hi, would you take £170 cash for it? I can come and collect.")
+    assert result["answer"]["message"] == once["message"]
+    assert "the message says that you'll come and collect twice: say it once" in result["attempts"][0]["problems"]
