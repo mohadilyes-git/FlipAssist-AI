@@ -230,8 +230,8 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
           {kind === "lower" && draft?.reading.no_offers && <Warn>The seller says no offers</Warn>}
 
           <div className="how-written">
-            <div className={pickMention && mention === null ? "chips flaw-counts missing" : "chips"} role="group"
-              aria-label="Say the flaw">
+            <div className={pickMention && mention === null ? "chips say-flaw flaw-counts missing" : "chips say-flaw"}
+              role="group" aria-label="Say the flaw">
               <span className="label">{kind === "lower" ? "Say the flaw" : "Say you don't mind the flaw"}</span>
               {(["yes", "no"] as Mention[]).map((m) => (
                 <Chip key={m} on={mention === m} label={m === "yes" ? "Yes" : "No"} onClick={() => {

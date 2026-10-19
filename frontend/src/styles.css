@@ -1862,3 +1862,14 @@ textarea.input {
     grid-template-areas: "hero" "running" "work";
   }
 }
+
+/* Say the flaw (14 Oct): its words on the left, Yes and No on the right, on every card; a "Pick Yes or No" goes on its
+   own line under them */
+.say-flaw .label {
+  margin-right: auto;
+}
+
+.say-flaw .flaw-pick {
+  flex-basis: 100%;
+  text-align: right;
+}
