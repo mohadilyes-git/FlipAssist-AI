@@ -153,8 +153,9 @@ class AuditLog:
         outputs = sum(m["passed"] for m in models.values())
         here = sum(m["passed"] for m in models.values() if not m["model"].startswith("claude"))
         drafts, cost = sum(ended.values()), sum(m["cost_pence"] for m in models.values())
-        # a UK price check's reading (job "price") isn't a draft's: left out of the cost per 100 drafts (4 Oct)
-        drafted = sum(m["cost_pence"] for m in models.values() if m["job"] != "price")
+        # a UK price check's reading (job "price") and its damage judges (job "severity", 14 Oct) aren't a draft's: left
+        # out of the cost per 100 drafts (4 Oct)
+        drafted = sum(m["cost_pence"] for m in models.values() if m["job"] not in ("price", "severity"))
         return {"drafts": drafts, "ready": ended.get("ready", 0), "needs_you": ended.get("needs you", 0),
                 "outputs_here": here, "outputs": outputs,
                 "models": [{**m, "cost_pence": float(round(m["cost_pence"], 4))} for m in models.values()],

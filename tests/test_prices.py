@@ -58,7 +58,7 @@ def test_an_iphone_is_priced_with_its_flaws_sorted_into_kinds():
                      "asked_ram_gb": None, "kind": "iphone", "kinds": ["damage"], "cuts": ["damage"],
                      "parts_price": False, "rough": False, "exact": True, "mode": "catalogue", "sorted_by": "code",
                      "damage": {"level": "minor", "tier": "middle", "cut": -0.188, "rough": False, "from": None,
-                                "n": 153}}
+                                "n": 153, "by": "code"}}
     url, headers, body = sent[0]
     assert body == {"action": "price", "country": "uk", "title": "iPhone 13 128GB Blue", "kinds": [],
                     "strict": True}  # the API's own sorter isn't used, and a title naming no model is refused
@@ -1505,3 +1505,13 @@ def test_every_listing_of_the_second_check_is_asked_for_its_kinds(title, flaws, 
 ])
 def test_the_round_two_regressions_stay_fixed(sentence, kinds):
     assert prices.kinds_of([sentence], "iPhone 13 128GB. " + sentence) == kinds
+
+
+def test_the_damage_judge_says_how_bad_and_who_said_it():
+    """14 Oct, the hybrid (flip.severity.judged): the judge's level sets the cut, and the estimate says who decided."""
+    opener, asked = asking()
+    found = prices.estimate("iPhone 13 128GB Blue", ["Screen cracked"], opener=opener, description="Screen cracked.",
+                            judge=lambda flaws, title, description, category: ("severe", "Claude Sonnet 5.5"))
+    assert (found["damage"]["level"], found["damage"]["by"], found["price"]) == ("severe", "Claude Sonnet 5.5", 104)
+    plain = prices.estimate("iPhone 13 128GB Blue", ["Screen cracked"], opener=opener, description="Screen cracked.")
+    assert (plain["damage"]["level"], plain["damage"]["by"]) == ("moderate", "code")

@@ -173,8 +173,10 @@ export function damageLine(e: PriceEstimate): string {
   if (!d) return "";
   const where = !d.rough ? "" : d.from?.includes("the US") ? " (rough: from US sales)"
     : d.from?.includes("the iPhone") ? " (rough: from iPhones)" : " (rough: few listings, pooled with a group next to it)";
+  const judged = !d.by ? "" : d.by.startsWith("Claude Sonnet") ? ` · ${d.by} decided how bad`
+    : ` · how bad: ${d.by}`;  // the hybrid (14 Oct): code and Claude Haiku 5.5, Claude Sonnet 5.5 when they disagree
   return `Damage counted as ${d.level}: −${Math.round(-d.cut * 100)}% for ${TIERS[d.tier] ? `a ${TIERS[d.tier]}` : "this"} `
-    + `${NOUNS[e.kind ?? ""] ?? "item"}, from ${d.n} listings like it${where}`;
+    + `${NOUNS[e.kind ?? ""] ?? "item"}, from ${d.n} listings like it${where}${judged}`;
 }
 
 /** After "counted as": a locked or for-parts one is priced as that, so its other flaws aren't cut on top of it */

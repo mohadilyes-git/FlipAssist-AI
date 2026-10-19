@@ -1141,7 +1141,7 @@ def sorted_kinds(flaws, text, title, description, sorter=None):
     return kinds, by
 
 
-def estimate(title, flaws=(), country="uk", opener=None, description=None, sorter=None):
+def estimate(title, flaws=(), country="uk", opener=None, description=None, sorter=None, judge=None):
     """The UK price of this listing with its flaws, as the prices API answers it, trimmed to what the screen shows:
     {"price", "middle", "low", "high", "currency", "sales", "model", "item", "storage_gb", "ram_gb",
     "asked_storage_gb", "asked_ram_gb", "kind", "kinds", "cuts", "parts_price", "rough", "exact", "mode"} — or
@@ -1179,7 +1179,7 @@ def estimate(title, flaws=(), country="uk", opener=None, description=None, sorte
         body["ram_gb"] = in_description[1]
     remembered = json.dumps([url, body], sort_keys=True)
     if remembered in _seen:
-        return with_damage({**_seen[remembered], "sorted_by": by}, own_damage, kinds, flaws, title)
+        return with_damage({**_seen[remembered], "sorted_by": by}, own_damage, kinds, flaws, title, judge, description)
     request = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
                                      headers={"Content-Type": "application/json", "x-prices-key": key})
     try:
@@ -1211,20 +1211,24 @@ def estimate(title, flaws=(), country="uk", opener=None, description=None, sorte
              "parts_price": "for-parts price" in used, "rough": bool(answer.get("rough")),
              "exact": bool(answer.get("exact_match")), "mode": answer.get("mode")}
     _seen[remembered] = found
-    return with_damage({**found, "sorted_by": by}, own_damage, kinds, flaws, title)
+    return with_damage({**found, "sorted_by": by}, own_damage, kinds, flaws, title, judge, description)
 
 
-def with_damage(found, own, kinds, flaws, title):
+def with_damage(found, own, kinds, flaws, title, judge=None, description=None):
     """The estimate with the damage cut FlipAssist measured (fix 1, 14 Oct): how bad the damage is (flip.severity: minor,
     moderate or severe; moderate when no word says) and the model's price tier, by its clean middle price, take the
     cut from data/damage_cuts.json off the API's price for its other flaws. "damage" says which: {"level", "tier",
-    "cut", "rough", "from", "n"}. Not own (no damage, or locked or for parts): the API's estimate as it is."""
+    "cut", "rough", "from", "n", "by"}. judge(flaws, title, description, category) -> (level, by): the hybrid
+    (flip.severity.judged, 14 Oct: code and Claude Haiku 5.5, Claude Sonnet 5.5 when they disagree); None: code alone.
+    Not own (no damage, or locked or for parts): the API's estimate as it is."""
     found = {**found, "kinds": kinds}
     if not own or found.get("price") is None:
         return found
-    level = severity(flaws, title) or "moderate"
+    level, by = judge(flaws, title, description or "", found.get("kind") or "") if judge else \
+        (severity(flaws, title) or "moderate", "code")
     cut = damage_cut(found.get("kind"), "uk", found.get("middle") or found["price"], level)
     if cut is None:
         return found
     return {**found, "price": round(found["price"] * (1 + cut["cut"])),
-            "cuts": [*(c for c in found.get("cuts", []) if c != "damage"), "damage"], "damage": {"level": level, **cut}}
+            "cuts": [*(c for c in found.get("cuts", []) if c != "damage"), "damage"],
+            "damage": {"level": level, **cut, "by": by}}

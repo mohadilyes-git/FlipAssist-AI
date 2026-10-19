@@ -600,8 +600,9 @@ def test_a_price_checks_reading_isnt_counted_in_the_cost_per_draft(client, monke
     before = client.get("/stats").json()["cost_per_100_drafts_pence"]
     log = api.app.dependency_overrides[api.audit]()
     log.attempt("price-1", Reply("claude-haiku-5-5", answer={}), [], "0.05", job="price")  # a paid price reading
+    log.attempt(None, Reply("claude-sonnet-5-5", answer={"severity": "minor"}), [], "0.2", job="severity")  # its judge
     after = client.get("/stats").json()
-    assert after["cost_per_100_drafts_pence"] == before and after["cost_pence"] >= 0.05
+    assert after["cost_per_100_drafts_pence"] == before and after["cost_pence"] >= 0.25
 
 
 def test_flaws_already_read_are_used_as_they_are(client, monkeypatch, prices_api):

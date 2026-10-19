@@ -48,7 +48,9 @@ from flip.drafter import draft_listing
 from flip.message_drafter import MESSAGE_TOKENS, Refused, draft_message, offer_to_draft
 from flip.offers import check_battery_reason, check_condition_talk
 from flip.style_ai import MODEL as STYLE_MODEL
-from flip.wording import MODEL as WORDING_MODEL, check_reason, completed, settings
+from flip.wording import MODEL as WORDING_MODEL, api_model as wording_api_model, check_reason, completed, settings
+from flip.severity import judged
+from flip.costs import cost_pence
 from flip.money import to_pence
 from flip.photos import NotAPhoto, photo_base64, photo_kind
 from flip.prompts import offer_words
@@ -343,8 +345,9 @@ class Health(BaseModel):
 class Setup:
     """The models, the audit log and the catalogue: made once, on the first call that needs them."""
 
-    def __init__(self, local, api, log, local_listing=None, reader=None, wording=None, kinds=None):
+    def __init__(self, local, api, log, local_listing=None, reader=None, wording=None, kinds=None, judge=None):
         self.local, self.api, self.log = local, api, log
+        self.judge = judge  # how bad the damage is: "settings" in the app (the hybrid, flip.severity), None: code alone
         self.kinds = kinds  # what sorts a price's flaws: a sorter, or a function that gives one (None: code sorts)
         self.wording = wording  # the reason's models (flip.wording): "settings" in the app, None (off) unless given
         self.local_listing = local_listing or local  # listings get the bigger answer budget
@@ -376,7 +379,7 @@ def setup():
     api = ApiModel(backup_model()) if os.environ.get("ANTHROPIC_API_KEY") else None
     local = LocalModel(max_tokens=MESSAGE_TOKENS)
     return Setup(local, api, audit(), LocalModel(), reader=lambda: reader_for(local), wording="settings",
-                 kinds=lambda: kinds_sorter(local.url))
+                 kinds=lambda: kinds_sorter(local.url), judge="settings")
 
 
 @lru_cache
@@ -683,8 +686,25 @@ def estimate_price(request: PriceRequest, s: Setup = Depends(setup)):
         reading = read_listing_with_ai(listing, s.reading_model(), s.api, "auto",
                                      PriceChecks(s.log) if s.log is not None else None)
         flaws, read_by = reading.get("quotes") or reading["flaws"], reading["read_by"]
-    found = estimate(request.title, flaws, description=request.description, sorter=s.flaw_sorter() if flaws else None)
+    found = estimate(request.title, flaws, description=request.description, sorter=s.flaw_sorter() if flaws else None,
+                     judge=damage_judge(s) if flaws and s.judge == "settings" else None)
     return PriceEstimate(**found, flaws=flaws, read_by=read_by)
+
+
+def damage_judge(s):
+    """How bad the damage is, the hybrid way (flip.severity.judged, 14 Oct): code and Claude Haiku 5.5, Claude Sonnet 5.5
+    when they disagree; None without an Anthropic key (code alone). Each paid call is in the audit log as the job
+    "severity", so Home counts it and its cost (not in the cost per 100 drafts: it's the price tab's)."""
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        return None
+    check = wording_api_model("claude-haiku-5-5", thinking={"type": "disabled"})
+    decide = wording_api_model("claude-sonnet-5-5", thinking={"type": "between_tools"})  # Sonnet 5.5's "thinking off"
+
+    def logged(reply):
+        if s.log is not None:
+            s.log.attempt(None, reply, [] if reply.answer else [reply.error or "no answer"],
+                          cost_pence(reply.model, reply.tokens_in, reply.tokens_out), job="severity")
+    return lambda flaws, title, description, category: judged(flaws, title, description, category, check, decide, logged)
 
 
 @app.post("/messages/check-reason", response_model=ReasonCheck, dependencies=[Depends(key)])

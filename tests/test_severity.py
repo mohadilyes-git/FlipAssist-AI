@@ -91,3 +91,47 @@ def test_no_table_or_no_level_is_none():
     assert damage_cut("tablet", "uk", 300, "minor") is None
     assert damage_cut("iphone", "uk", 300, None) is None
     assert damage_cut("iphone", "uk", None, "minor") is None
+
+
+class Judge:
+    """A pretend Claude: answers in turn, remembers how often it was asked."""
+
+    def __init__(self, name, *answers):
+        self.name, self.answers, self.asked = name, list(answers), 0
+
+    def ask(self, system, user, photos, schema):
+        from flip.ai import Reply
+        self.asked += 1
+        answer = self.answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return Reply(self.name, answer=answer, tokens_in=500, tokens_out=8)
+
+
+def test_the_hybrid_takes_code_and_haiku_when_they_agree_and_asks_sonnet_when_they_dont():
+    """14 Oct: code and Claude Haiku 5.5 read how bad it is; Claude Sonnet 5.5 only when they disagree."""
+    from flip import severity as sev
+    sev._judged.clear()
+    haiku, sonnet = Judge("claude-haiku-5-5", {"severity": "minor"}), Judge("claude-sonnet-5-5")
+    assert sev.judged(["Small crack on the back"], "iPhone 13", check=haiku, decide=sonnet) == \
+        ("minor", "code and Claude Haiku 5.5")
+    assert sonnet.asked == 0
+    haiku, sonnet = Judge("claude-haiku-5-5", {"severity": "severe"}), Judge("claude-sonnet-5-5", {"severity": "moderate"})
+    logged = []
+    assert sev.judged(["Screen cracked"], "iPhone 12", "Screen cracked, works fine.", "iphone", haiku, sonnet,
+                      logged.append) == ("moderate", "Claude Sonnet 5.5")
+    assert (haiku.asked, sonnet.asked, len(logged)) == (1, 1, 2)
+    # the same listing again isn't paid for again
+    assert sev.judged(["Screen cracked"], "iPhone 12", "Screen cracked, works fine.", "iphone", haiku, sonnet) == \
+        ("moderate", "Claude Sonnet 5.5") and (haiku.asked, sonnet.asked) == (1, 1)
+
+
+def test_a_judge_that_cant_answer_leaves_it_to_the_others():
+    from flip import severity as sev
+    sev._judged.clear()
+    assert sev.judged(["Screen smashed"], "iPhone 11") == ("severe", "code")  # no key: code alone
+    down = Judge("claude-haiku-5-5", RuntimeError("no network"))
+    assert sev.judged(["Screen smashed"], "iPhone 11", check=down, decide=Judge("claude-sonnet-5-5")) == ("severe", "code")
+    haiku, sonnet = Judge("claude-haiku-5-5", {"severity": "minor"}), Judge("claude-sonnet-5-5", {"severity": "none"})
+    assert sev.judged(["Hairline crack across the screen"], "iPhone 14", check=haiku, decide=sonnet)[1] in \
+        ("Claude Haiku 5.5", "code and Claude Haiku 5.5")

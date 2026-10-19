@@ -38,3 +38,10 @@ describe("Rewrite's own job (14 Oct)", () => {
     expect(jobName("claude-sonnet-5-5", "rewrite")).toBe("rewording the message as a backup");
   });
 });
+
+describe("the damage judges on Home (14 Oct)", () => {
+  it("says Claude Haiku 5.5 judges and Claude Sonnet 5.5 decides how bad, not as a backup", () => {
+    expect(jobName("claude-haiku-5-5", "severity")).toBe("judging how bad the damage is");
+    expect(jobName("claude-sonnet-5-5", "severity")).toBe("deciding how bad the damage is");
+  });
+});

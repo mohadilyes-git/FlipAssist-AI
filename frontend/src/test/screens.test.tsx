@@ -1229,6 +1229,12 @@ describe("the damage cut by how bad (fix 1, 14 Oct)", () => {
     expect(damageLine({ ...base, damage: { level: "moderate", tier: "middle", cut: -0.304, rough: false, n: 191 } }))
       .toBe("Damage counted as moderate: −30% for a mid-priced iPhone, from 191 listings like it");
     expect(damageLine({ ...base })).toBe("");
+    expect(damageLine({ ...base, damage: { level: "severe", tier: "middle", cut: -0.391, rough: false, n: 32,
+      by: "Claude Sonnet 5.5" } })).toBe("Damage counted as severe: −39% for a mid-priced iPhone, from 32 listings like it"
+      + " · Claude Sonnet 5.5 decided how bad");
+    expect(damageLine({ ...base, damage: { level: "minor", tier: "top", cut: -0.167, rough: false, n: 175,
+      by: "code and Claude Haiku 5.5" } })).toBe("Damage counted as minor: −17% for a pricier iPhone, from 175 listings "
+      + "like it · how bad: code and Claude Haiku 5.5");
   });
   it("says where a rough one came from", () => {
     const samsung = { ...base, kind: "samsung", damage: { level: "minor", tier: "top", cut: -0.059, rough: true,
