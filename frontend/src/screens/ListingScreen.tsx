@@ -1,9 +1,10 @@
-// List on eBay: photos and your notes on the left, the checked eBay draft on
-// the right. Code fills what the catalogue knows (model, storage, specs, the
-// title), eBay's condition from your notes, and eBay's own fields in eBay's
-// words (phones so far); the AI the colour from the photos, the condition note
-// and the description, and the checks hold it to your notes. Nothing is listed
-// from here: you copy it into eBay.
+// List on eBay, iPhones only (14 Oct): photos and your notes on the left, the
+// checked eBay draft on the right. Code fills what the catalogue knows (model,
+// storage, specs, the title), eBay's condition from your notes, and eBay's own
+// fields in eBay's words; the AI the colour from the photos, the condition note
+// and the description, from your title and notes alone (never the original
+// seller's words, as in AlertFlip), and the checks hold it to your notes.
+// Nothing is listed from here: you copy it into eBay.
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { api, type ItemSpecific, type ListingDraft } from "../api";
 import { CONDITIONS, cost, modelName, seconds, writerName } from "../format";
@@ -22,7 +23,6 @@ const FACT_UNITS: Record<string, string> = { battery: "%" };
 
 export function ListingScreen() {
   const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
   const [notes, setNotes] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
   const [draft, setDraft] = useState<ListingDraft | null>(null);
@@ -51,7 +51,6 @@ export function ListingScreen() {
     setCopied(null);
     const form = new FormData();
     form.append("title", title);
-    form.append("description", description);
     form.append("notes", notes);
     photos.forEach((photo) => form.append("photos", photo));
     try {
@@ -90,21 +89,16 @@ export function ListingScreen() {
 
   return (
     <>
-      <Head icon={<TagIcon />} title="List on eBay" sub="Your notes and photos · a checked eBay draft" />
+      <Head icon={<TagIcon />} title="List on eBay" sub="iPhones only · your notes and photos · a checked eBay draft" />
       <div className="split">
         <div className="stack">
           {error && <p className="error" role="alert">{error}</p>}
           <Photos photos={photos} onAdd={add} onRemove={(i) => setPhotos((now) => now.filter((_, n) => n !== i))} />
           <section className="card" aria-label="The item">
             <label className="field">
-              <span>The seller's title</span>
+              <span>Which iPhone</span>
               <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={300}
                 placeholder="iphone 13 128gb unlocked boxed" />
-            </label>
-            <label className="field">
-              <span>The seller's description</span>
-              <textarea className="input" rows={3} value={description} maxLength={5000}
-                onChange={(e) => setDescription(e.target.value)} />
             </label>
             <label className="field">
               <span>Your notes from looking at it</span>
@@ -145,7 +139,8 @@ export function ListingScreen() {
             <div className="empty">
               <span className="tile"><TagIcon size={20} /></span>
               <strong>Your eBay draft shows here</strong>
-              <p className="sub">Add photos and notes, then Draft listing. Code fills the specs, Gemma 3 4B writes the rest.</p>
+              <p className="sub">For iPhones only. Add photos and your notes, then Draft listing. Code fills the specs,
+                Gemma 3 4B writes the rest from your notes.</p>
             </div>
           )}
         </div>
@@ -241,7 +236,7 @@ function Drafted({ draft, ebayTitle, setEbayTitle, text, setText, specifics, set
 /** One of eBay's fields, in eBay's words: yours to change, with eBay's values to pick from. */
 function Specific({ specific, value, onChange, empty, by = "" }: { specific: ItemSpecific; value: string; onChange: (value: string) => void; empty: string; by?: string }) {
   const id = `ebay-${specific.name.toLowerCase().replace(/[^a-z]+/g, "-")}`;
-  const note = !value.trim() ? (specific.hint ? `eBay needs this: ${specific.hint}, check it` : specific.required ? empty : "")
+  const note = !value.trim() ? (specific.required ? empty : "")
     : value !== (specific.value ?? "") ? "your edit" : specific.source ? `from ${specific.source}${by ? `, by ${by}` : ""}` : "";
   return (
     <div className="specific">

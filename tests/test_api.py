@@ -205,10 +205,14 @@ def test_a_colour_gemma_couldnt_see_comes_from_haikus_look_and_says_so(client):
     assert draft["cost_pence"] == round(sum(a["cost_pence"] for a in draft["attempts"]), 4) > 0
 
 
-def test_a_listing_outside_phones_has_no_ebay_fields_yet(client):
-    client.use(local=FakeModel("gemma3:4b", {**LISTED, "colour": "White"}))
+def test_a_listing_that_isnt_an_iphone_is_turned_away(client):
+    # 14 Oct (the owner's call): List on eBay drafts iPhones only
+    local = FakeModel("gemma3:4b", {**LISTED, "colour": "White"})
+    client.use(local=local)
     draft = client.post("/listings/draft", data={"title": "PS5 Slim digital 1TB", "notes": "boxed"}).json()
-    assert (draft["ebay_category"], draft["item_specifics"]) == (None, [])
+    assert (draft["status"], draft["reasons"], draft["ebay_category"], draft["item_specifics"]) == \
+        ("needs you", ["List on eBay is for iPhones only"], None, [])
+    assert local.asked == []
 
 
 def test_a_listing_needs_photos_that_are_photos(client):
@@ -225,7 +229,8 @@ def test_a_listing_the_catalogue_doesnt_know_needs_you_and_asks_no_ai(client):
     local = FakeModel("gemma3:4b")
     client.use(local=local)
     draft = client.post("/listings/draft", data={"title": "Dyson V11 cordless vacuum"}).json()
-    assert (draft["status"], draft["reasons"]) == ("needs you", ["the model isn't in the catalogue"])
+    assert (draft["status"], draft["reasons"]) == \
+        ("needs you", ["List on eBay is for iPhones only: say which iPhone it is in the title"])
     assert local.asked == []
 
 

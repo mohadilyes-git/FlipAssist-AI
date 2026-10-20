@@ -777,7 +777,7 @@ describe("List on eBay", () => {
     expect(screen.getAllByRole("img")).toHaveLength(8);
     expect(screen.getByText("Cover")).toBeTruthy();
     expect(container.querySelector("input[type=file]")).toBeNull(); // no "Add photo" slot once there are 8
-    await user.type(screen.getByLabelText("The seller's title"), "iphone 13 128gb");
+    await user.type(screen.getByLabelText("Which iPhone"), "iphone 13 128gb");
     await user.click(screen.getByRole("button", { name: "Draft listing" }));
     expect(await screen.findByDisplayValue(LISTED.ebay_title!)).toBeTruthy();
     expect(screen.getByText("Midnight (from the photos)")).toBeTruthy();
@@ -793,7 +793,7 @@ describe("List on eBay", () => {
       cost_pence: 0.0125 }] });
     const user = userEvent.setup();
     render(<ListingScreen />);
-    await user.type(screen.getByLabelText("The seller's title"), "iphone 13 128gb");
+    await user.type(screen.getByLabelText("Which iPhone"), "iphone 13 128gb");
     await user.click(screen.getByRole("button", { name: "Draft listing" }));
     expect(await screen.findByText("Midnight (from the photos, by Claude Haiku 5.5)")).toBeTruthy();
     // a phone's eBay Colour field says who picked it too
@@ -803,7 +803,7 @@ describe("List on eBay", () => {
       item_specifics: [{ name: "Colour", value: "Black", required: true, source: "the photos: Midnight", options: ["Black"] }],
       attempts: LISTED.attempts, cost_pence: 0 }] });
     render(<ListingScreen />);
-    await user.type(screen.getByLabelText("The seller's title"), "iphone 13 128gb");
+    await user.type(screen.getByLabelText("Which iPhone"), "iphone 13 128gb");
     await user.click(screen.getByRole("button", { name: "Draft listing" }));
     expect(await screen.findByText("from the photos: Midnight, by Claude Haiku 5.5")).toBeTruthy();
     cleanup();
@@ -812,7 +812,7 @@ describe("List on eBay", () => {
         { model: "claude-haiku-5-5", problems: [], seconds: 2.1, cost_pence: 0.0125, colour_only: true }],
       cost_pence: 0.0125 }] });
     render(<ListingScreen />);
-    await user.type(screen.getByLabelText("The seller's title"), "iphone 13 128gb");
+    await user.type(screen.getByLabelText("Which iPhone"), "iphone 13 128gb");
     await user.click(screen.getByRole("button", { name: "Draft listing" }));
     await screen.findByText("Midnight (from the photos, by Claude Haiku 5.5)");
     expect(screen.getByText(/^Gemma 3 4B \(on this device\) ·/)).toBeTruthy(); // Gemma wrote it; Haiku only looked at the colour
@@ -840,7 +840,7 @@ describe("List on eBay", () => {
     const user = userEvent.setup();
     render(<ListingScreen />);
     expect(screen.getByText("Your eBay draft shows here")).toBeTruthy();
-    await user.type(screen.getByLabelText("The seller's title"), "iphone 13 128gb");
+    await user.type(screen.getByLabelText("Which iPhone"), "iphone 13 128gb");
     await user.click(screen.getByRole("button", { name: "Draft listing" }));
     expect(await screen.findByText("Needs you")).toBeTruthy();
     expect(screen.getByText("Fill in: colour")).toBeTruthy();
@@ -871,7 +871,7 @@ describe("List on eBay", () => {
       "POST /api/drafts/3/approve": [200, { draft_id: 3, edited: false, at: "now", saved_to_style: false }] });
     const user = userEvent.setup();
     render(<ListingScreen />);
-    await user.type(screen.getByLabelText("The seller's title"), "iphone 13 128gb unlocked");
+    await user.type(screen.getByLabelText("Which iPhone"), "iphone 13 128gb unlocked");
     await user.click(screen.getByRole("button", { name: "Draft listing" }));
     const fields = within(await screen.findByRole("region", { name: "eBay's fields" }));
     expect(fields.getByText("Mobile & Smart Phones")).toBeTruthy();
@@ -890,17 +890,40 @@ describe("List on eBay", () => {
     expect(copied).toContain("Colour: Black\nNetwork: Unlocked\nScreen Size: 6.1 in");
   });
 
-  it("says what the seller's description says for an empty field eBay needs", async () => {
+  it("says it's for iPhones only and writes from your title and notes alone: no seller's description box", async () => {
+    // 14 Oct (the owner): iPhones only, said on the page; written from your notes, as AlertFlip's List on eBay is
+    const fetch = serve({ "POST /api/listings/draft": [200, LISTED] });
+    const user = userEvent.setup();
+    render(<ListingScreen />);
+    expect(screen.getByText("iPhones only · your notes and photos · a checked eBay draft")).toBeTruthy();
+    expect(screen.getByText(/^For iPhones only\. Add photos and your notes/)).toBeTruthy();
+    expect(screen.queryByLabelText("The seller's description")).toBeNull();
+    await user.type(screen.getByLabelText("Which iPhone"), "iphone 13");
+    await user.type(screen.getByLabelText("Your notes from looking at it"), "battery 88%");
+    await user.click(screen.getByRole("button", { name: "Draft listing" }));
+    expect(await screen.findByText("Needs you")).toBeTruthy();
+    const form = fetch.mock.calls[0][1]!.body as FormData;
+    expect([form.get("title"), form.get("notes"), form.has("description")]).toEqual(["iphone 13", "battery 88%", false]);
+  });
+
+  it("says so when it isn't an iPhone, and an empty field eBay needs is yours to fill in", async () => {
+    serve({ "POST /api/listings/draft": [200, { ...LISTED, ebay_title: null, condition_id: null, condition_note: null,
+      description: null, filled_by_code: {}, reasons: ["List on eBay is for iPhones only"], attempts: [] }] });
+    const user = userEvent.setup();
+    render(<ListingScreen />);
+    await user.type(screen.getByLabelText("Which iPhone"), "PS5 Slim digital");
+    await user.click(screen.getByRole("button", { name: "Draft listing" }));
+    expect(await screen.findByText("List on eBay is for iPhones only")).toBeTruthy();
+    cleanup();
     serve({ "POST /api/listings/draft": [200, { ...LISTED,
       ebay_category: { id: "9355", name: "Mobile & Smart Phones", path: "Mobile Phones & Communication" },
       item_specifics: [{ name: "Storage Capacity", value: null, required: true, source: null,
-        options: ["128 GB", "256 GB", "512 GB"], hint: "the seller says 128 GB" }] }] });
-    const user = userEvent.setup();
+        options: ["128 GB", "256 GB", "512 GB"] }] }] });
     render(<ListingScreen />);
-    await user.type(screen.getByLabelText("The seller's title"), "iphone 13");
+    await user.type(screen.getByLabelText("Which iPhone"), "iphone 13");
     await user.click(screen.getByRole("button", { name: "Draft listing" }));
-    expect(await screen.findByText("eBay needs this: the seller says 128 GB, check it")).toBeTruthy();
-    expect((screen.getByLabelText("Storage Capacity") as HTMLInputElement).value).toBe(""); // a hint, never filled
+    expect(await screen.findByText("eBay needs this: fill it in")).toBeTruthy();
+    expect((screen.getByLabelText("Storage Capacity") as HTMLInputElement).value).toBe("");
   });
 
   it("keeps code's title when no answer passed, and says the colour wasn't drafted rather than unsure", async () => {
@@ -908,7 +931,7 @@ describe("List on eBay", () => {
       ebay_title: "Apple iPhone 14 Pro Max Unlocked", reasons: ["no answer passed the checks", "fill in: storage, colour"] }] });
     const user = userEvent.setup();
     render(<ListingScreen />);
-    await user.type(screen.getByLabelText("The seller's title"), "iphone 14 pro max");
+    await user.type(screen.getByLabelText("Which iPhone"), "iphone 14 pro max");
     await user.click(screen.getByRole("button", { name: "Draft listing" }));
     expect(await screen.findByDisplayValue("Apple iPhone 14 Pro Max Unlocked")).toBeTruthy();
     expect(screen.getAllByText("Not drafted")).toHaveLength(2); // condition and colour

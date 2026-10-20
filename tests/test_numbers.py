@@ -178,5 +178,6 @@ def test_what_the_test_agents_tried(title, notes, storage, battery):
 
 
 def test_a_size_right_after_another_models_name_is_that_models():
-    from flip.ebay import seller_sizes
-    assert seller_sizes("Upgraded to the iPhone 15 Pro 256GB so selling my old phone", MODELS["iphone-13"]) == []
+    from flip.catalogue import model_names
+    said = "Upgraded to the iPhone 15 Pro 256GB so selling my old phone"
+    assert read_numbers(said, MODELS["iphone-13"], model_names())["storage"] == set()

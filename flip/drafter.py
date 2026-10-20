@@ -12,16 +12,19 @@
 4. eBay's category and fields ("item specifics") come from the same facts, in
    eBay's own words (flip.ebay): "Apple iPhone 13", "128 GB", "Black".
 5. A draft is "ready" only when nothing is missing. Anything the AI was unsure
-   of, or code couldn't fill, is listed for you to fill in, and so is a fault
-   the seller mentions that your notes don't. If no answer passes, code's
-   title and that list still stand.
+   of, or code couldn't fill, is listed for you to fill in. If no answer
+   passes, code's title and that list still stand.
+
+iPhones only (14 Oct 2026, the owner's call): any other item is turned away
+before the AI is asked. It's written from your title and notes alone, as
+AlertFlip's List on eBay is: on eBay you're the seller, so the description says
+only what you checked, never the original seller's words.
 """
 
-import re
 
 from flip.attempts import try_models
-from flip.catalogue import fill_from_catalogue, words
-from flip.checks import UNSURE, canonical, check_listing_answer, condition_for, has_fault, sources_text
+from flip.catalogue import fill_from_catalogue
+from flip.checks import UNSURE, canonical, check_listing_answer, condition_for, sources_text
 from flip.ebay import item_specifics
 from flip.prompts import answer_schema, colour_schema, listing_prompt
 from flip.title import build_title
@@ -30,13 +33,16 @@ from flip.title import build_title
 def draft_listing(entry, catalogue, conditions, local=None, api=None, mode="auto", photos=(), log=None):
     """Draft one listing. entry is one item in the test set's format; photos
     are base64 JPEGs (flip.photos). Returns what happened, attempt by attempt."""
-    title, description, notes = (entry.get(k) or "" for k in ("original_title", "original_description", "my_notes"))
-    item = fill_from_catalogue(title, notes, catalogue, description)
+    title, notes = (entry.get(k) or "" for k in ("original_title", "my_notes"))  # never the seller's description
+    item = fill_from_catalogue(title, notes, catalogue)
     result = {"item_id": entry.get("id"), "status": "needs you", "reasons": [], "warnings": item["warnings"],
               "item": item, "answer": None, "title": None, "attempts": [], "ebay": None,
               "colour_from": "listing" if item.get("colour") else None, "colour_by": None}
     if not item["model_id"]:
-        result["reasons"].append("the model isn't in the catalogue")
+        result["reasons"].append(f"{IPHONES_ONLY}: say which iPhone it is in the title")
+        return finish(result, log)
+    if not is_iphone(item):
+        result["reasons"].append(IPHONES_ONLY)
         return finish(result, log)
 
     model = next(m for m in catalogue if m["id"] == item["model_id"])
@@ -45,7 +51,7 @@ def draft_listing(entry, catalogue, conditions, local=None, api=None, mode="auto
     allowed = [c for c in conditions[item["category"]] if c["id"] == condition] or conditions[item["category"]]
     schema = answer_schema(item, model, allowed)
     system, user = listing_prompt(item, model, entry, len(photos), allowed[0] if len(allowed) == 1 else None)
-    sources = sources_text(title, description, notes, item)
+    sources = sources_text(title, "", notes, item)
     result["answer"] = try_models(
         mode, {"local": local, "api": api},
         ask=lambda ai: ai.ask(system, user, list(photos), schema),
@@ -68,41 +74,20 @@ def draft_listing(entry, catalogue, conditions, local=None, api=None, mode="auto
     # code's title and what's left to fill in stand even when no answer passed
     result["item"] = item
     result["title"] = build_title(item)
-    result["ebay"] = item_specifics(item, model, result["colour_from"], description)  # eBay's own fields, in its words
-    checks = seller_faults(description, notes)
+    result["ebay"] = item_specifics(item, model, result["colour_from"])  # eBay's own fields, in its words
     if item["missing"]:
         result["reasons"].append(f"fill in: {', '.join(item['missing'])}")
-    result["reasons"] += checks
-    if not item["missing"] and not checks and result["answer"] is not None:
+    if not item["missing"] and result["answer"] is not None:
         result["status"] = "ready"
     return finish(result, log)
 
 
-# the parts a fault can be about: your notes naming one means you've looked at it
-FAULT_PARTS = {"camera", "cameras", "lens", "screen", "display", "touch", "battery", "charging", "charger", "port",
-               "speaker", "speakers", "mic", "microphone", "face", "button", "buttons", "wifi", "bluetooth", "signal",
-               "sim", "network", "sound", "audio", "volume", "power", "keyboard", "trackpad", "controller", "controllers",
-               "joycon", "joycons", "stick", "sticks", "disc", "drive", "fan", "hdmi", "earbud", "earbuds", "buds"}
-MAX_QUOTE = 25  # words of the seller's sentence to quote
+IPHONES_ONLY = "List on eBay is for iPhones only"
 
 
-def seller_faults(description, notes):
-    """What to check: each fault the seller's description mentions and your
-    notes don't, in the seller's own sentence. The draft follows your notes
-    (they beat the seller's words), but an untested camera is a return waiting
-    to happen. Your notes naming the part ("camera fine") means you've looked."""
-    noted = set(words(notes or ""))
-    found = []
-    for sentence in re.split(r"[.!?;\n]+", description or ""):
-        if not sentence.strip() or not has_fault(sentence):
-            continue
-        parts = set(words(sentence)) & FAULT_PARTS
-        if (parts & noted) or (not parts and has_fault(notes or "")):
-            continue
-        said = sentence.split()
-        quote = " ".join(said[:MAX_QUOTE]) + ("…" if len(said) > MAX_QUOTE else "")
-        found.append(f'The seller says "{quote}": your notes don\'t mention it. Check it before you list it.')
-    return found
+def is_iphone(item):
+    """Whether the catalogue's item is an iPhone: List on eBay drafts nothing else (14 Oct)."""
+    return item.get("category") == "phones" and item.get("brand") == "Apple"
 
 
 def unsure(colour):

@@ -208,7 +208,6 @@ class ItemSpecific(BaseModel):
     required: bool = Field(description="eBay won't list without it")
     source: str | None = Field(description="the catalogue, your title or notes, or the photos (with the exact colour)")
     options: list[str] = Field(description="eBay's values to pick from")
-    hint: str | None = Field(None, description="for an empty field, what the seller's description says, to check")
 
 
 class ListingDraft(BaseModel):
@@ -574,14 +573,14 @@ def draft_a_message(request: MessageRequest, s: Setup = Depends(setup), book: St
 
 
 @app.post("/listings/draft", response_model=ListingDraft, dependencies=[Depends(key)])
-def draft_a_listing(title: str = Form(min_length=1, max_length=300), description: str = Form("", max_length=5000),
+def draft_a_listing(title: str = Form(min_length=1, max_length=300, description="which iPhone it is"),
                     notes: str = Form("", max_length=2000, description="your notes from looking at the item"),
                     id: str | None = Form(None, max_length=100), mode: Mode = Form("auto"),
                     photos: list[UploadFile] = File(default=[], description=f"up to {MAX_PHOTOS} photos"),
                     s: Setup = Depends(setup)):
-    """Draft an eBay listing: code fills what the catalogue knows, the AI the
-    colour (from the photos), the condition and the description, and the
-    checks hold it to your notes."""
+    """Draft an eBay listing for an iPhone (iPhones only, 14 Oct): code fills what the catalogue knows, the AI the
+    colour (from the photos), the condition and the description, and the checks hold it to your notes. Written from
+    your title and notes alone, never the original seller's description."""
     if len(photos) > MAX_PHOTOS:
         raise HTTPException(422, f"at most {MAX_PHOTOS} photos")
     encoded = []
@@ -602,7 +601,7 @@ def draft_a_listing(title: str = Form(min_length=1, max_length=300), description
                 raise HTTPException(422, f"{name}: {e.why}")
             except (OSError, ValueError, subprocess.CalledProcessError):
                 raise HTTPException(422, f"{name}: can't be read as a photo")
-    entry = {"id": id or new_id(), "original_title": title, "original_description": description, "my_notes": notes}
+    entry = {"id": id or new_id(), "original_title": title, "my_notes": notes}
     result = draft_listing(entry, s.catalogue, s.conditions, s.local_listing, s.api, mode, encoded, s.log)
     answer, item = result["answer"] or {}, result["item"]
     tried = attempts(result["attempts"])

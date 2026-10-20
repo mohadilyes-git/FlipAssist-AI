@@ -23,12 +23,12 @@ Drafts eBay listings and offer messages for a reseller. Plain code does everythi
   - Anything code isn't sure about goes on a "missing" list.
   - Parts, accessories, wanted ads and listings that name two products aren't matched at all.
 - **Builds the eBay title** from a template, within eBay's 80-character limit.
-- **Fills eBay's own fields in eBay's own words** (phones so far, `flip/ebay.py`):
+- **Fills eBay's own fields in eBay's own words** (iPhones, `flip/ebay.py`):
   - the category (Mobile & Smart Phones) and the four fields eBay won't list a phone without: Brand, Model, Storage Capacity and Colour;
   - then what the catalogue and the reseller's notes already know: network, 4G/5G, operating system, screen size and chip;
   - spelt as eBay's lists spell them ("Apple iPhone 13", "128 GB", "Apple A15 Bionic"); each colour becomes one of eBay's 16 plain colours, the one UK sellers pick for it (Midnight is Black, Rose Gold is Pink: `data/ebay_map.json`, with the counts);
   - eBay's lists come from its own API (`python -m flip.ebay --refresh` writes `data/ebay_fields.json`), and a test holds every phone in the catalogue to them.
-- **Says what to check in the seller's words:** a fault the seller's description mentions ("sometimes it does not focus") that the reseller's notes don't is quoted back to check before listing, and an empty field eBay needs gets the seller's word as a hint ("the seller says 128 GB"), never filled from it.
+- **List on eBay is for iPhones only, written from the reseller's title and notes alone** (14 Oct 2026, the owner's call; the page says so). Anything else the catalogue knows (the Galaxy S23, the consoles, AirPods) is turned away before the AI is asked, and the original seller's description isn't asked for or used: on eBay the reseller is the seller, so the listing says only what they checked, as AlertFlip's List on eBay does. An empty field eBay needs is theirs to fill in.
 - **Sets eBay's condition from the reseller's notes:** For parts or not working for a fault, New or Opened - never used only when the notes back it, Used otherwise. A crack or scratch on its own is wear, not a fault. The AI writes the condition note to match and can't answer another condition.
 - **Does the money in pence:** profit after fees, and an offer price rounded to a tidy number.
 - **Checks an AI answer before it's used:**

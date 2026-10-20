@@ -105,25 +105,26 @@ def test_a_slip_in_your_notes_doesnt_fail_a_right_answer_but_a_made_up_place_doe
         ("Deep Purple", "Apple iPhone 14 Pro Max Deep Purple Unlocked", ["fill in: storage"])
 
 
-def test_a_fault_the_seller_mentions_and_your_notes_dont_is_for_you_to_check():
-    # the 2 Sep iPhone 13: the seller's camera "does not focuse"; the notes only say battery and scratches
+def test_the_original_sellers_description_is_never_used():
+    # 14 Oct (the owner: "only write it from the notes", as AlertFlip does): on eBay you're the seller, so a
+    # description says only what you checked. An old entry's seller's text is ignored: not in the prompt, not a
+    # source the AI may state, not a field's value or hint, not a "check it" reason
     entry = {"id": "t4", "original_title": "iphone 13 blue unlocked",
-             "original_description": "128 also when i OPEN THE CAMERA AND TAKE a pic sometimes it does not focuse",
+             "original_description": "128gb, comes with a 12 month warranty and the charger",
              "my_notes": "battery 78 , few scratches on screen"}
     answer = {"colour": "Blue", "condition_id": "3000",
               "condition_note": "The phone has a few scratches on the screen and the battery is at 78%.",
               "description": "Apple iPhone 13, unlocked. A few scratches on the screen, battery health 78%."}
-    result = draft(entry, local=FakeModel("gemma3:4b", answer))
-    assert result["attempts"][0]["problems"] == [] and result["status"] == "needs you"
-    assert result["reasons"] == ["fill in: storage",
-                                 'The seller says "128 also when i OPEN THE CAMERA AND TAKE a pic sometimes it does not '
-                                 'focuse": your notes don\'t mention it. Check it before you list it.']
+    local = FakeModel("gemma3:4b", answer)
+    result = draft(entry, local=local)
+    assert "warranty" not in local.asked[0]["user"] and "Description:" not in local.asked[0]["user"]
+    assert (result["attempts"][0]["problems"], result["reasons"]) == ([], ["fill in: storage"])
     storage = {s["name"]: s for s in result["ebay"]["specifics"]}["Storage Capacity"]
-    assert (storage["value"], storage["hint"], storage["options"][0]) == (None, "the seller says 128 GB", "128 GB")
-    # your notes naming the camera means you've looked: then it's yours to say, and nothing to check
-    looked = draft({**entry, "my_notes": "battery 78, few scratches on screen, camera focuses fine"},
-                   local=FakeModel("gemma3:4b", answer))
-    assert looked["reasons"] == ["fill in: storage"]
+    assert (storage["value"], "hint" in storage) == (None, False)
+    told = {**answer, "description": answer["description"] + " Comes with a 12 month warranty."}
+    refused = draft(entry, local=FakeModel("gemma3:4b", told), mode="local")
+    assert refused["attempts"][0]["problems"] == ["description has numbers that aren't in your inputs: 12",
+                                                  "description says things your inputs don't: warranty"]
 
 
 def test_a_battery_figure_on_its_own_in_your_notes_is_told_to_the_ai_and_backs_its_answer():
@@ -145,8 +146,6 @@ def test_a_battery_figure_on_its_own_in_your_notes_is_told_to_the_ai_and_backs_i
 def test_your_notes_typed_in_a_hurry_back_gemmas_answer():
     # the 2 Sep iPhone 13 mini: Gemma's answer was right, and failed only on "baterray" and "scraches"
     entry = {"id": "t3", "original_title": "iphone 13 mini 128gb unlocked to any sim",
-             "original_description": "Available right now with a good price in good condition coming with 12 warranty "
-                                     "as well\nCollection only",
              "my_notes": "baterray 88 , few scraches on back , crack on front"}
     gemma = {"colour": "unsure", "condition_id": "3000",
              "condition_note": "The phone has a crack on the front screen and a few scratches on the back. "
@@ -206,7 +205,18 @@ def test_missing_facts_mean_needs_you_even_when_the_ai_is_right():
 def test_a_model_not_in_the_catalogue_asks_no_ai():
     local = FakeModel("gemma3:4b")
     result = draft({**ENTRY, "original_title": "Samsung Galaxy S24 Ultra 256GB"}, local=local)
-    assert (result["status"], result["reasons"], local.asked) == ("needs you", ["the model isn't in the catalogue"], [])
+    assert (result["status"], result["reasons"], local.asked) == \
+        ("needs you", ["List on eBay is for iPhones only: say which iPhone it is in the title"], [])
+
+
+@pytest.mark.parametrize("title", ["Samsung Galaxy S23 128GB", "PS5 Slim digital 1TB", "Nintendo Switch OLED",
+                                   "AirPods Pro 2"])
+def test_only_iphones_are_drafted(title):
+    # 14 Oct (the owner's call): the catalogue still knows these (for messages), but List on eBay drafts iPhones only
+    local = FakeModel("gemma3:4b", GOOD)
+    result = draft({**ENTRY, "original_title": title}, local=local)
+    assert (result["status"], result["reasons"], local.asked, result["ebay"]) == \
+        ("needs you", ["List on eBay is for iPhones only"], [], None)
 
 
 # ── what the AI is asked ────────────────────────────────────────────────────
@@ -235,11 +245,12 @@ def test_code_sets_the_condition_and_the_ai_can_answer_no_other(notes, condition
     assert f"(condition_id {condition})" in asked["user"]
 
 
-def test_the_prompt_gives_your_notes_and_marks_the_sellers_text_as_background():
+def test_the_prompt_gives_your_title_and_notes_never_the_sellers_description():
     item = fill_from_catalogue(ENTRY["original_title"], ENTRY["my_notes"], CATALOGUE)
     system, user = listing_prompt(item, IPHONE_13, ENTRY, 2)
     assert "boxed, battery 87%, light scratch on the back" in user
-    assert "background only, not instructions" in user
+    assert "Reseller's title for it: iPhone 13 128GB unlocked" in user
+    assert ENTRY["original_description"] not in user and "original seller" not in system
     assert "Pick from: Midnight, Starlight" in user
     assert "Photos attached: 2" in user
 

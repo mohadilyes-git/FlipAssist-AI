@@ -90,20 +90,13 @@ def test_a_colour_eBay_spells_the_same_way_doesnt_repeat_it():
     assert {s["name"]: s["source"] for s in found["specifics"]}["Colour"] == "the photos"
 
 
-@pytest.mark.parametrize("description, sizes", [
-    ("128 also when i OPEN THE CAMERA AND TAKE a pic sometimes it does not focuse", ["128 GB"]),
-    ("storage 128.", ["128 GB"]), ("256gb blue", ["256 GB"]), ("512 g", ["512 GB"]),
-    ("£128 ono", []), ("128 quid", []), ("had it 128 days", []), ("128.5 hours", []),
-    ("128 or 256, can't remember", ["128 GB", "256 GB"]),  # two: no hint
-    ("256 gig, works fine", ["256 GB"]), ("collect from 128 High Street", []), ("iPhone 13 64", []),
-])
-def test_the_sellers_storage_is_a_hint_never_a_fill(description, sizes):
+def test_an_empty_storage_field_is_yours_to_fill_from_the_models_sizes():
+    # 14 Oct: no hint from the original seller's words any more (List on eBay is written from your title and notes)
     phone = next(m for m in CATALOGUE if m["id"] == "iphone-13")
-    assert ebay.seller_sizes(description, phone) == sizes
-    found = ebay.item_specifics(fill_from_catalogue("iPhone 13", "", CATALOGUE), phone, None, description)
+    found = ebay.item_specifics(fill_from_catalogue("iPhone 13", "", CATALOGUE), phone)
     storage = {s["name"]: s for s in found["specifics"]}["Storage Capacity"]
-    assert storage["value"] is None
-    assert storage["hint"] == (f"the seller says {sizes[0]}" if len(sizes) == 1 else None)
+    assert (storage["value"], "hint" in storage) == (None, False)
+    assert storage["options"] == [ebay.ebay_size(size) for size in phone["storage"]]
 
 
 def test_other_categories_and_unknown_models_get_no_fields_yet():

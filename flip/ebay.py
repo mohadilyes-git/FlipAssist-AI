@@ -26,8 +26,6 @@ from datetime import date
 from functools import lru_cache
 from pathlib import Path
 
-from flip.catalogue import model_names
-from flip.numbers import read_numbers
 
 ROOT = Path(__file__).resolve().parent.parent
 FIELDS = ROOT / "data" / "ebay_fields.json"
@@ -66,16 +64,6 @@ def spelt(values, wanted):
     return next((value for value in values if value.lower() == lower), None)
 
 
-def seller_sizes(description, model):
-    """The model's storage sizes the seller's description names, in eBay's
-    words: "128 also when i..." -> ["128 GB"]. Read like your title and notes
-    (flip.numbers): "GB" typed any way or, from 64 GB up, not at all; never a
-    price ("£128"), a time ("128 days"), an address ("128 High Street") or
-    another model's size ("upgraded to an iPhone 15 Pro 256GB")."""
-    named = read_numbers(description or "", model or {}, model_names())["storage"]
-    return [ebay_size(size) for size in (model or {}).get("storage", []) if size in named]
-
-
 def model_value(item, values, models):
     """eBay's name for the catalogue's model: the map's, or the brand and the model."""
     return models.get(item["model"]) or spelt(values, f"{item['brand']} {item['model']}") \
@@ -92,14 +80,13 @@ def chipset_value(brand, chip, values):
         or f"{brand} {chip}"
 
 
-def item_specifics(item, model=None, colour_from=None, description="", fields=None, emap=None):
+def item_specifics(item, model=None, colour_from=None, fields=None, emap=None):
     """eBay's category and fields for one item (fill_from_catalogue's), filled
     from what code knows, or None for a category not done yet. model is its
     catalogue entry. Each field: {"name", "value" (None if nobody knows it),
-    "required", "source", "options" (eBay's values to pick from), "hint" (for
-    an empty one, what the seller's description says)}, in eBay's order: the
-    ones eBay needs, then the ones filled. description: the seller's, read
-    only for hints: your title and notes fill the fields."""
+    "required", "source", "options" (eBay's values to pick from)}, in eBay's
+    order: the ones eBay needs, then the ones filled. Your title and notes fill
+    them, never the original seller's words."""
     if not item.get("model_id") or item.get("category") not in FILLED:
         return None
     fields, emap = fields or load_fields(), emap or load_map()
@@ -109,10 +96,6 @@ def item_specifics(item, model=None, colour_from=None, description="", fields=No
     sizes = [ebay_size(size) for size in (model or {}).get("storage", [])]
     colour = item.get("colour")
     plain = emap["colours"].get(colour) if colour else None
-    said = seller_sizes(description, model) if not item.get("storage") else []
-    hints = {"Storage Capacity": f"the seller says {said[0]}"} if len(said) == 1 else {}
-    if hints:
-        sizes = [said[0], *[size for size in sizes if size != said[0]]]
     filled = {
         "Brand": (item["brand"], CATALOGUE, [item["brand"]]),
         "Model": (model_value(item, known["Model"]["values"], emap["models"]), CATALOGUE,
@@ -132,8 +115,7 @@ def item_specifics(item, model=None, colour_from=None, description="", fields=No
         value, source, options = filled.get(field["name"], (None, None, []))
         if field["required"] or value:
             specifics.append({"name": field["name"], "value": value, "required": field["required"],
-                              "source": source if value else None, "options": options,
-                              "hint": None if value else hints.get(field["name"])})
+                              "source": source if value else None, "options": options})
     return {"category": {key: category[key] for key in ("id", "name", "path")}, "specifics": specifics}
 
 
