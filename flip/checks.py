@@ -1537,6 +1537,9 @@ def mark_places(text, typos=False, reach=None):
         if not marked:
             continue
         at = [i for i, word in enumerate(part_words) if is_mark(word, typos)]
+        # marks said of the screen protector are its own: "the screen is perfect under a SCRATCHED PROTECTOR" (14 Oct)
+        if at and all(any(w.startswith("protector") for w in part_words[max(0, i - 2):i + 3]) for i in at):
+            continue
         found |= {place for i, place in enumerate(places)
                   if place and (reach is None or any(abs(i - j) <= reach for j in at))}
     return found

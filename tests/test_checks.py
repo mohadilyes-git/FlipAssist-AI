@@ -1051,6 +1051,9 @@ def test_a_no_covers_what_it_says_and_no_more(text, claims):
     ("The phone is used, with a flawless front screen and minor scratches on the back glass.", {"back"}),
     ("Small minor scratches to the top and bottom, and the screen protector is scratched.", set()),
     ("Light scratch on the back and the sides", {"back", "side"}),  # the list of places goes on
+    ("The screen is perfect under a scratched protector.", set()),  # the protector's scratch
+    ("A scratched screen protector over a perfect screen.", set()),
+    ("A light scratch on an otherwise perfect screen.", {"screen"}),  # no protector: the screen's
 ])
 def test_a_mark_is_where_its_own_words_put_it(text, places):
     assert mark_places(text, reach=MARK_REACH) == places
