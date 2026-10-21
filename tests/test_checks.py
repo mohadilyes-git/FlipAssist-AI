@@ -4,9 +4,9 @@ one good and many bad, each bad one failing for the right reason."""
 import pytest
 
 from flip.catalogue import fill_from_catalogue, load_catalogue, load_conditions
-from flip.checks import (KEYWORDS, NO_CASH, check_listing_answer, check_message, check_message_manner,
-                         check_no_unasked_promises, has_fault, numbers_in, offer_asked, promised_in, promises_in,
-                         real_words, slipped, sources_text)
+from flip.checks import (KEYWORDS, MARK_REACH, NO_CASH, check_listing_answer, check_message, check_message_manner,
+                         check_no_meta_talk, check_no_unasked_promises, has_fault, mark_places, numbers_in, offer_asked,
+                         promised_in, promises_in, real_words, slipped, sources_text, works_as_noted)
 from flip.offers import read_listing
 from flip.real_words import DICTIONARY, build
 
@@ -1025,3 +1025,53 @@ def test_a_phone_that_no_longer_turns_on_has_a_fault():
     assert has_fault("Woke up one day and it no longer turns on")
     assert has_fault("no longer holds a charge")
     assert not has_fault("I no longer play it, so it's up for sale")  # not every job: this one's yours
+
+
+# ── 14 Oct: what Claude wrote faithfully that the checks refused (the eBay writer test, 40 real iPhones) ─────
+
+@pytest.mark.parametrize("text, claims", [
+    ("Never repaired and fully working.", {"working": {"yes"}}),  # the "never" is the repair's
+    ("Never been dropped and in excellent condition.", {"excellent": {"yes"}}),
+    ("No charger or box is included.", {"charger": {"no"}, "box": {"no"}}),  # the list goes on
+    ("No cracks and no faults noted.", {"crack": {"no"}, "working": {"yes"}}),
+    ("Minor scratches that do not affect how the phone works.", {"scratch": {"yes"}}),  # said of the marks
+    ("The scratches have no effect on how the phone works.", {"scratch": {"yes"}}),
+    ("Cracked screen and not in perfect condition.", {"crack": {"yes"}, "flawless": {"no"}}),  # the phone, not the screen
+    # what a "no" still covers
+    ("No scratches and dents.", {"scratch": {"no"}, "dent": {"no"}}),
+    ("No box and cracked back", {"box": {"no"}, "crack": {"yes"}}),
+    ("not been opened and no scratches", {"scratch": {"no"}}),
+])
+def test_a_no_covers_what_it_says_and_no_more(text, claims):
+    assert promises_in(text) == claims
+
+
+@pytest.mark.parametrize("text, places", [
+    ("The screen is cracked and the bottom left corner is loose, so it needs a screen repair.", {"screen"}),
+    ("The phone is used, with a flawless front screen and minor scratches on the back glass.", {"back"}),
+    ("Small minor scratches to the top and bottom, and the screen protector is scratched.", set()),
+    ("Light scratch on the back and the sides", {"back", "side"}),  # the list of places goes on
+])
+def test_a_mark_is_where_its_own_words_put_it(text, places):
+    assert mark_places(text, reach=MARK_REACH) == places
+
+
+def test_a_part_that_works_or_the_rest_can_be_said_when_your_notes_say_it():
+    notes = "face id not working, touchscreen works, cameras and flash work, everything else working"
+    assert works_as_noted("The touchscreen works.", notes)
+    assert works_as_noted("Everything else is working.", notes)
+    assert not works_as_noted("Face ID works.", notes)  # your notes say it doesn't
+    assert not works_as_noted("It is fully working.", notes)  # a fault in your notes: never the whole phone
+    assert not works_as_noted("Everything else is working.", "face id not working")  # your notes don't say so
+
+
+@pytest.mark.parametrize("text", ["The reseller describes it as in like-new condition.",
+                                  "No battery health figure is given.", "Battery health is not stated.",
+                                  "The notes say it is boxed.", "The seller describes the battery as good."])
+def test_a_listing_never_talks_about_the_notes(text):
+    assert check_no_meta_talk("description", text)
+
+
+def test_a_listing_about_the_phone_isnt_talk_about_the_notes():
+    assert check_no_meta_talk("description", "Apple iPhone 13 128GB in Blue, unlocked. A light scratch on the back "
+                                             "and battery health of 87%. Comes with a charging cable.") == []

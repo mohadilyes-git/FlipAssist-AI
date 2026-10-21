@@ -431,6 +431,10 @@ CONTRACTED = {"aren", "isn", "don", "doesn", "didn", "can", "won", "wasn", "were
 # scratches")
 NEGATION_ENDS = {"only", "just", "apart", "except", "bar", "other", "but", "though", "although", "however", "selling",
                  "sold", "aside", "besides", "excluding", "excepting", "beyond", "save", "barring", "minus"}
+# ...and a "no" that denies an effect ends there (14 Oct): "doesn't AFFECT how it works", "no EFFECT on use"
+NEGATION_ENDS |= {"affect", "affects", "affected", "affecting", "effect", "effects", "impact", "impacts", "impacting"}
+# words a "no" can have before what it denies without denying anything of its own: "never BEEN repaired"
+NEGATION_FILLER = {"t", "been", "ever", "even", "yet", "really", "any", "a", "an", "the", "it", "its", "was", "is", "be"}
 NEW_STATEMENT = {"has", "have", "got", "is", "are", "was", "theres", "shows"}  # "never dropped, SHOWS signs of wear"
 # ...but not after only a "think" or an "it": "I don't THINK there's any scratches", "Don't think IT shows any wear"
 NOT_THEIR_OWN = {"think", "believe", "reckon", "sure", "guess", "feel", "see", "notice", "noticed", "know", "remember",
@@ -448,6 +452,10 @@ ANSWERS = [
     (re.compile(r"(?<![\w.£$€])0\s+(?=[a-z])", re.IGNORECASE), "no "),
 ]
 # what has a claim word but isn't a flaw or a claim: a guard against one, a part's name, a cover
+# "doesn't affect how the phone works", "no effect on phone function": said of a mark, not a claim that it works
+NO_EFFECT = re.compile(r"\b(?:no|not|t|nt|without)\s+(?:any\s+)?(?:affect|effect|impact)(?:s|ed|ing)?\b"
+                       r"(?:\s+(?:on|how|the|its|it|s|phone|iphone|works?|working|functions?|functioning|functionality|use|"
+                       r"usage|performance))*")
 NOT_A_FLAW = re.compile(
     r"\b(?:scratch[- ]?resist\w*|scratch[- ]?proof|anti[- ]?scratch|(?:to )?prevent(?:s|ing)? (?:any )?(?:scratch\w*|damage)|"
     r"protect\w* (?:it )?(?:from|against) (?:any )?(?:scratch\w*|damage|drops?)|water damage indicators?(?: \w+)?|"
@@ -490,6 +498,8 @@ def denied_by(lead, negations=NEGATIONS):
             continue
         rest = lead[n + 1:]
         ends = set(rest) & (NEGATION_ENDS | NEGATED_THINGS)
+        # a thing a "no" covers on its own ends it, unless the list goes on: "no charger OR box" (14 Oct)
+        ends -= {w for w, after in zip(rest, rest[1:]) if w in NEGATED_THINGS and after in ("or", "nor")}
         if "other" in ends and not any(w == "other" and after in ("than", "then") for w, after in zip(rest, rest[1:])):
             ends.discard("other")  # "no OTHER marks" denies more of them; "no marks OTHER THAN a scratch" excepts one
         ended = ends or any(verb in NEW_STATEMENT and set(rest[:k]) - {"t"} - NOT_THEIR_OWN for k, verb in enumerate(rest))
@@ -497,6 +507,12 @@ def denied_by(lead, negations=NEGATIONS):
         # working" by now: SAME_AS) says the screen is cracked (26 Sep)
         ended = ended or bool(re.match(r"(?:t )?(?:(?:turn|switch|power|boot|come|start)s? (?:on|up)|work(?:s|ing)?) \S",
                                        " ".join(rest)))
+        # ...or at the next "and" when what it denies is no claim of its own, a verb: "never REPAIRED and fully
+        # working", "not been DROPPED and in great condition" (14 Oct). A claim word before the "and" keeps it going:
+        # "no scratches and dents", "doesn't have a charger and box"
+        if not ended and "and" in rest:
+            before = [w for w in rest[:rest.index("and")] if w not in NEGATION_FILLER]
+            ended = bool(before) and not any(KEYWORDS.get(singular(w)) for w in before)
         if not ended:
             return True
     return False
@@ -1128,6 +1144,7 @@ def promises_in(text, typos=False):
         for phrase in HARMLESS:
             part = part.replace(f" {phrase} ", " ")
         part = NOT_A_FLAW.sub(" ", part)
+        part = NO_EFFECT.sub(" ", part)
         part_words = part.split()
         for i, word in enumerate(part_words):
             promise = KEYWORDS.get(singular(word)) or (typos and KEYWORDS.get(slipped(word)))
@@ -1143,7 +1160,10 @@ def promises_in(text, typos=False):
                 if set(part_words[i + 1:i + 2]) & FEATURES:
                     continue  # "excellent noise cancelling" describes the model
                 # the part can come a few words before: "the SCREEN is in perfect condition"
-                parts = sorted(CONDITION_PARTS & set(part_words[max(0, i - 4):i + 2]))
+                start = max(0, i - 4)
+                if "and" in part_words[start:i]:  # "cracked screen AND not in perfect condition" is the item (14 Oct)
+                    start = i - part_words[start:i][::-1].index("and")
+                parts = sorted(CONDITION_PARTS & set(part_words[start:i + 2]))
                 if parts:
                     promise = f"{promise} {parts[0]}"
             # a "no" after the claim may cover a whole list: "box and charger not included"
@@ -1154,7 +1174,10 @@ def promises_in(text, typos=False):
             # up to 5 words back: "doesn't come with a charger" splits into
             # doesn / t / come / with / a, so "doesn" is 5 words before. A "no" stops
             # where its own thing ends: "no offers small crack", "no cracks only light scratches"
-            negated = denied_by(part_words[max(0, i - 5):i]) or bool(NEGATED_AFTER & set(after[:2])) \
+            lead = part_words[max(0, i - 5):i]
+            if promise == "working" and "and" in lead:  # "no cracks AND no faults" isn't "not working" (14 Oct)
+                lead = lead[len(lead) - lead[::-1].index("and"):]
+            negated = denied_by(lead) or bool(NEGATED_AFTER & set(after[:2])) \
                 or any(w in ("not", "t") and nxt in INCLUDED for w, nxt in zip(after, after[1:]))
             found.setdefault(promise, set()).add("no" if negated else "yes")
     return found
@@ -1435,7 +1458,8 @@ def check_no_invented_promises(what, text, sources, notes, battery=None):
         else:
             backing = from_notes.get(promise) or (set() if condition else from_inputs.get(promise, set()))
         for said in sorted(saids, reverse=True):
-            if said not in backing or (promise == "working" and said == "yes" and faulty):
+            if said not in backing or (promise == "working" and said == "yes" and faulty
+                                       and not works_as_noted(text, notes)):
                 (unbacked_condition if condition else unbacked).append(promise if said == "yes" else f"no {promise}")
     problems = []
     if unbacked:
@@ -1443,6 +1467,39 @@ def check_no_invented_promises(what, text, sources, notes, battery=None):
     if unbacked_condition:
         problems.append(f"{what} says things about the condition your notes don't: {', '.join(unbacked_condition)}")
     return problems
+
+
+# what a phone has that can work or not: "the TOUCHSCREEN works", "cameras and FLASH work"
+WORKING_PARTS = {"touchscreen", "touch", "screen", "display", "camera", "flash", "speaker", "mic", "microphone", "face",
+                 "id", "faceid", "touchid", "button", "port", "charging", "wifi", "bluetooth", "signal", "sim", "volume",
+                 "power", "lens", "sensor", "nfc", "gps", "earpiece", "vibration", "haptic", "sound", "audio", "network",
+                 "data", "keyboard", "trackpad"}
+# said of the rest: "everything ELSE works", "works fine OTHERWISE"
+RESTS = re.compile(r"\b(?:else|otherwise|rest|apart from|other than|besides|aside from)\b")
+
+
+def works_said(text, typos=False):
+    """Each part of a text that says something works: (the parts it names, whether it's said of the rest)."""
+    found = []
+    for part in re.split(r"[,.;:!?\n()]|\bbut\b", text.lower()):
+        if "yes" in promises_in(part, typos=typos).get("working", set()):
+            found.append(({singular(w) for w in words(part)} & WORKING_PARTS, bool(RESTS.search(part))))
+    return found
+
+
+def works_as_noted(text, notes):
+    """Whether each "works" in the text is said only of parts your notes say work ("the touchscreen works"), or of
+    the rest when your notes say the rest works ("everything else is working"): then a fault in your notes doesn't
+    make it false (14 Oct). A plain "fully working", or a part your notes don't say works, still is."""
+    noted = works_said(notes, typos=True)
+    theirs = set().union(*(named for named, _ in noted)) if noted else set()
+    for named, rest in works_said(text):
+        if named and named <= theirs:
+            continue
+        if rest and not named and any(r for _, r in noted):
+            continue
+        return False
+    return True
 
 
 def place_of(word):
@@ -1464,7 +1521,11 @@ def mark_places(text, typos=False, reach=None):
     reach, only places that close to a mark word. "Light scratch on the back,
     corners and sides" -> {"back", "corner", "side"}."""
     found, marked = set(), False
-    for part in re.split(r"[,.;:!?\n()]|\b(?:but|while|whereas|except)\b", text.lower()):
+    # a screen protector's marks aren't the screen's (14 Oct: "the screen protector is scratched")
+    text = re.sub(r"\bscreen\s+(?:protector|guard)s?\b", "protector", text.lower())
+    # "...is cracked AND THE bottom left corner is loose": the corner isn't where the crack is (14 Oct)
+    for part in re.split(r"[,.;:!?\n()]|\b(?:but|while|whereas|except)\b|\band\b(?=\s+(?:the|it|its|there|a|an|some|minor|"
+                         r"light|small|slight|few|couple|tiny|deep|large|big)\b)", text):
         part_words = words(part)
         places = [place_of(word) for word in part_words]
         if part_words and all(place or word in PLACE_LIST_WORDS for word, place in zip(part_words, places)):
@@ -1630,6 +1691,20 @@ def check_no_unasked_promises(message, allowed):
 
 # ── all checks for one AI answer ────────────────────────────────────────────
 
+# a listing is the seller talking about the phone, never about the notes or who wrote them (14 Oct: "the reseller
+# describes it as in like-new condition", "No battery health figure is given")
+META_TALK = re.compile(r"\b(?:re)?sellers?\b|\b(?:the|your|my)\s+notes?\b|\bnotes?\s+(?:says?|describes?|mentions?|states?|"
+                       r"gives?)\b|\bdescribed\s+as\b|\bdescribes?\s+(?:it|the|this)\b|\bnot\s+(?:stated|mentioned|specified)\b|"
+                       r"\bno\s+(?:\w+\s+){0,3}(?:figure|percentage|reading|info|information|details?)\s+(?:is\s+|was\s+)?"
+                       r"(?:given|stated|available|provided)\b", re.IGNORECASE)
+
+
+def check_no_meta_talk(what, text):
+    """The listing speaks for the phone, as its seller: never about the notes, the reseller or what isn't said."""
+    found = META_TALK.search(text or "")
+    return [f"{what} talks about the notes, not the phone: \"{found.group().strip()}\""] if found else []
+
+
 def check_listing_answer(answer, item, catalogue, conditions, sources, notes):
     """Every check on the AI's part of a listing. An empty list means it passed.
 
@@ -1684,6 +1759,7 @@ def check_listing_answer(answer, item, catalogue, conditions, sources, notes):
             problems += check_no_prices(what, text)
             problems += check_no_off_platform(what, text)
             problems += check_no_contact_details(what, text)
+            problems += check_no_meta_talk(what, text)
     return problems
 
 

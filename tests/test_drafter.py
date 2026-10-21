@@ -16,7 +16,7 @@ from flip.audit import AuditLog
 from flip.catalogue import fill_from_catalogue, load_catalogue, load_conditions
 from flip.costs import cost_pence
 from flip.drafter import draft_listing
-from flip.prompts import answer_schema, colour_schema, listing_prompt
+from flip.prompts import SYSTEM, answer_schema, colour_schema, listing_prompt
 from tests.fakes import FakeModel
 
 CATALOGUE = load_catalogue()
@@ -485,3 +485,15 @@ def test_half_a_character_in_an_answer_becomes_one_that_can_be_written(tmp_path)
     answer, error = parse_answer('{"description": "Light scratch \\ud800 on the back"}')
     assert (answer["description"], error) == ("Light scratch � on the back", "")
     AuditLog(tmp_path / "audit.sqlite3").attempt("item", Reply("gemma3:4b", answer=answer), [], 0)  # no crash
+
+
+def test_the_prompt_is_for_an_iphone_written_as_its_seller_without_specs():
+    # 14 Oct: Claude wrote "the reseller describes it as like new" and listed the chip and screen size
+    assert "second-hand iPhone" in SYSTEM and "Write as the seller, about the phone" in SYSTEM
+    assert "No specs such as screen size, processor, chip, iOS or 5G" in SYSTEM
+
+
+def test_a_draft_that_talks_about_your_notes_is_refused():
+    told = {**GOOD, "condition_note": "The reseller notes a light scratch on the back. Battery health 87%."}
+    result = draft(local=FakeModel("gemma3:4b", told), mode="local")
+    assert result["attempts"][0]["problems"] == ['condition_note talks about the notes, not the phone: "reseller"']
