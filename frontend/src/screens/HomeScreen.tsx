@@ -125,6 +125,15 @@ export function HomeScreen({ go, count, running, reload }: Props) {
 
 /** Ollama, then each model it's asked for on its own line, with its job; one that isn't installed is said, with what
  * does its job instead (6 Oct review: Home said every model was running whenever Ollama was). */
+/** Whether Claude writes List on eBay's drafts (14 Oct), not this device's model. */
+const claudeLists = (running: Health) => (running.listing_model ?? "").startsWith("claude");
+// with Claude writing eBay listings, this device's writer only rewords messages
+const job = (name: string, running: Health) =>
+  name === "writes messages" && claudeLists(running) ? "rewords a message when you click Rewrite" : JOBS[name] ?? name;
+const instead = (name: string, running: Health) =>
+  name === "writes messages" && claudeLists(running) ? "Rewrite can't run on this device"
+    : INSTEAD[name] ?? "code does its job instead";
+
 export function ollamaRows(running: Health): Row[] {
   if (!running.local_running) {
     return [{ name: "Ollama", ok: false, state: "Not running: start it with ollama serve" }];
@@ -135,7 +144,7 @@ export function ollamaRows(running: Health): Row[] {
     { name: "Ollama", ok: true,
       state: missing ? `Running on this device, ${missing} of its models not installed` : "Running on this device" },
     ...models.map((m) => ({ name: modelName(m.name), model: true, ok: m.installed,
-      state: m.installed ? JOBS[m.job] ?? m.job : `Not installed: ${INSTEAD[m.job] ?? "code does its job instead"}` })),
+      state: m.installed ? job(m.job, running) : `Not installed: ${instead(m.job, running)}` })),
   ];
 }
 
@@ -149,12 +158,18 @@ export function paidRows(running: Health): Row[] {
       { name: paid("claude-sonnet-5-5"), ok: "off", state: "Off: no Anthropic key, so everything runs on this device" },
     ];
   }
+  const lister = claudeLists(running) ? running.listing_model! : "";
   const rows: Row[] = [running.check_model
-    ? { name: paid(running.check_model), ok: true, state: "Only checks each message's reason is sendable" }
+    ? { name: paid(running.check_model), ok: true, state: lister === running.check_model
+      ? "Checks each message's reason is sendable, and writes eBay listings"
+      : "Only checks each message's reason is sendable" }
     : { name: paid("claude-haiku-5-5"), ok: "off", state: "Off in .env: reasons aren't checked" }];
+  if (lister && lister !== running.check_model) rows.push({ name: paid(lister), ok: true, state: "Writes eBay listings" });
   // the checker by name: it flags the reasons the fixer rewrites (Claude Haiku 5.5 unless .env names another)
   const checker = modelName(running.check_model || "claude-haiku-5-5");
-  const writes = "writes a message or eBay listing, reads a listing, or looks at the photos for the colour";
+  const writes = lister
+    ? `writes a message, reads a listing, or looks at the photos for the colour; and writes an eBay listing when ${modelName(lister)}'s fails the checks`
+    : "writes a message or eBay listing, reads a listing, or looks at the photos for the colour";
   if (running.fix_model && running.fix_model === running.api_model) {
     rows.push({ name: paid(running.api_model), ok: true,
       state: `Fixes a reason ${checker} flags; when this device's models can't, ${writes}` });

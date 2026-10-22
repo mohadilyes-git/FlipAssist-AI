@@ -1,6 +1,6 @@
 # FlipAssist-ai
 
-Drafts eBay listings and offer messages for a reseller. Plain code does everything it can. A small local AI model does only what code can't. A paid API model steps in only when the local answer fails a check, and a person approves every draft.
+Drafts eBay listings and offer messages for a reseller. Plain code does everything it can. A small local AI model does only what code can't (eBay listings are Claude Haiku 5.5's since 14 Oct: measured better and cheaper, below). A paid API model steps in only when the local answer fails a check, and a person approves every draft.
 
 > **Work in progress.** The plain-code half, its safety checks, the AI listing drafter, the message drafter and the API are built and tested. Next: a catalogue agent and measured results on real items.
 
@@ -29,6 +29,15 @@ Drafts eBay listings and offer messages for a reseller. Plain code does everythi
   - spelt as eBay's lists spell them ("Apple iPhone 13", "128 GB", "Apple A15 Bionic"); each colour becomes one of eBay's 16 plain colours, the one UK sellers pick for it (Midnight is Black, Rose Gold is Pink: `data/ebay_map.json`, with the counts);
   - eBay's lists come from its own API (`python -m flip.ebay --refresh` writes `data/ebay_fields.json`), and a test holds every phone in the catalogue to them.
 - **List on eBay is for iPhones only, written from the reseller's title and notes alone** (14 Oct 2026, the owner's call; the page says so). Anything else the catalogue knows (the Galaxy S23, the consoles, AirPods) is turned away before the AI is asked, and the original seller's description isn't asked for or used: on eBay the reseller is the seller, so the listing says only what they checked, as AlertFlip's List on eBay does. An empty field eBay needs is theirs to fill in.
+- **Claude Haiku 5.5 writes the eBay listing's condition note and description, and Claude Sonnet 5.5 rewrites one that fails the checks** (14 Oct 2026). Judged blind by two judges on 40 real UK iPhones (notes made from Vinted listings no model had seen), as the app shows them:
+
+  | Writer | Postable as is | Says something the notes don't | Score (1-5) | Per listing |
+  |---|---|---|---|---|
+  | Gemma 3 4B on this device, Sonnet if it fails | 49% | 16% | 3.54 | 0.088p |
+  | **Claude Haiku 5.5, Sonnet if it fails** | **82%** | **2%** | **4.44** | **0.036p** |
+  | Claude Sonnet 5.5 alone | 88% | 8% | 4.60 | 0.289p |
+
+  Gemma 3 4B's drafts that passed the checks were postable 32% of the time (they leave notes out); its failures cost Sonnet's price, so it was the dearer way too. `FLIP_LISTING_WRITER=gemma` in `.env` goes back to Gemma 3 4B. The writer is told it's an iPhone, to write as the seller about the phone (never about the notes), and is handed no specs (eBay's fields carry them); code puts your battery figure in the condition note when the writer leaves it out. The same test found checks refusing faithful drafts ("never repaired and fully working", "no charger or box", "doesn't affect how it works", a scratched screen protector) and an unused case or an unopened pack of screen protectors making a used phone New: all fixed, with the cases as tests.
 - **Sets eBay's condition from the reseller's notes:** For parts or not working for a fault, New or Opened - never used only when the notes back it, Used otherwise. A crack or scratch on its own is wear, not a fault. The AI writes the condition note to match and can't answer another condition.
 - **Does the money in pence:** profit after fees, and an offer price rounded to a tidy number.
 - **Checks an AI answer before it's used:**

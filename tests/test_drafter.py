@@ -506,3 +506,14 @@ def test_the_writer_gets_no_specs_and_no_example_battery_figure():
     system, user = listing_prompt(item, IPHONE_13, {**ENTRY, "my_notes": "few scratches on the back"}, 0)
     assert "Screen Size" not in user and "Processor" not in user and "Bionic" not in user
     assert "88" not in system and "Battery health" not in user
+
+
+def test_your_battery_figure_is_in_the_condition_note_whoever_wrote_it():
+    # 14 Oct, judged blind: passing drafts left the battery figure out 1 time in 8 (Haiku) to 1 in 4 (Gemma)
+    left_out = {**GOOD, "condition_note": "Light scratch on the back."}
+    result = draft(local=FakeModel("gemma3:4b", left_out))
+    assert (result["status"], result["answer"]["condition_note"]) == ("ready", "Light scratch on the back. Battery health 87%.")
+    assert draft(local=FakeModel("gemma3:4b", GOOD))["answer"]["condition_note"] == GOOD["condition_note"]  # said once
+    none = draft({**ENTRY, "my_notes": "boxed, light scratch on the back"},
+                 local=FakeModel("gemma3:4b", {**left_out, "description": GOOD["description"].split(" Light")[0]}))
+    assert none["answer"]["condition_note"] == "Light scratch on the back."  # no figure in your notes: nothing added

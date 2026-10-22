@@ -897,6 +897,12 @@ describe("List on eBay", () => {
     render(<ListingScreen />);
     expect(screen.getByText("iPhones only · your notes and photos · a checked eBay draft")).toBeTruthy();
     expect(screen.getByText(/^For iPhones only\. Add photos and your notes/)).toBeTruthy();
+    cleanup();
+    render(<ListingScreen writer="claude-haiku-5-5" />);  // who writes, as /health says
+    expect(screen.getByText(/Claude Haiku 5\.5 \(Claude Sonnet 5\.5 if a check fails\) writes the rest from your notes/))
+      .toBeTruthy();
+    cleanup();
+    render(<ListingScreen />);
     expect(screen.queryByLabelText("The seller's description")).toBeNull();
     await user.type(screen.getByLabelText("Which iPhone"), "iphone 13");
     await user.type(screen.getByLabelText("Your notes from looking at it"), "battery 88%");
@@ -1233,6 +1239,19 @@ describe("Home (fix 2, 14 Oct)", () => {
       ["Claude Haiku 5.5 (paid)", "When this device's models can't: writes a message or eBay listing, reads a listing, or "
         + "looks at the photos for the colour"],
       ["Claude Sonnet 5.5 (paid)", "Fixes a reason Claude Haiku 5.5 flags"]]);
+  });
+
+  it("names Claude Haiku 5.5 as the eBay listing writer once it writes them, and Gemma for Rewrite only (14 Oct)", () => {
+    const lists = { ...HEALTH, listing_model: "claude-haiku-5-5" };
+    expect(paidRows(lists).map((r) => [r.name, r.state])).toEqual([
+      ["Claude Haiku 5.5 (paid)", "Checks each message's reason is sendable, and writes eBay listings"],
+      ["Claude Sonnet 5.5 (paid)", "Fixes a reason Claude Haiku 5.5 flags; when this device's models can't, writes a "
+        + "message, reads a listing, or looks at the photos for the colour; and writes an eBay listing when Claude "
+        + "Haiku 5.5's fails the checks"]]);
+    expect(ollamaRows(lists).at(-1)).toEqual(
+      { name: "Gemma 3 4B", model: true, ok: true, state: "rewords a message when you click Rewrite" });
+    expect(ollamaRows({ ...HEALTH, listing_model: "gemma3:4b" }).at(-1)?.state)
+      .toBe("rewords a message when you click Rewrite, and writes eBay listings");
   });
 
   it("says when the AlertFlip API or the key isn't set, and the API's own state before it answers", () => {

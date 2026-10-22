@@ -48,9 +48,9 @@ def client(tmp_path, monkeypatch):
     log = AuditLog(tmp_path / "audit.sqlite3")
     book = StyleBook(tmp_path / "style.sqlite3")  # no search: the examples come from the style card alone
 
-    def use(local=None, api_model=None, messages=(), kinds=None):
+    def use(local=None, api_model=None, messages=(), kinds=None, listing=None):
         book.add(list(messages), "csv")
-        api.app.dependency_overrides[api.setup] = lambda: api.Setup(local, api_model, log, kinds=kinds)
+        api.app.dependency_overrides[api.setup] = lambda: api.Setup(local, api_model, log, kinds=kinds, listing=listing)
         api.app.dependency_overrides[api.audit] = lambda: log
         api.app.dependency_overrides[api.style] = lambda: book
 
@@ -191,6 +191,30 @@ def test_a_listing_drafted_from_the_form_and_photos(client):
     assert fields["Model"] == ("Apple iPhone 13", True, "the catalogue")
     assert fields["Storage Capacity"] == ("128 GB", True, "your title or notes")
     assert fields["Colour"] == ("Black", True, "the photos: Midnight")
+
+
+def test_list_on_ebay_is_written_by_the_listing_model_first_and_local_mode_stays_on_this_device(client):
+    # 14 Oct: Claude Haiku 5.5 writes first in the app (blind-judged on 40 real iPhones), Claude Sonnet 5.5 if it fails
+    gemma, haiku = FakeModel("gemma3:4b", LISTED), FakeModel("claude-haiku-5-5", LISTED)
+    client.use(local=gemma, api_model=FakeModel("claude-sonnet-5-5", LISTED), listing=haiku)
+    form = {"title": "iPhone 13 128GB Midnight unlocked", "notes": "boxed, battery 87%, light scratch on the back"}
+    draft = client.post("/listings/draft", data=form).json()
+    assert ([a["model"] for a in draft["attempts"]], draft["status"], gemma.asked) == (["claude-haiku-5-5"], "ready", [])
+    local = client.post("/listings/draft", data={**form, "mode": "local"}).json()
+    assert [a["model"] for a in local["attempts"]] == ["gemma3:4b"] and len(haiku.asked) == 1
+
+
+def test_the_apps_listing_writer_is_claude_haiku_unless_set_back_to_gemma(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "pretend-anthropic-key")
+    monkeypatch.delenv("FLIP_LISTING_WRITER", raising=False)
+    assert (api.listing_writer_name(), api.listing_writer().name) == ("claude-haiku-5-5", "claude-haiku-5-5")
+    monkeypatch.setenv("FLIP_LISTING_WRITER", "gemma")
+    assert (api.listing_writer_name(), api.listing_writer()) == ("gemma3:4b", None)
+    monkeypatch.delenv("FLIP_LISTING_WRITER")
+    monkeypatch.delenv("ANTHROPIC_API_KEY")  # no key: this device's model writes
+    assert (api.listing_writer_name(), api.listing_writer()) == ("gemma3:4b", None)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "pretend-anthropic-key")
+    assert TestClient(api.app).get("/health").json()["listing_model"] == "claude-haiku-5-5"
 
 
 def test_a_colour_gemma_couldnt_see_comes_from_haikus_look_and_says_so(client):

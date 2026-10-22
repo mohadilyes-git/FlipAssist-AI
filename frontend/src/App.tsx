@@ -199,7 +199,9 @@ export function App() {
                   {/* the screens you type into stay put while you look elsewhere; the others load fresh */}
                   <div className="screen" hidden={tab !== "message"}><MessageScreen onApproved={loadStyle} /></div>
                   <div className="screen" hidden={tab !== "price"}><PriceScreen /></div>
-                  <div className="screen" hidden={tab !== "listing"}><ListingScreen /></div>
+                  <div className="screen" hidden={tab !== "listing"}>
+                    <ListingScreen writer={running && running !== "down" ? running.listing_model : undefined} />
+                  </div>
                   {tab === "home" && <HomeScreen go={go} count={count} running={running} reload={loadRunning} />}
                   {tab === "style" && (
                     <StyleScreen style={style} reload={loadStyle} setUp={() => {

@@ -332,6 +332,8 @@ class Health(BaseModel):
                                              "5.5); empty when it's off")
     fix_model: str = Field("", description="the paid model that rewrites a reason the check flags; empty when it's off")
     prices_api_set: bool = Field(False, description="the AlertFlip prices API (fresh UK sales) has its URL and key in .env")
+    listing_model: str = Field("", description="who writes List on eBay's draft first: claude-haiku-5-5 (Claude Sonnet "
+                                               "5.5 when it fails the checks), or the local model (FLIP_LISTING_WRITER)")
     flip_api_key_set: bool = Field(description=f"the key callers need is set, {MIN_KEY} characters or more; "
                                                 "without it every call is refused")
     models: list[ModelState] = Field(default_factory=list, description="the models Ollama is asked for, by job, and "
@@ -344,8 +346,10 @@ class Health(BaseModel):
 class Setup:
     """The models, the audit log and the catalogue: made once, on the first call that needs them."""
 
-    def __init__(self, local, api, log, local_listing=None, reader=None, wording=None, kinds=None, judge=None):
+    def __init__(self, local, api, log, local_listing=None, reader=None, wording=None, kinds=None, judge=None,
+                 listing=None):
         self.local, self.api, self.log = local, api, log
+        self.listing = listing  # what writes List on eBay's draft first: a model, or a function giving one (None: local)
         self.judge = judge  # how bad the damage is: "settings" in the app (the hybrid, flip.severity), None: code alone
         self.kinds = kinds  # what sorts a price's flaws: a sorter, or a function that gives one (None: code sorts)
         self.wording = wording  # the reason's models (flip.wording): "settings" in the app, None (off) unless given
@@ -359,6 +363,12 @@ class Setup:
         started later is used), else the local model that writes."""
         found = self.reader() if callable(self.reader) else self.reader
         return found or self.local
+
+    def listing_model(self):
+        """What writes List on eBay's condition note and description first: Claude Haiku 5.5 in the app (14 Oct,
+        listing_writer), else the local model that writes listings (Gemma 3 4B)."""
+        found = self.listing() if callable(self.listing) else self.listing
+        return found or self.local_listing
 
     def flaw_sorter(self):
         """What sorts a price's flaws into the API's kinds: flip-kinds when Ollama has it (looked up at each price
@@ -378,7 +388,27 @@ def setup():
     api = ApiModel(backup_model()) if os.environ.get("ANTHROPIC_API_KEY") else None
     local = LocalModel(max_tokens=MESSAGE_TOKENS)
     return Setup(local, api, audit(), LocalModel(), reader=lambda: reader_for(local), wording="settings",
-                 kinds=lambda: kinds_sorter(local.url), judge="settings")
+                 kinds=lambda: kinds_sorter(local.url), judge="settings", listing=listing_writer)
+
+
+LISTING_WRITER = "claude-haiku-5-5"
+
+
+def listing_writer_name():
+    """Who writes List on eBay's condition note and description first (14 Oct 2026): Claude Haiku 5.5, with Claude
+    Sonnet 5.5 when its draft fails the checks. Judged blind by two judges on 40 real iPhones: 82% postable as is and
+    2% saying something the notes don't, against 49% and 16% for Gemma 3 4B with the same backup, at 0.036p a listing
+    against 0.088p (Gemma's drafts failed the checks more often, so Sonnet wrote more). FLIP_LISTING_WRITER=gemma in
+    .env goes back to Gemma 3 4B on this device; so does no Anthropic key. Returns the model's name."""
+    if os.environ.get("FLIP_LISTING_WRITER", "").strip().lower() == "gemma" or not os.environ.get("ANTHROPIC_API_KEY"):
+        return LocalModel().name
+    return LISTING_WRITER
+
+
+def listing_writer():
+    """The model listing_writer_name names, when it's Claude's; None for the local model (Setup.listing_model)."""
+    name = listing_writer_name()
+    return ApiModel(name) if name.startswith("claude") else None
 
 
 @lru_cache
@@ -527,7 +557,7 @@ def health():
     names = settings()  # the reason's models: empty when there's no Anthropic key or a step is off in .env
     return Health(local_model=local.name, local_running=running, api_model=backup_model(),
                   api_key_set=bool(os.environ.get("ANTHROPIC_API_KEY")), check_model=names["check"],
-                  fix_model=names["fix"], prices_api_set=all(prices_settings()),
+                  fix_model=names["fix"], prices_api_set=all(prices_settings()), listing_model=listing_writer_name(),
                   flip_api_key_set=bool(usable_key()), models=models)
 
 
@@ -602,7 +632,9 @@ def draft_a_listing(title: str = Form(min_length=1, max_length=300, description=
             except (OSError, ValueError, subprocess.CalledProcessError):
                 raise HTTPException(422, f"{name}: can't be read as a photo")
     entry = {"id": id or new_id(), "original_title": title, "my_notes": notes}
-    result = draft_listing(entry, s.catalogue, s.conditions, s.local_listing, s.api, mode, encoded, s.log)
+    # auto: Claude Haiku 5.5 first in the app (listing_writer), Claude Sonnet 5.5 if it fails; local: this device only
+    first = s.listing_model() if mode == "auto" else s.local_listing
+    result = draft_listing(entry, s.catalogue, s.conditions, first, s.api, mode, encoded, s.log)
     answer, item = result["answer"] or {}, result["item"]
     tried = attempts(result["attempts"])
     return ListingDraft(

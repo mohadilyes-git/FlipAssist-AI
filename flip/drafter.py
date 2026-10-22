@@ -22,6 +22,8 @@ only what you checked, never the original seller's words.
 """
 
 
+import re
+
 from flip.attempts import try_models
 from flip.catalogue import fill_from_catalogue
 from flip.checks import UNSURE, canonical, check_listing_answer, condition_for, sources_text
@@ -58,6 +60,10 @@ def draft_listing(entry, catalogue, conditions, local=None, api=None, mode="auto
         check=lambda answer: check_listing_answer(answer, item, catalogue, allowed, sources, notes),
         result=result, log=log, job="listing")  # its own job in the audit log: Home says "writing the eBay listing"
 
+    # the battery health figure your notes give is in the condition note, whoever wrote it: judged blind on 40 real
+    # iPhones (14 Oct), a draft that passed the checks left it out 1 time in 8 (Claude Haiku 5.5) or 1 in 4 (Gemma 3 4B)
+    if result["answer"] is not None:
+        result["answer"] = with_battery(result["answer"], item.get("battery"))
     # a colour the AI picked from the photos, once checked, completes the item; one code read stays.
     # With no photos it had nothing to look at, so its pick is a guess: the colour stays for you
     colour = (result["answer"] or {}).get("colour")
@@ -88,6 +94,15 @@ IPHONES_ONLY = "List on eBay is for iPhones only"
 def is_iphone(item):
     """Whether the catalogue's item is an iPhone: List on eBay drafts nothing else (14 Oct)."""
     return item.get("category") == "phones" and item.get("brand") == "Apple"
+
+
+def with_battery(answer, battery):
+    """The answer with "Battery health 87%." after its condition note when your notes give the figure and the note
+    doesn't (a new item's note stays empty: eBay ignores it there)."""
+    note = answer.get("condition_note") or ""
+    if not battery or answer.get("condition_id") in ("1000", "1500") or re.search(rf"\b{battery}\s?%", note):
+        return answer
+    return {**answer, "condition_note": f"{note.rstrip()} Battery health {battery}%.".strip()}
 
 
 def unsure(colour):

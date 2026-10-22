@@ -207,6 +207,9 @@ export type Health = {
   fix_model?: string;
   /** AlertFlip's prices API (fresh UK sales) has its URL and key */
   prices_api_set?: boolean;
+  /** who writes List on eBay's draft first: "claude-haiku-5-5" (Claude Sonnet 5.5 when it fails the checks, 14 Oct)
+   * or this device's model (FLIP_LISTING_WRITER=gemma) */
+  listing_model?: string;
   flip_api_key_set: boolean;
   /** the models Ollama is asked for, by job, and whether this device has each (empty when Ollama isn't running) */
   models?: { job: string; name: string; installed: boolean }[];
