@@ -563,6 +563,13 @@ UNUSED = re.compile(r"\bnever (?:been )?used\b|\bunused\b")
 USED_SIGNS = re.compile(r"\b(?:used|worn|refurbished|refurb|new condition|bought new|bought brand new|"
                         r"like new|as new|basically new|basically brand new)\b")
 OPENED_SIGNS = re.compile(r"\b(?:opened|open box|box open|seal broken|unsealed)\b")
+# new, unused, unopened or sealed said of what comes with it isn't the item's own condition (14 Oct: "two unused phone
+# cases" and "unopened pack of two tempered screen protectors" made a used iPhone 11 New). Not across a comma: "sealed,
+# comes with a charger" is still sealed. The box isn't one of these: "unopened box" is the item unopened
+ACCESSORY = (r"(?:cases?|covers?|protectors?|guards?|tempered|chargers?|cables?|leads?|plugs?|earphones|earpods|"
+             r"headphones|adapters?|accessories|packs?|packets?|straps?|stands?|sims?)")
+NEW_WORD = r"(?:brand new|new|unused|unopened|sealed|never (?:been )?(?:used|opened))"
+ITS_THINGS_NEW = re.compile(rf"\b{NEW_WORD}(?: [a-z0-9]+){{0,3}}? {ACCESSORY}\b|\b{ACCESSORY}(?: [a-z0-9]+){{0,2}}? {NEW_WORD}\b")
 NEW_PROBLEMS = {"1000": "condition is New, but your notes don't say it's brand new and unopened",
                 "1500": "condition is Opened - never used, but your notes don't say it's unused"}
 # a fault in your notes means the item is "For parts or not working", and no
@@ -1231,6 +1238,7 @@ def new_conditions_allowed(notes):
     ("in brand new condition", "used twice", "box opened" all rule it out).
     Opened - never used: "never used" or "unused" (or sealed), with no sign of use.
     """
+    notes = ITS_THINGS_NEW.sub(" , ", (notes or "").lower())
     text = " ".join(words(notes))
     claims = promises_in(notes, typos=True)
     if "no" in claims.get("new", set()) | claims.get("sealed", set()):

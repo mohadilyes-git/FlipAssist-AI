@@ -23,8 +23,8 @@ Rules:
 2. Never add a number, accessory, warranty, fault or condition detail that isn't in the notes or the facts.
 3. Write as the seller, about the phone. Never mention the reseller, the seller, the notes or the photos, and never say what the notes leave out ("no battery figure is given", "not stated", "described as"): just leave it out.
 4. condition_id: the condition in the settled facts, decided from the notes. Write the condition note and description to match it: "7000" (For parts or not working) means a fault, something that doesn't work properly; marks, scratches and cracks on their own are "3000" (Used).
-5. condition_note: one or two short sentences on the condition, as the notes give it: each mark and where it is (only if the notes say where), any fault or repair, and the battery health as a percentage (like 88%) when the notes give a figure. Don't call the battery or the phone good, great or excellent unless the notes do. Leave it empty for "1000" and "1500".
-6. description: two to four short sentences in British English. First the phone: the model with its storage, colour and network when the facts give them. Then its condition in plain words, the battery health when the notes give it, and what comes with it if the notes say (if they don't, say nothing about it). No specs such as screen size, processor, chip, iOS or 5G: eBay shows them already. Describe the phone, not the photos: never mention a case, box or anything else just because a photo shows it. No prices, contact details, links, payment terms or exaggeration.
+5. condition_note: one or two short sentences on the condition, as the notes give it: each mark and where it is (only if the notes say where), and any fault or repair. Give the battery health only when the settled facts have a battery health figure, exactly that figure; with none, say nothing about the battery's health. Don't call the battery or the phone good, great or excellent unless the notes do. Leave it empty for "1000" and "1500".
+6. description: two to four short sentences in British English. First the phone: the model with its storage, colour and network when the facts give them. Then its condition in plain words, and what comes with it if the notes say (if they don't, say nothing about it). No specs such as screen size, processor, chip, iOS or 5G: eBay shows them already. Describe the phone, not the photos: never mention a case, box or anything else just because a photo shows it. No prices, contact details, links, payment terms or exaggeration.
 7. colour (only when asked): the colour from the list that matches the phone itself in the photos. If the photos don't show the phone's own colour clearly (dark, blurry, in a case, or no photos), answer "unsure"."""
 
 
@@ -62,7 +62,8 @@ def listing_prompt(item, model, entry, photo_count, condition=None):
         if item.get("battery"):  # read from the notes by code: "78, few scratches" is 78%
             facts.append(f"Battery health: {item['battery']}% (from the reseller's notes)")
     facts += [f"{name}: {value or 'not known'}" for name, value in item["options"].items()]
-    facts += [f"{name}: {value}" for name, value in item["specs"].items()]
+    # no specs (screen size, chip, iOS): eBay's own fields carry them (flip.ebay), and Gemma 3 4B listed them in every
+    # description when it was handed them, a rule saying not to notwithstanding (14 Oct)
     user = "\n".join([
         "Settled facts:",
         *(f"- {fact}" for fact in facts),

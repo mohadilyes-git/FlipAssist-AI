@@ -1078,3 +1078,18 @@ def test_a_listing_never_talks_about_the_notes(text):
 def test_a_listing_about_the_phone_isnt_talk_about_the_notes():
     assert check_no_meta_talk("description", "Apple iPhone 13 128GB in Blue, unlocked. A light scratch on the back "
                                              "and battery health of 87%. Comes with a charging cable.") == []
+
+
+@pytest.mark.parametrize("notes, condition", [
+    # 14 Oct: what comes with it being new isn't the phone's condition (this one was listed New)
+    ("iphone 11, battery about 70%, new screen fitted january, great condition, includes 1m charger, two unused "
+     "phone cases, unopened pack of two tempered screen protectors", "3000"),
+    ("comes with an unused case", "3000"), ("unused charger included", "3000"),
+    # the phone's own still are
+    ("brand new sealed", "1000"), ("sealed, comes with charger", "1000"), ("unopened box", "1000"),
+    ("brand new iphone 13 sealed with charger", "1000"), ("never used, comes with unused cable", "1500"),
+    ("never used, box opened to check", "1500"),
+])
+def test_new_said_of_what_comes_with_it_isnt_the_phones_condition(notes, condition):
+    from flip.checks import condition_for
+    assert condition_for(notes) == condition

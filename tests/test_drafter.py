@@ -497,3 +497,12 @@ def test_a_draft_that_talks_about_your_notes_is_refused():
     told = {**GOOD, "condition_note": "The reseller notes a light scratch on the back. Battery health 87%."}
     result = draft(local=FakeModel("gemma3:4b", told), mode="local")
     assert result["attempts"][0]["problems"] == ['condition_note talks about the notes, not the phone: "reseller"']
+
+
+def test_the_writer_gets_no_specs_and_no_example_battery_figure():
+    # 14 Oct, 40 real iPhones: Gemma 3 4B listed the chip and screen size whenever it was handed them, and wrote
+    # "battery health 88%" (the prompt's example) for phones whose notes give no figure
+    item = fill_from_catalogue("iPhone 13 128GB", "few scratches on the back", CATALOGUE)
+    system, user = listing_prompt(item, IPHONE_13, {**ENTRY, "my_notes": "few scratches on the back"}, 0)
+    assert "Screen Size" not in user and "Processor" not in user and "Bionic" not in user
+    assert "88" not in system and "Battery health" not in user
