@@ -149,7 +149,8 @@ def test_flaws_sent_with_no_description_are_their_own_listing():
                             sorter=kinds.Sorter(model))
     assert model.asked[0][1] == ("Title: iPhone 13 128GB Blue\nDescription: Small crack on the back. battery 79%\n"
                                  "The flaw sentence: Small crack on the back")
-    assert found["kinds"] == ["damage", "battery"] and sent[0]["kinds"] == ["battery"]
+    # damage and a battery under 80% are FlipAssist's own cuts (14 Oct), so the API is asked for neither
+    assert found["kinds"] == ["damage", "battery"] and sent[0]["kinds"] == []
 
 
 def test_a_long_description_is_cut_round_the_sentence_as_in_the_test():

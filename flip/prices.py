@@ -40,7 +40,7 @@ import urllib.request
 
 from flip.severity import damage_cut, severity
 from flip.checks import NEGATED_THINGS, NOT_A_FLAW, PROBLEM, denied_by, slipped
-from flip.offers import battery_now
+from flip.offers import battery_now, figures_joined
 from flip.reader import (CLAUSE_WORDS, HOW_BAD, ITEM_OPENERS, MAX_BEFORE, MAX_FLAW, NEGATORS, OTHER_ITEM, judge,
                          parts_of, plain_words, problems_at, without_neutral_nots)
 
@@ -933,7 +933,8 @@ def kinds_of(flaws, text, title=False):
     the listing's title, whose words say what's sold (TITLE_PARTS: "iPhone 12 Pro repairs" is for parts)."""
     straight = lambda said: re.sub(r"[’‘ʼ]", "'", said)  # "doesn’t" as "doesn't": the rules' apostrophe
     kinds, text = [], straight(text)
-    for flaw in (straight(f) for f in flaws):
+    # a battery figure apart from its label is read with it: "Battery health - 76%", "(76%)" (14 Oct review)
+    for flaw in (figures_joined(straight(f)) for f in flaws):
         listing = text
         if DASHED_LABELS.search(flaw) and len(DASHED_LABELS.findall(flaw)) + len(OTHER_LABELS.findall(flaw)) > 1:
             # "Cracks - no Scratches - light", "Dents: no Cracks - minor": a line of labels, read as with colons
@@ -1119,26 +1120,36 @@ def refused(code, status=None, message=None):
                                            else f"The AlertFlip API answered {status}")}
 
 
+def sorted_each(flaws, text, title, description, sorter=None):
+    """Each flaw with its kinds and who sorted it: [(flaw, kinds, "flip-kinds-1" or "code")], flip-kinds (sorter)
+    each flaw it answers, code's rules (kinds_of) the rest."""
+    each, name = [], getattr(sorter, "name", "code")
+    for flaw in flaws:
+        said = sorter(flaw, title, description if description is not None else ". ".join(flaws)) if sorter else None
+        each.append((flaw, kinds_of([flaw], text), "code") if said is None else (flaw, said, name))
+    return each
+
+
+def kinds_and_by(each):
+    """The kinds of every flaw (sorted_each's) and who sorted them: the model's kinds first, then code's; "code" when
+    code sorted every one (no sorter, or none answered), the model's name when it sorted every one, "<model> and code"
+    when both did. No flaws: None."""
+    if not each:
+        return [], None
+    kinds = []
+    for _, said, _ in sorted(each, key=lambda e: e[2] == "code"):  # stable: each one's order kept
+        kinds += [k for k in said if k not in kinds]
+    models = {by for _, _, by in each if by != "code"}
+    model = next(iter(models), None)
+    by = "code" if model is None else model if all(b != "code" for _, _, b in each) else f"{model} and code"
+    return kinds, by
+
+
 def sorted_kinds(flaws, text, title, description, sorter=None):
     """The flaws' kinds and who sorted them: flip-kinds (sorter) each flaw it answers, code's rules (kinds_of) the
     rest; "code" when code sorted every one (no sorter, or none answered), the model's name when it sorted every one,
     "<model> and code" when both did. No flaws: None."""
-    if not flaws:
-        return [], None
-    if sorter is None:
-        return kinds_of(flaws, text), "code"
-    kinds, by_model, by_code = [], 0, []
-    for flaw in flaws:
-        said = sorter(flaw, title, description if description is not None else ". ".join(flaws))
-        if said is None:
-            by_code.append(flaw)
-            continue
-        by_model += 1
-        kinds += [k for k in said if k not in kinds]
-    if by_code:
-        kinds += [k for k in kinds_of(by_code, text) if k not in kinds]
-    by = sorter.name if not by_code else f"{sorter.name} and code" if by_model else "code"
-    return kinds, by
+    return kinds_and_by(sorted_each(flaws, text, title, description, sorter))
 
 
 def estimate(title, flaws=(), country="uk", opener=None, description=None, sorter=None, judge=None):
@@ -1160,15 +1171,20 @@ def estimate(title, flaws=(), country="uk", opener=None, description=None, sorte
     flaws = [f.strip() for f in flaws or [] if isinstance(f, str) and f.strip()]
     # the listing the flaws are judged in: the title and the description, as the reader read them
     text = f"{title}. {description if description is not None else '. '.join(flaws)}"
-    kinds, by = sorted_kinds(flaws, text, title, description, sorter)
+    each = sorted_each(flaws, text, title, description, sorter)
+    kinds, by = kinds_and_by(each)
     # the title's own, read as what's sold: "Faulty iPhone 12 for parts", "iPhone 12 Pro repairs", "iPhone 12 dead"
-    kinds += [k for k in kinds_of([title], text, title=True) if k not in kinds]
+    titled = [k for k in kinds_of([title], text, title=True) if k not in kinds]
+    kinds += titled
     # fix 1 (14 Oct): damage is cut by how bad it is and the model's price tier, from FlipAssist's own measured table
     # (flip.severity), in place of the prices API's one damage cut: the API is asked without "damage", so every
     # other cut stays the API's. Not for a locked or for-parts one, which the API prices as that alone
     own_damage = "damage" in kinds and not (PARTS_WORDS.search(title) or {"lock", "parts"} & set(kinds))
+    # the owner's battery rule (14 Oct): a battery under 80% is cut by how low it is (battery_cut), in place of the
+    # prices API's one small battery cut, so the API is asked without "battery" too; not for a locked or for-parts one
+    own_battery = "battery" in kinds and not (PARTS_WORDS.search(title) or {"lock", "parts"} & set(kinds))
     body = {"action": "price", "country": country, "title": title, "strict": True,
-            "kinds": [k for k in kinds if k != "damage"] if own_damage else kinds}
+            "kinds": [k for k in kinds if not (own_damage and k == "damage") and not (own_battery and k == "battery")]}
     if PARTS_WORDS.search(title) or {"lock", "parts"} & set(kinds):
         body["bucket"] = "good"
     in_title = sizes_in(title, kind)
@@ -1178,8 +1194,20 @@ def estimate(title, flaws=(), country="uk", opener=None, description=None, sorte
     if kind == "macbook" and in_title[1] is None and in_description[1] is not None:
         body["ram_gb"] = in_description[1]
     remembered = json.dumps([url, body], sort_keys=True)
+
+    def priced(found):
+        """The API's answer with FlipAssist's battery and damage cuts, and each flaw's own cut for the screen
+        (cut_rows)."""
+        done = with_damage(with_battery({**found, "sorted_by": by}, own_battery, flaws, description, title), own_damage,
+                           kinds, flaws, title, judge, description)
+        if own_battery and done.get("price") is not None:
+            done = {**done, "price": round(done["price"])}
+        rows = cut_rows(done, found.get("price"), flaw_items(each, titled, text, title, description, sorter),
+                        found.get("api_factor"))
+        return {**{k: v for k, v in done.items() if k != "api_factor"}, **rows}
+
     if remembered in _seen:
-        return with_damage({**_seen[remembered], "sorted_by": by}, own_damage, kinds, flaws, title, judge, description)
+        return priced(_seen[remembered])
     request = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
                                      headers={"Content-Type": "application/json", "x-prices-key": key})
     try:
@@ -1209,9 +1237,10 @@ def estimate(title, flaws=(), country="uk", opener=None, description=None, sorte
              "asked_ram_gb": body.get("ram_gb", plan.get("ram_gb")) if kind == "macbook" else None,
              "kind": kind, "kinds": kinds, "cuts": [c for c in used if c not in ("no flaw", "for-parts price")],
              "parts_price": "for-parts price" in used, "rough": bool(answer.get("rough")),
-             "exact": bool(answer.get("exact_match")), "mode": answer.get("mode")}
+             "exact": bool(answer.get("exact_match")), "mode": answer.get("mode"),
+             "api_factor": answer.get("factor") if isinstance(answer.get("factor"), (int, float)) else None}
     _seen[remembered] = found
-    return with_damage({**found, "sorted_by": by}, own_damage, kinds, flaws, title, judge, description)
+    return priced(found)
 
 
 def with_damage(found, own, kinds, flaws, title, judge=None, description=None):
@@ -1232,3 +1261,236 @@ def with_damage(found, own, kinds, flaws, title, judge=None, description=None):
     return {**found, "price": round(found["price"] * (1 + cut["cut"])),
             "cuts": [*(c for c in found.get("cuts", []) if c != "damage"), "damage"],
             "damage": {"level": level, **cut, "by": by}}
+
+
+# ── a battery under 80%: the owner's cut (14 Oct) ───────────────────────────────────────────────────────────────────
+# The owner: "make the battery cut bigger for under 80%", by how low it is. The prices API's own cut was about 5% (UK
+# asking prices barely move for a worn battery), but a reseller buying one has to replace it.
+BATTERY_CUTS = ((75, -0.10), (70, -0.15), (0, -0.20))  # a figure at or over the first number: the cut
+BATTERY_NO_FIGURE = -0.15  # "battery needs a service", "drains fast": no figure under 80% given
+# a range of figures ("battery 70-75%"): battery_now reads its top, the price goes by its bottom
+BATTERY_RANGE = re.compile(r"\b(\d{2})\s?%?\s?(?:-|–|to)\s?(\d{2})\s?%", I)
+
+
+def battery_cut(flaws, description=None, title=None):
+    """FlipAssist's cut for a battery under 80% (the owner's rule, 14 Oct), by the lowest figure under 80% the flaws
+    give (the description's when they give none, then the title's: "iPhone 13 128GB Battery 68%"): 75-79% -10%, 70-74%
+    -15%, under 70% -20%; no figure ("battery needs a service", "drains fast"): -15%. A figure set apart from its label
+    counts ("Battery health - 76%", "(76%)", on the next line). {"figure": 76 or None, "cut": -0.1}."""
+    def figures_in(texts):
+        found = []
+        for text in texts:
+            for clause in parts_of(figures_joined(text)) if text else []:
+                said = battery_now(clause)
+                if not said:
+                    continue
+                value = float(said[0])
+                for low, high in BATTERY_RANGE.findall(clause):
+                    if float(high) == value and float(low) < value:
+                        value = float(low)
+                if value < FLAWED_BATTERY:
+                    found.append(value)
+        return found
+
+    figures = figures_in(flaws) or figures_in([description or ""]) or figures_in([title or ""])
+    if not figures:
+        return {"figure": None, "cut": BATTERY_NO_FIGURE}
+    low = min(figures)
+    return {"figure": int(low) if low == int(low) else low, "cut": next(c for at, c in BATTERY_CUTS if low >= at)}
+
+
+def with_battery(found, own, flaws, description=None, title=None):
+    """The estimate with FlipAssist's battery cut (battery_cut) off the API's price for its other flaws, unrounded
+    (the damage cut, if any, comes off it next): "battery" says which, {"figure", "cut"}. Not own (no battery under
+    80%, or locked or for parts): as it is."""
+    if not own or found.get("price") is None:
+        return found
+    cut = battery_cut(flaws, description, title)
+    return {**found, "price": found["price"] * (1 + cut["cut"]),
+            "cuts": [*(c for c in found.get("cuts", []) if c != "battery"), "battery"], "battery": cut}
+
+
+# ── each flaw with its own cut, for the screen (14 Oct) ──────────────────────────────────────────────────────────────
+# The owner, 14 Oct ("give real description like here we had 2 flaws"): the screen gave only the damage's cut, so "cracked
+# back and the balck dot in the front screen" said "Damage counted as moderate: −30%" by a price cut 42%, the black
+# dot's fault cut (−17%) said nowhere. Each flaw now has its own row, its words, its kind and its cut, and the rows,
+# taken in turn, make the price.
+
+# The prices API's own UK cuts (supabase/functions/prices CUTS["co.uk"], measured on the owner's labelled listings'
+# asking prices, 3 Oct), each taken as its number over clean's (the API's base "clean"). Only to split the API's one
+# answer between two or more of its kinds, and only when they multiply to that answer (api_cuts).
+API_CUTS_UK = {"clean": 1.05, "damage": 0.91, "fault": 0.87, "network lock": 0.95, "not genuine": 0.99,
+               "battery": 1.0, "wear": 1.0, "lock": 0.65, "parts": 0.76}
+# the words that join two flaws in one sentence: "cracked back and the battery is 75%", "scratches & a dent"
+JOINS = re.compile(r"\s+(?:and|&|but|plus|also|as\swell\sas)\s+(?!tear\b)", I)  # "wear and tear" is one
+
+
+def flaw_spans(quote):
+    """Where each part of a flaw sentence is, [(start, end, clause, join)] in it: cut where the kinds are read
+    (parts_of: commas, sentences, "except"; clause counts them) and at the words that join two flaws (JOINS); join is
+    the word that joined the part to the one before it in its clause ("and", "but"), None for a clause's first."""
+    spans, at = [], 0
+    for n, clause in enumerate(parts_of(quote)):
+        start = quote.find(clause, at)
+        if start < 0:
+            return [(0, len(quote), 0, None)]
+        last, join = start, None
+        for m in JOINS.finditer(clause):
+            spans.append((last, start + m.start(), n, join))
+            last, join = start + m.end(), " ".join(m.group().lower().split())
+        at = start + len(clause)
+        spans.append((last, at, n, join))
+    return spans or [(0, len(quote), 0, None)]
+
+
+# a part with no flaw of its own joined to the flaw before it by one of these goes on with it ("scratches top AND
+# bottom", "wear on the edges AND back"); joined by "but" or "also" it's something else ("...but everything works")
+GOES_ON = {"and", "&", "plus", "as well as"}
+
+
+def tidy(words):
+    """A flaw's words as the screen gives them: no stray comma or joining word at either end, a capital to start (not
+    for a word with its own capitals: "iCloud locked", "eSIM")."""
+    words = words.strip(" \t\n.,;:!-–—&")
+    words = re.sub(r"^(?:(?:and|but|plus|also)\s+)+", "", words, flags=I)
+    first = words.split(" ", 1)[0]
+    return words if first[1:] != first[1:].lower() else words[:1].upper() + words[1:]
+
+
+def split_flaw(quote, kinds, by_code, by_model=None):
+    """A flaw sentence as the flaws in it, each with its kinds: "cracked back and the battery is 75%" ->
+    [("Cracked back", ["damage"]), ("The battery is 75%", ["battery"])], "No charger, small scratch on the back" ->
+    [("Small scratch on the back", ["wear"])]. Its parts are sorted by code's rules (by_code(words) -> kinds) and, when
+    flip-kinds sorted the sentence (by_model), by it where code finds none of the sentence's kinds ("the balck dot in
+    the front screen"), then by it alone, until the parts give every one of the sentence's kinds; only the sentence's
+    own kinds are kept (it's what the price was cut for). A part with none joined to the flaw before it by "and" goes on
+    with it ("scratches top and bottom"); otherwise it goes with the part after it in its clause ("black and white
+    lines"), and with no flaw after it in its clause it's left out ("...but everything works", "No charger"). When the
+    parts never give every kind, the sentence stays whole with all of them."""
+    whole = [(tidy(quote), list(kinds))]
+    spans = flaw_spans(quote) if kinds else []
+    if len(spans) < 2:
+        return whole
+    own = lambda said: [k for k in said if k in kinds]  # noqa: E731
+    passes = [lambda words: own(by_code(words))]
+    if by_model is not None:
+        passes += [lambda words: own(by_code(words)) or own(by_model(words)), lambda words: own(by_model(words))]
+    for classify in passes:
+        said = [(span, classify(quote[span[0]:span[1]])) for span in spans]
+        if {k for _, ks in said for k in ks} != set(kinds):
+            continue
+        out, held = [], None  # out: [start, end, kinds, clause]; held: where words waiting for a flaw start
+        for (a, b, clause, join), ks in said:
+            if held is not None and held[1] != clause:
+                held = None  # the words with no flaw ended their clause: left out
+            if ks:
+                out.append([held[0] if held else a, b, ks, clause])
+                held = None
+            elif join in GOES_ON and held is None and out and out[-1][3] == clause:
+                out[-1][1] = b  # "...top and bottom": the flaw before it goes on
+            elif held is None:
+                held = (a, clause)  # "black and white lines": the flaw after it starts here
+        return [(tidy(quote[a:b]), ks) for a, b, ks, _ in out]
+    return whole
+
+
+def flaw_items(each, titled, text, title, description, sorter=None):
+    """Every flaw the price was read from, [(words, kinds, from_title)]: each sentence the reader quoted (sorted_each's)
+    split into its flaws (split_flaw: code's rules first, flip-kinds for a sentence it sorted and code can't split,
+    each part asked as the sentence was); then the title's own kinds (titled), with the title as their words."""
+    context = description if description is not None else ". ".join(flaw for flaw, _, _ in each)
+    coded, asked = {}, {}
+
+    def by_code(words):
+        if words not in coded:
+            coded[words] = kinds_of([words], text)
+        return coded[words]
+
+    def by_model(words):
+        if words not in asked:
+            asked[words] = sorter(words, title, context) if sorter else None
+        return by_code(words) if asked[words] is None else asked[words]
+
+    items = []
+    for flaw, kinds, by in each:
+        # flip-kinds only for two or more kinds: a sentence of one kind is cut for it whichever words say it
+        model = None if by == "code" or sorter is None or len(kinds) < 2 else by_model
+        items += [(words, ks, False) for words, ks in split_flaw(flaw, kinds, by_code, model)]
+    if titled:
+        items.append((title, list(titled), True))
+    return items
+
+
+def api_cuts(kinds, factor):
+    """Each of the API's kinds with its own cut, {kind: -0.17, or None for nothing on top}, as the API takes them
+    (applyCuts, base "clean": the clean premium off once, then each kind's own number, so the premium goes with the
+    first kind and a later kind whose number is 1, wear in the UK, adds nothing on top). One kind has the API's whole
+    answer (factor: its own, unrounded); two or more are split by its table (API_CUTS_UK) when the table makes its
+    answer, to within rounding. None when it doesn't (a kind the table hasn't, a table since changed, the for-parts
+    floor): the screen gives them as one cut together."""
+    if len(kinds) == 1:
+        return {kinds[0]: factor - 1}
+    if any(k not in API_CUTS_UK for k in kinds):
+        return None
+    own = {k: API_CUTS_UK[k] / (API_CUTS_UK["clean"] if n == 0 else 1) - 1 for n, k in enumerate(kinds)}
+    together = 1.0
+    for cut in own.values():
+        together *= 1 + cut
+    if abs(together - factor) > 0.015:
+        return None
+    return {k: None if n and abs(cut) < 1e-9 else cut for n, (k, cut) in enumerate(own.items())}
+
+
+def cut_rows(done, api_price, items, api_factor=None):
+    """The price's cuts as the screen gives them: {"breakdown": [{"kinds", "words", "title", "cut", "by"}], "not_cut":
+    [words]}, a row for each kind of flaw in the order the listing gives them, with the flaws' own words (title: they're
+    the title's). cut: the share taken off the price before it (-0.3), the rows' cuts taken in turn making the price
+    (by rounding); None for no cut. by: "damage" (FlipAssist's damage cut, done["damage"] says how bad), "battery"
+    (FlipAssist's battery cut, done["battery"] gives the figure), "api" (the prices API's cut for that kind), "api
+    none" (one of its kinds that adds nothing on top of the one before: wear after a fault), "api together" (two or
+    more of its kinds its table can't split: one cut for all; api_factor: the API's own factor, unrounded),
+    "parts price" (priced at what for-parts ones sell for), "lock" (the API's rough cut for a locked or for-parts one
+    with no for-parts sales), "not on top" (a locked or for-parts one's other flaws, not cut on top), None (a kind
+    nothing was cut for). not_cut: the words of flaws with no kind ("Charger missing")."""
+    not_cut = [words for words, kinds, _ in items if not kinds]
+    middle, price = done.get("middle"), done.get("price")
+    if not middle or price is None:
+        return {"breakdown": [], "not_cut": not_cut}
+    order, said, title_only = [], {}, {}
+    for words, kinds, from_title in items:
+        for k in kinds:
+            if k not in said:
+                order.append(k)
+                said[k], title_only[k] = [], True
+            if words not in said[k]:
+                said[k].append(words)
+            title_only[k] = title_only[k] and from_title
+    row = lambda k: {"kinds": [k], "words": said[k], "title": title_only[k]}  # noqa: E731
+    whole = next((k for k in ("lock", "parts") if k in order), None)
+    if done.get("parts_price") or whole:  # priced as for parts: one cut, first, and nothing on top of it
+        first = whole or (order[0] if order else None)
+        by = "parts price" if done.get("parts_price") else "lock"
+        whole_cut = price / middle - 1 if done.get("parts_price") or not api_factor else api_factor - 1
+        return {"breakdown": [{**row(k), "cut": whole_cut, "by": by} for k in order if k == first]
+                + [{**row(k), "cut": None, "by": "not on top"} for k in order if k != first], "not_cut": not_cut}
+    damage, battery = done.get("damage"), done.get("battery")
+    from_api = [k for k in order if k in (done.get("cuts") or []) and not (damage and k == "damage")
+                and not (battery and k == "battery")]
+    # the API's own factor, unrounded: its prices are rounded up to £5, which on a cheap phone hides a cut or doubles it
+    factor = api_factor or (api_price or price) / middle
+    own = api_cuts(from_api, factor) if from_api else {}
+    rows = []
+    for k in order:
+        if damage and k == "damage":
+            rows.append({**row(k), "cut": damage["cut"], "by": "damage"})
+        elif battery and k == "battery":
+            rows.append({**row(k), "cut": battery["cut"], "by": "battery"})
+        elif k in from_api and own is not None:
+            rows.append({**row(k), "cut": own[k], "by": "api" if own[k] is not None else "api none"})
+        elif k in from_api:
+            if not any(r["by"] == "api together" for r in rows):
+                rows.append({"kinds": from_api, "words": list(dict.fromkeys(w for x in from_api for w in said[x])),
+                             "title": all(title_only[x] for x in from_api), "cut": factor - 1, "by": "api together"})
+        else:
+            rows.append({**row(k), "cut": None, "by": None})
+    return {"breakdown": rows, "not_cut": not_cut}

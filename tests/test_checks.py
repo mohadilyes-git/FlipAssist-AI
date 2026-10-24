@@ -1093,3 +1093,20 @@ def test_a_listing_about_the_phone_isnt_talk_about_the_notes():
 def test_new_said_of_what_comes_with_it_isnt_the_phones_condition(notes, condition):
     from flip.checks import condition_for
     assert condition_for(notes) == condition
+
+
+# 14 Oct: a "no" over a list with commas in it is a no to each thing listed ("no box, charger or cable" was read as a
+# charger and a cable that come with it, so a listing saying "comes with a charger" passed the checks)
+@pytest.mark.parametrize("notes, expected", [
+    ("no box, charger or cable", {"box": {"no"}, "charger": {"no"}, "cable": {"no"}}),
+    ("no original box, charger or cable", {"box": {"no"}, "charger": {"no"}, "cable": {"no"}}),
+    ("no box, charger, or cable", {"box": {"no"}, "charger": {"no"}, "cable": {"no"}}),
+    ("no scratches, scuffs nor dents", {"scratch": {"no"}, "scuff": {"no"}, "dent": {"no"}}),
+    # the list never runs over what isn't a thing that comes with it or a mark
+    ("no screen protector, unlocked, works, no box, charger or cable",
+     {"screen protector": {"no"}, "unlocked": {"yes"}, "working": {"yes"}, "box": {"no"}, "charger": {"no"},
+      "cable": {"no"}}),
+    ("no charger, comes with box", {"charger": {"no"}, "box": {"yes"}}),
+])
+def test_a_no_over_a_list_with_commas_is_a_no_to_each(notes, expected):
+    assert promises_in(notes, typos=True) == expected

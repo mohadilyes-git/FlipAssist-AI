@@ -3,7 +3,7 @@
 // AlertFlip app's prices API prices it: the middle price of clean ones of the same model and size (sales Claude Haiku
 // 5.5 sorted), cut for the kinds of flaw found, or what for-parts ones sell for when it's locked or for parts.
 import { useState } from "react";
-import { api, type PriceEstimate } from "../api";
+import { api, type CutRow, type PriceEstimate } from "../api";
 import { modelName, readBy } from "../format";
 import { Head, PoundIcon, Warn } from "../ui";
 
@@ -101,7 +101,8 @@ export function PriceScreen() {
                 into a kind (code's rules do when it isn't installed),
                 and the price is cut by amounts measured on phone listings: any flaw takes a small cut, faults cut
                 the most, and different kinds' cuts multiply. Damage is cut by how bad it is (minor, moderate or
-                severe) and how pricey the model is, as measured on 1,697 damaged iPhone, Samsung and MacBook listings. A locked or for-parts one is priced at what
+                severe) and how pricey the model is, as measured on 1,697 damaged iPhone, Samsung and MacBook listings. A
+                worn battery is cut by how low its health is, as it has to be replaced. A locked or for-parts one is priced at what
                 for-parts ones of the same model and size sell for, or at a rough guess when too few have sold, with its
                 other flaws not cut on top.</li>
             </ol>
@@ -157,7 +158,9 @@ export function cautions(e: PriceEstimate, title?: string): string[] {
     if (hard.length) said.push(`Rough: ${hard.join(" and ")} ${hard.length > 1 ? "are" : "is"} hard to price`);
   }
   // only when a flaw cut the prices API measured on phones was used: the damage cut is measured on MacBooks too
-  if (mac && (e.cuts ?? []).filter((c) => !(e.damage && c === "damage")).length && !e.parts_price) {
+  // (the battery cut is the owner's rule, 14 Oct, not one measured on phones)
+  if (mac && (e.cuts ?? []).filter((c) => !(e.damage && c === "damage") && !(e.battery && c === "battery")).length
+    && !e.parts_price) {
     said.push("Rough for a MacBook: the flaw cuts were measured on phones");
   }
   return said;
@@ -195,6 +198,120 @@ export function sortedBy(by?: string | null): string {
   return ` (sorted by ${by.split(" and ").map((m) => (m === "code" ? "code" : modelName(m))).join(" and ")})`;
 }
 
+// ── each flaw with its own cut (14 Oct, the owner: "give real description like here we had 2 flaws") ──────────────
+// The card gave only the damage's cut ("Damage counted as moderate: −30%") by a price cut 42%: now each flaw has its
+// own row, in the seller's words, with what it takes off in pounds, and the rows add up to the price.
+
+/** Each kind of flaw in plain words: its name on the card, and "one with ..." for what UK sellers ask */
+const KIND_WORDS: Record<string, { name: string; one: string }> = {
+  damage: { name: "Damage", one: "a damaged one" },
+  fault: { name: "Fault", one: "one with a fault" },
+  battery: { name: "Worn battery (under 80% or needs a service)", one: "one with a worn battery" },
+  wear: { name: "Wear", one: "one with wear" },
+  "network lock": { name: "Network locked", one: "a network-locked one" },
+  "not genuine": { name: "Parts that aren't genuine", one: "one with parts that aren't genuine" },
+  lock: { name: "Locked", one: "a locked one" },
+  parts: { name: "For parts", one: "one for parts" },
+};
+const kindName = (k: string) => KIND_WORDS[k]?.name ?? k.charAt(0).toUpperCase() + k.slice(1);
+const percent = (cut: number) => `−${Math.round(-cut * 100)}%`;
+
+/** What a row's cut is, in words: "Damage, counted as moderate: −30%. UK sellers ask about 30% less for a mid-priced
+ * iPhone with moderate damage (191 listings) · how bad: code and Claude Haiku 5.5", "Fault: −17%. UK sellers ask about
+ * 17% less for one with a fault (the AlertFlip API's cut)". */
+export function cutWords(row: CutRow, e: PriceEstimate): string {
+  const names = and(row.kinds.map(kindName));
+  const d = e.damage;
+  if (row.by === "damage" && d && row.cut != null) {
+    const rough = !d.rough ? "" : d.from?.includes("the US") ? ", rough: from US sales"
+      : d.from?.includes("the iPhone") ? ", rough: from iPhones" : ", rough: few listings, pooled with a group next to it";
+    const judged = !d.by ? "" : d.by.startsWith("Claude Sonnet") ? ` · ${d.by} decided how bad` : ` · how bad: ${d.by}`;
+    const what = TIERS[d.tier] ? `a ${TIERS[d.tier]} ${NOUNS[e.kind ?? ""] ?? "one"}` : `a ${NOUNS[e.kind ?? ""] ?? "one"}`;
+    // a cut borrowed from US listings (every Samsung's, most MacBooks') is what US sellers ask (14 Oct review)
+    const who = d.from?.includes("the US") ? "US sellers" : "UK sellers";
+    return `Damage, counted as ${d.level}: ${percent(row.cut)}. ${who} ask about ${Math.round(-row.cut * 100)}% less `
+      + `for ${what} with ${d.level} damage (${d.n} listings${rough})${judged}`;
+  }
+  if (row.by === "battery" && row.cut != null) {
+    // the owner's rule (14 Oct): a battery under 80% has to be replaced, so it's cut by how low it is
+    const figure = e.battery?.figure;
+    return `${figure != null ? `Battery at ${figure}%` : "Worn battery, no figure given"}: ${percent(row.cut)}. `
+      + "FlipAssist's battery cut: 10% off at 75–79%, 15% at 70–74% or with no figure, 20% under 70%";
+  }
+  if (row.by === "api none") return `${names}: no more off, as it's counted in the cut above (the AlertFlip API's way)`;
+  if (row.cut == null) {
+    if (row.by !== "not on top") return `${names}: not cut for`;
+    // with no for-parts sales to go on, the price is the API's rough cut for a locked or for-parts one (14 Oct review)
+    const first = e.breakdown?.[0]?.kinds[0];
+    const price = e.parts_price ? "the for-parts price" : first === "lock" ? "the rough cut for a locked one"
+      : "the rough cut for a for-parts one";
+    return `${names}: not cut on top of ${price}`;
+  }
+  if (row.by === "parts price") return `${names}: ${percent(row.cut)}, priced at what for-parts ones of this model sell for`;
+  if (row.by === "lock") {
+    return `${names}: ${percent(row.cut)}, a rough cut (too few for-parts sales of this model to go on)`;
+  }
+  const less = `UK sellers ask about ${Math.round(-row.cut * 100)}% less for`;
+  const phones = e.kind === "macbook" ? ", measured on phones" : "";  // its cuts were measured on phone listings
+  if (row.by === "api together") {
+    return `${names}: ${percent(row.cut)} together. ${less} one with all of these (the AlertFlip API's cuts${phones})`;
+  }
+  return `${names}: ${percent(row.cut)}. ${less} ${KIND_WORDS[row.kinds[0]]?.one ?? "one like it"} (the AlertFlip `
+    + `API's cut${phones})`;
+}
+
+/** What each row takes off in pounds, taken in turn from the clean middle price to the price: [72, 29] for −30% then
+ * −17% off £240 (£139); null for a row not cut. Each step is rounded as the screen shows prices, and the last step
+ * lands on the price itself, so the pounds always add up to the price. */
+export function poundsOff(rows: CutRow[], middle: number, price: number): (number | null)[] {
+  const last = rows.map((r) => r.cut != null).lastIndexOf(true);
+  let before = middle;
+  return rows.map((row, n) => {
+    if (row.cut == null) return null;
+    const after = n === last ? price : before * (1 + row.cut);
+    const off = Math.round(before) - Math.round(after);
+    before = after;
+    return off;
+  });
+}
+
+/** The flaws card when the estimate says what each flaw cut: a row for each, then how they add up */
+function FlawCuts({ estimate }: { estimate: PriceEstimate }) {
+  const rows = estimate.breakdown ?? [];
+  const notCut = estimate.not_cut ?? [];
+  const middle = estimate.middle ?? estimate.price ?? 0;
+  const offs = poundsOff(rows, middle, estimate.price ?? 0);
+  const taken = offs.filter((o): o is number => !!o);  // a cut that rounds to £0 isn't summed
+  const sorter = estimate.sorted_by && estimate.sorted_by !== "code"
+    ? ` · sorted by ${estimate.sorted_by.split(" and ").map((m) => (m === "code" ? "code" : modelName(m))).join(" and ")}`
+    : "";
+  return (
+    <>
+      {!(estimate.flaws ?? []).length && <p className="sub">{estimate.read_by ? "None quoted from the description."
+        : "None given."}</p>}
+      <ol className="flaw-cuts">
+        {rows.map((row, n) => (
+          <li key={`${row.kinds.join("+")}-${n}`}>
+            <div className="flaw-cut-top">
+              <span className="flaw-words">{row.title ? `In the title: ${row.words.join(" · ")}` : row.words.join(" · ")}</span>
+              <strong className="flaw-off">{offs[n] ? `−£${offs[n]!.toLocaleString("en-GB")}` : "–"}</strong>
+            </div>
+            <p className="sub">{cutWords(row, estimate)}</p>
+          </li>
+        ))}
+      </ol>
+      {taken.length > 0 && (
+        <p className="flaw-sum" aria-label="How the cuts add up">
+          {`${pounds(middle)} with no flaws${taken.map((o) => ` − £${o.toLocaleString("en-GB")}`).join("")} = `}
+          <strong>{pounds(estimate.price)}</strong>
+        </p>
+      )}
+      {notCut.length > 0 && <p className="sub">Not cut for: {notCut.join(" · ")}</p>}
+      <p className="sub">{estimate.read_by ? `R${readBy(estimate.read_by).slice(1)}` : "Flaws as given"}{sorter}</p>
+    </>
+  );
+}
+
 function Estimated({ estimate, title }: { estimate: PriceEstimate; title: string }) {
   if (estimate.skipped) return <Warn>{estimate.skipped}</Warn>;
   if (estimate.error || estimate.price == null) return <Warn>No UK price: {estimate.error ?? "no price came back"}</Warn>;
@@ -225,6 +342,7 @@ function Estimated({ estimate, title }: { estimate: PriceEstimate; title: string
       {cautions(estimate, title).map((c) => <Warn key={c}>{c}</Warn>)}
       <section className="card" aria-label="Flaws it found">
         <p className="caps">Flaws it found</p>
+        {(estimate.breakdown ?? []).length ? <FlawCuts estimate={estimate} /> : <>
         {flaws.length ? (
           <ul className="price-flaws">{flaws.map((f) => <li key={f}>{f}</li>)}</ul>
         ) : kinds.length ? (
@@ -239,6 +357,7 @@ function Estimated({ estimate, title }: { estimate: PriceEstimate; title: string
           {notCutOnTop(estimate)}
         </p>
         {estimate.damage && <p className="sub" aria-label="Damage cut">{damageLine(estimate)}</p>}
+        </>}
       </section>
     </>
   );

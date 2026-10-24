@@ -565,6 +565,10 @@ PART_BROKEN = re.compile(r"\b(?:screen|back|glass|lens|camera|frame|display|hous
                          r"scratched|chipped|dented|broken|damaged|shattered)\b")
 
 
+# where a new clause starts inside a list's last item: "...chips or dents but battery is 76%"
+LIST_ENDS = re.compile(r"\b(?:but|though|although|however)\b", re.IGNORECASE)
+
+
 def in_denied_list(part, text):
     """"With no scratches, scuffs or visible damage": a "no" before the first
     item of a list that ends in "or" (or "nor") denies every item, so the
@@ -581,7 +585,9 @@ def in_denied_list(part, text):
                              for n, w in enumerate(seg))
     closes_with_and = lambda raw: bool(re.search(r"(?:^|\s)(?:and|&)\s+\S", raw))
     for sentence in re.split(r"[.!?;\n]+", answered(text)):
-        raw = sentence.split(",")
+        # a list ends where a new clause starts: "no cracks, chips or dents BUT battery is 76%" closes on "chips or
+        # dents" (14 Oct review: read as damage, a -30% cut)
+        raw = [LIST_ENDS.split(s, maxsplit=1)[0] for s in sentence.split(",")]
         segments = [plain_words(s) for s in raw]
         for i in range(1, len(segments)):
             if not contains(segments[i], target):

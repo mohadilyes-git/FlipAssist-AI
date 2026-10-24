@@ -658,6 +658,18 @@ class PriceRequest(BaseModel):
     flaws: list[str] | None = Field(None, max_length=30, description="the flaws to cut for, if already read")
 
 
+class CutRow(BaseModel):
+    """One kind of flaw the price was cut for (flip.prices.cut_rows): its kinds (one, or the prices API's kinds it gave
+    one cut for together), the flaws' words (title: the listing's title, for a kind only the title gives), the share
+    taken off the price before it (-0.3; None: not cut), and whose cut: "damage" (FlipAssist's, the estimate's damage
+    says how bad), "api", "api together", "parts price", "lock", "not on top" or None."""
+    kinds: list[str]
+    words: list[str]
+    title: bool = False
+    cut: float | None = None
+    by: str | None = None
+
+
 class PriceEstimate(BaseModel):
     """The listing's UK price from the AlertFlip app's prices API (flip.prices): price is the one with its flaws cut,
     middle a clean one's, low to high the middle half of clean sales (the cheapest quarter left out); skipped or error
@@ -691,6 +703,13 @@ class PriceEstimate(BaseModel):
     # the damage cut FlipAssist measured (14 Oct): how bad (minor, moderate, severe), the price tier (bottom, middle,
     # top), the cut (-0.24), whether it's rough (borrowed: "from" says where) and how many listings it's from
     damage: dict | None = None
+    # the owner's battery cut (14 Oct), for a battery under 80%: the lowest figure given (None: none given, "needs a
+    # service") and the cut (75-79% -0.1, 70-74% -0.15, under 70% -0.2, no figure -0.15)
+    battery: dict | None = None
+    # each kind of flaw with its own cut, in the listing's order, with the flaws' own words (flip.prices.cut_rows, 13
+    # Nov: "Cracked back" damage -30%, "The balck dot in the front screen" a fault -17%); the flaws cut for nothing
+    breakdown: list[CutRow] = []
+    not_cut: list[str] = []
 
 
 class PriceChecks:

@@ -58,7 +58,10 @@ def test_an_iphone_is_priced_with_its_flaws_sorted_into_kinds():
                      "asked_ram_gb": None, "kind": "iphone", "kinds": ["damage"], "cuts": ["damage"],
                      "parts_price": False, "rough": False, "exact": True, "mode": "catalogue", "sorted_by": "code",
                      "damage": {"level": "minor", "tier": "middle", "cut": -0.188, "rough": False, "from": None,
-                                "n": 153, "by": "code"}}
+                                "n": 153, "by": "code"},
+                     # 14 Oct: each flaw with its own cut, in its own words (cut_rows)
+                     "breakdown": [{"kinds": ["damage"], "words": ["Small crack on the back"], "title": False,
+                                    "cut": -0.188, "by": "damage"}], "not_cut": []}
     url, headers, body = sent[0]
     assert body == {"action": "price", "country": "uk", "title": "iPhone 13 128GB Blue", "kinds": [],
                     "strict": True}  # the API's own sorter isn't used, and a title naming no model is refused
@@ -1515,3 +1518,262 @@ def test_the_damage_judge_says_how_bad_and_who_said_it():
     assert (found["damage"]["level"], found["damage"]["by"], found["price"]) == ("severe", "Claude Sonnet 5.5", 104)
     plain = prices.estimate("iPhone 13 128GB Blue", ["Screen cracked"], opener=opener, description="Screen cracked.")
     assert (plain["damage"]["level"], plain["damage"]["by"]) == ("moderate", "code")
+
+
+# ── 14 Oct: each flaw with its own cut (cut_rows) ─────────────────────────────────────────────────────────────────────
+# The owner: "give real description like here we had 2 flaws". The screen said "Damage counted as moderate: −30%" for
+# "cracked back and the balck dot in the front screen", by a price cut 42%: the black dot's fault cut was said nowhere.
+
+class Sorter:
+    """flip-kinds as these tests need it: its kinds for the words it's told, None for the rest (code sorts those)."""
+    name = "flip-kinds-1"
+
+    def __init__(self, said):
+        self.said, self.asked = said, []
+
+    def __call__(self, words, title, description):
+        self.asked.append(words)
+        return self.said.get(words)
+
+
+def cutting(middle=240.0):
+    """A pretend API that cuts as the real one does for the kinds it's sent (applyCuts, base "clean": the clean premium
+    off once, then each kind's own number from its UK table) and says its factor, the for-parts price (£70) for a
+    locked or for-parts one."""
+    def opener(request, timeout):
+        kinds = json.loads(request.data)["kinds"]
+        if {"lock", "parts"} & set(kinds):
+            price, used, factor = 70, ["for-parts price"], 70 / middle
+        else:
+            factor = 1 / prices.API_CUTS_UK["clean"] if kinds else 1.0
+            for k in kinds:
+                factor *= prices.API_CUTS_UK.get(k, 1)
+            price, used = round(middle * factor), kinds or ["no flaw"]
+        return Response(json.dumps({**ANSWER, "model": "iphone 14", "middle": middle, "price": price,
+                                    "factor": round(factor, 3), "used": used}).encode())
+    return opener
+
+
+def rows(found):
+    return [(r["words"], r["kinds"], r["by"], None if r["cut"] is None else round(r["cut"], 3))
+            for r in found["breakdown"]]
+
+
+def made_by_rows(found):
+    """The price the rows make, taken in turn from the clean middle price."""
+    price = found["middle"]
+    for row in found["breakdown"]:
+        price *= 1 + (row["cut"] or 0)
+    return price
+
+
+def test_each_flaw_of_a_sentence_has_its_own_row_with_its_cut():
+    sentence = "cracked back and the balck dot in the front screen"  # the owner's screenshot
+    sorter = Sorter({sentence: ["damage", "fault"], "the balck dot in the front screen": ["fault"]})
+    found = prices.estimate("iphone 14", [sentence], opener=cutting(), description=sentence, sorter=sorter)
+    assert rows(found) == [(["Cracked back"], ["damage"], "damage", -0.304),
+                           (["The balck dot in the front screen"], ["fault"], "api", -0.171)]
+    assert abs(made_by_rows(found) - found["price"]) < 1  # the rows make the price
+    # flip-kinds is asked about the sentence, then only the part code can't read ("balck"), never "cracked back"
+    assert sorter.asked == [sentence, "the balck dot in the front screen"]
+
+
+def test_a_battery_said_with_the_damage_has_its_own_row():
+    sentence = "cracked back and the battery is 75%"  # the owner's screenshot: −30% said, −33% cut
+    found = prices.estimate("iphone 14", [sentence], opener=cutting(), description=sentence)
+    assert rows(found) == [(["Cracked back"], ["damage"], "damage", -0.304),
+                           (["The battery is 75%"], ["battery"], "battery", -0.1)]  # the owner's battery cut
+    assert abs(made_by_rows(found) - found["price"]) < 1
+
+
+# ── 14 Oct: the owner's battery cut, "make the battery cut bigger for under 80%", by how low it is ─────────────────────
+
+@pytest.mark.parametrize("sentence, figure, cut", [
+    ("Battery health 78%", 78, -0.10),
+    ("the battery is 75%", 75, -0.10),
+    ("BH 74", 74, -0.15),
+    ("Battery at 70%", 70, -0.15),
+    ("Battery health 69%, needs replacing soon", 69, -0.20),
+    ("Battery needs a service", None, -0.15),  # no figure given
+    ("Battery drains fast", None, -0.15),
+    ("battery 70-75%", 70, -0.15),  # a range goes by its bottom
+])
+def test_a_battery_under_80_is_cut_by_how_low_it_is(sentence, figure, cut):
+    opener, asked = asking({**ANSWER, "price": 200, "used": ["no flaw"]})
+    found = prices.estimate("iPhone 13 128GB Blue", [sentence], opener=opener, description=sentence)
+    assert "battery" not in asked[0][2]["kinds"]  # the API's own small battery cut isn't asked for: FlipAssist's is
+    assert (found["battery"], found["price"], found["cuts"]) == ({"figure": figure, "cut": cut}, round(200 * (1 + cut)),
+                                                                 ["battery"])
+
+
+def test_a_battery_at_80_or_more_isnt_cut():
+    found = prices.estimate("iPhone 13 128GB Blue", ["Battery health 81%"], opener=asking()[0],
+                            description="Battery health 81%")
+    assert "battery" not in found and found["kinds"] == []
+
+
+def test_the_battery_figure_comes_from_the_description_when_the_flaw_has_none():
+    found = prices.estimate("iPhone 13 128GB Blue", ["Battery needs a service"], opener=asking()[0],
+                            description="Battery needs a service. Battery health 73%.")
+    assert found["battery"] == {"figure": 73, "cut": -0.15}
+
+
+def test_battery_and_damage_cuts_are_taken_in_turn():
+    sentence = "cracked back and the battery is 75%"
+    found = prices.estimate("iphone 14", [sentence], opener=cutting(), description=sentence)
+    assert found["price"] == round(240 * 0.9 * (1 - 0.304))  # £150, the owner's example (was £160)
+
+
+def test_a_locked_ones_battery_isnt_cut_on_top():
+    found = prices.estimate("iphone 14", ["iCloud locked, battery 70%"], opener=cutting(),
+                            description="iCloud locked, battery 70%")
+    assert "battery" not in found and rows(found) == [(["iCloud locked"], ["lock"], "parts price", -0.708),
+                                                      (["Battery 70%"], ["battery"], "not on top", None)]
+
+
+@pytest.mark.parametrize("sentence, expected", [
+    # what isn't a flaw in its clause is left out, a word with no flaw goes with the flaw after it
+    ("No charger, small scratch on the back", [("Small scratch on the back", ["wear"])]),
+    ("Back glass smashed but everything works", [("Back glass smashed", ["damage"])]),
+    ("Cracked back and Face ID not working", [("Cracked back", ["damage"]), ("Face ID not working", ["fault"])]),
+    ("Screen cracked, face id not working and battery at 78%. Small scratches on the frame",
+     [("Screen cracked", ["damage"]), ("Face id not working", ["fault"]), ("Battery at 78%", ["battery"]),
+      ("Small scratches on the frame", ["wear"])]),
+    # one part that's two kinds stays whole, in both
+    ("Cracked screen with lines on the display", [("Cracked screen with lines on the display", ["damage", "fault"])]),
+])
+def test_a_flaw_sentence_is_split_into_the_flaws_code_finds_in_it(sentence, expected):
+    text = "iPhone 13 128GB. " + sentence
+    kinds = prices.kinds_of([sentence], text)
+    assert prices.split_flaw(sentence, kinds, lambda words: prices.kinds_of([words], text)) == expected
+
+
+def test_a_sentence_whose_parts_dont_give_all_its_kinds_stays_whole():
+    # flip-kinds said damage and a fault, and neither code nor flip-kinds finds the fault in a part
+    said = {"cracked back": ["damage"], "a funny thing": []}
+    parts = prices.split_flaw("cracked back and a funny thing", ["damage", "fault"],
+                              lambda words: said.get(words, []), lambda words: said.get(words, []))
+    assert parts == [("Cracked back and a funny thing", ["damage", "fault"])]
+
+
+@pytest.mark.parametrize("words, shown", [
+    ("iCloud locked, ", "iCloud locked"),
+    ("eSIM only", "eSIM only"),
+    (" and the battery is 75%.", "The battery is 75%"),
+    ("cracked back", "Cracked back"),
+])
+def test_a_flaws_words_are_tidied_without_losing_their_own_capitals(words, shown):
+    assert prices.tidy(words) == shown
+
+
+def test_the_apis_cuts_are_split_as_the_api_takes_them_and_only_when_its_table_makes_its_answer():
+    assert prices.api_cuts(["fault"], 0.83) == {"fault": pytest.approx(-0.17)}  # one kind: the API's whole answer
+    # 14 Oct review: the API takes the clean premium off once (1 / 1.05), then each kind's own number, so the
+    # premium goes with the first kind and wear after a fault adds nothing on top
+    assert prices.api_cuts(["fault", "wear"], 0.87 / 1.05) == {"fault": pytest.approx(-0.1714, abs=1e-4), "wear": None}
+    assert prices.api_cuts(["fault", "network lock"], 0.87 * 0.95 / 1.05) == {
+        "fault": pytest.approx(-0.1714, abs=1e-4), "network lock": pytest.approx(-0.05)}
+    assert prices.api_cuts(["fault", "wear"], 0.7) is None  # its table changed, or the for-parts floor: together
+
+
+def test_two_api_kinds_its_table_cant_split_are_one_row_together():
+    done = {"middle": 200, "price": 140, "cuts": ["battery", "wear"], "kinds": ["battery", "wear"]}
+    items = [("Battery at 70%", ["battery"], False), ("Scratches", ["wear"], False)]
+    assert prices.cut_rows(done, 140, items)["breakdown"] == [
+        {"kinds": ["battery", "wear"], "words": ["Battery at 70%", "Scratches"], "title": False,
+         "cut": pytest.approx(-0.3), "by": "api together"}]
+
+
+def test_a_locked_one_is_cut_once_for_the_lock_and_nothing_on_top():
+    found = prices.estimate("iphone 14", ["iCloud locked, screen smashed"], opener=cutting(),
+                            description="iCloud locked, screen smashed")
+    assert rows(found) == [(["iCloud locked"], ["lock"], "parts price", -0.708),
+                           (["Screen smashed"], ["damage"], "not on top", None)]
+    assert abs(made_by_rows(found) - found["price"]) < 1
+
+
+def test_the_titles_own_flaws_have_the_title_as_their_words():
+    found = prices.estimate("Faulty iPhone 14 128GB for parts", [], opener=cutting(), description="Collection only.")
+    # the for-parts price first, as it's the price; the fault the title gives isn't cut on top of it
+    assert [(r["kinds"], r["words"], r["title"], r["by"]) for r in found["breakdown"]] == [
+        (["parts"], ["Faulty iPhone 14 128GB for parts"], True, "parts price"),
+        (["fault"], ["Faulty iPhone 14 128GB for parts"], True, "not on top")]
+
+
+def test_what_isnt_cut_for_is_said_as_that():
+    found = prices.estimate("iphone 14", ["Charger missing"], opener=cutting(), description="Charger missing.")
+    assert (found["breakdown"], found["not_cut"]) == ([], ["Charger missing"])
+
+
+@pytest.mark.parametrize("sentence", [
+    "Screen cracked, face id not working and battery at 78%. Small scratches on the frame",
+    "Light scratches on the screen, back glass smashed but everything works",
+    "Locked to EE, small dent on the corner",
+    "Screen is not genuine and the battery is at 72%",
+    "Scratches and dents on the back and a cracked camera lens",
+])
+def test_the_rows_always_make_the_price(sentence):
+    found = prices.estimate("iphone 14", [sentence], opener=cutting(), description=sentence)
+    assert found["breakdown"] and abs(made_by_rows(found) - found["price"]) < 1
+    assert {k for r in found["breakdown"] for k in r["kinds"]} == set(found["kinds"])  # every kind said
+
+
+
+# ── 14 Oct review of the per-flaw rows and the battery cut ──────────────────────────────────────────────────────────
+
+def test_two_api_kinds_each_have_their_own_row_from_the_real_apis_answer():
+    sentence = "Face ID not working and locked to Vodafone"
+    found = prices.estimate("iPhone 14 128GB", [sentence], opener=cutting(), description=sentence)
+    assert rows(found) == [(["Face ID not working"], ["fault"], "api", -0.171),
+                           (["Locked to Vodafone"], ["network lock"], "api", -0.05)]
+    assert abs(made_by_rows(found) - found["price"]) < 1
+
+
+def test_wear_after_a_fault_adds_nothing_on_top_as_the_api_takes_it():
+    sentence = "Face ID not working and scratches on the back"
+    found = prices.estimate("iPhone 14 128GB", [sentence], opener=cutting(), description=sentence)
+    assert rows(found) == [(["Face ID not working"], ["fault"], "api", -0.171),
+                           (["Scratches on the back"], ["wear"], "api none", None)]
+
+
+def test_an_api_rows_cut_is_its_own_factor_not_its_rounded_prices():
+    # the API rounds its prices up to £5: a cheap phone's 4.8% wear cut can vanish (£50 and £50) or double
+    def opener(request, timeout):
+        return Response(json.dumps({**ANSWER, "middle": 50, "price": 50, "factor": 0.952, "used": ["wear"]}).encode())
+    found = prices.estimate("iPhone 8 64GB", ["Small scratches on the frame"], opener=opener,
+                            description="Small scratches on the frame")
+    assert rows(found) == [(["Small scratches on the frame"], ["wear"], "api", -0.048)]
+    assert "api_factor" not in found  # kept for the rows only
+
+
+@pytest.mark.parametrize("title, flaws, description, figure, cut", [
+    ("iPhone 13 128GB Battery 68%", [], "Unlocked, collection only.", 68, -0.2),  # only the title gives it
+    ("iPhone 13 128GB Battery 68%", ["The battery needs a service"], "The battery needs a service.", 68, -0.2),
+    ("iPhone 13 128GB", ["Battery health - 76%"], "Battery health - 76%", 76, -0.1),  # set apart from its label
+    ("iPhone 13 128GB", ["Battery health (68%)"], "Battery health (68%)", 68, -0.2),
+    ("iPhone 13 128GB", ["Battery health\n76%"], "Battery health\n76%", 76, -0.1),
+])
+def test_the_battery_figure_is_found_wherever_the_listing_gives_it(title, flaws, description, figure, cut):
+    found = prices.estimate(title, flaws, opener=cutting(), description=description)
+    assert found["battery"] == {"figure": figure, "cut": cut}
+
+
+def test_a_denied_list_closed_by_a_new_clause_is_still_denied():
+    # 14 Oct review: "...chips or dents BUT battery is 76%" was read as damage, a -30% cut
+    assert prices.kinds_of(["No cracks, chips or dents but battery is 76%"],
+                           "iPhone 13. No cracks, chips or dents but battery is 76%") == ["battery"]
+    assert prices.kinds_of(["No scratches, scuffs or marks but battery is 76%"],
+                           "iPhone 13. No scratches, scuffs or marks but battery is 76%") == ["battery"]
+    assert prices.kinds_of(["no scratches but a crack on the back"],
+                           "iPhone 13. no scratches but a crack on the back") == ["damage"]
+
+
+@pytest.mark.parametrize("sentence, words", [
+    ("Cracked on screen and back", ["Cracked on screen and back"]),  # the flaw goes on after "and"
+    ("Has bad lcd lines on the left and bottom of the screen", ["Has bad lcd lines on the left and bottom of the screen"]),
+    ("Normal wear and tear", ["Normal wear and tear"]),  # one flaw
+])
+def test_a_flaws_words_go_on_after_and(sentence, words):
+    text = "iPhone 13. " + sentence
+    kinds = prices.kinds_of([sentence], text)
+    assert [w for w, _ in prices.split_flaw(sentence, kinds, lambda w: prices.kinds_of([w], text))] == words

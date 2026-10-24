@@ -1121,6 +1121,17 @@ def one_slip_claim(word):
     return None
 
 
+# "no" (or "without") over a list of things that come with it, or of marks, with commas in it and ending "or" or "nor"
+# one: "no box, charger or cable", "no scratches, dents or cracks". Each item is one of those things, with up to two
+# words before it ("original box"), so a list never runs over "unlocked" or "works" ("no screen protector, unlocked,
+# works, no box, charger or cable" has its own "no box, charger or cable")
+LISTED = (r"(?:box(?:es)?|boxed|chargers?|adapt[eo]rs?|plugs?|cables?|leads?|cords?|cases?|covers?|protectors?|manuals?|"
+          r"instructions|paperwork|receipts?|invoices?|accessor(?:y|ies)|extras|earphones|headphones|tips|pouch(?:es)?|"
+          r"sleeves?|bags?|headsets?|scratch(?:es)?|scuffs?|dents?|cracks?|chips?|marks?|stickers?)")
+LIST_ITEM = rf"(?:(?!(?:no|not|or|nor|and)\b)[a-z]+ ){{0,2}}{LISTED}"
+NO_LIST = re.compile(rf"\b(?:no|without)\s+({LIST_ITEM}(?:\s*,\s*{LIST_ITEM})+\s*,?\s+(?:or|nor)\s+{LIST_ITEM})\b")
+
+
 def promises_in(text, typos=False):
     """Each claim the text makes, and whether it says yes or no to it.
 
@@ -1140,6 +1151,10 @@ def promises_in(text, typos=False):
         text = TYPED_WORD.sub(lambda m: as_meant(m.group()), text)
     # "box: yes" -> "box" ("box: no" is answered's)
     text = re.sub(r"\b([a-z]+(?: [a-z]+)?)\s*[:=\-–—]\s*(?:yes|yep|included)\s*(?=[,.;\n]|$)", r"\1", text)
+    # a "no" over a list with commas in it is a no to each: "no box, charger or cable" (14 Oct: read as a charger and a
+    # cable that come with it), "no scratches, dents or cracks"
+    text = NO_LIST.sub(lambda m: ", ".join(f"no {item}" for item in re.split(r"\s*,\s*(?:(?:or|nor)\s+)?|\s+(?:or|nor)\s+",
+                                                                         m.group(1)) if item), text)
     # read one part of a sentence at a time, so "no scratches, comes with box"
     # or "no scratches and comes with box" doesn't turn into "no box"
     for part in re.split(r"[,.;:!?\n()]|\bbut\b|\band\b(?= (?:comes|has|includes|included|with|is|boxed))", text):

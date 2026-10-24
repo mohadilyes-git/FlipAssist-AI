@@ -2,12 +2,12 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App, markShell, SETUP_DONE, THEME } from "../App";
-import type { Attempt, ListingDraft, MessageDraft, PriceEstimate, Style } from "../api";
+import type { Attempt, CutRow, ListingDraft, MessageDraft, PriceEstimate, Style } from "../api";
 import { Steps } from "../ui";
 import { ListingScreen } from "../screens/ListingScreen";
 import { HomeScreen, ollamaRows, paidRows, runningRows } from "../screens/HomeScreen";
 import { MessageScreen } from "../screens/MessageScreen";
-import { cautions, damageLine, itemName, PriceScreen, sortedBy } from "../screens/PriceScreen";
+import { cautions, cutWords, damageLine, itemName, poundsOff, PriceScreen, sortedBy } from "../screens/PriceScreen";
 
 const DRAFT: MessageDraft = {
   draft_id: 7, status: "ready", written_by: "template", kind: "lower", offer: "£185", offer_pence: 18500,
@@ -663,6 +663,127 @@ describe("AI UK price estimate", () => {
     expect(got.flaws).toMatch(/ · counted as parts, lock$/);
   });
 
+  // 14 Oct, the owner: "give real description like here we had 2 flaws". The card said "Damage counted as moderate:
+  // −30%" for a price cut 42%: now each flaw has its own row in the seller's words, with what it takes off in pounds.
+  const TWO_FLAWS: PriceEstimate = { ...PRICED, price: 139, middle: 239.6, low: 220, high: 255, sales: 24,
+    model: "iphone 14", asked_storage_gb: null, kinds: ["damage", "fault"], cuts: ["fault", "damage"],
+    flaws: ["cracked back and the balck dot in the front screen"], sorted_by: "flip-kinds-1",
+    damage: { level: "moderate", tier: "middle", cut: -0.304, rough: false, from: null, n: 191,
+      by: "code and Claude Haiku 5.5" },
+    breakdown: [
+      { kinds: ["damage"], words: ["Cracked back"], title: false, cut: -0.304, by: "damage" },
+      { kinds: ["fault"], words: ["The balck dot in the front screen"], title: false, cut: -0.171, by: "api" }],
+    not_cut: [] };
+
+  it("gives each flaw its own row in the seller's words, with what it takes off, adding up to the price", async () => {
+    const got = await check("iphone 14", "cracked back and the balck dot in the front screen", TWO_FLAWS);
+    expect(got.hero).toContain("−42%cut for its flaws");
+    const flaws = screen.getByLabelText("Flaws it found");
+    expect(within(flaws).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+      "Cracked back−£73Damage, counted as moderate: −30%. UK sellers ask about 30% less for a mid-priced iPhone with "
+        + "moderate damage (191 listings) · how bad: code and Claude Haiku 5.5",
+      "The balck dot in the front screen−£28Fault: −17%. UK sellers ask about 17% less for one with a fault (the "
+        + "AlertFlip API's cut)"]);
+    expect(screen.getByLabelText("How the cuts add up").textContent).toBe("£240 with no flaws − £73 − £28 = £139");
+    expect(flaws.textContent).toContain("Read by flip-reader-5 (on this device) · sorted by flip-kinds-1");
+    expect(flaws.textContent).not.toContain("Damage counted as moderate");  // the old line, said once for every flaw
+  });
+
+  it("works out each row's pounds so they always add up to the price", () => {
+    const row = (cut: number | null): CutRow => ({ kinds: ["wear"], words: ["x"], cut, by: cut == null ? null : "api" });
+    expect(poundsOff([row(-0.3), row(-0.17)], 240, 139)).toEqual([72, 29]);  // £240 → £168 → £139
+    expect(poundsOff([row(-0.304), row(null), row(-0.046)], 239.6, 159)).toEqual([73, null, 8]);  // £240 → £167 → £159
+    for (const [middle, price] of [[239.6, 139], [175, 150], [999.5, 412]]) {
+      const offs = poundsOff([row(-0.2), row(-0.1), row(-0.05)], middle, price);
+      expect(Math.round(middle) - offs.reduce((a: number, b) => a + (b ?? 0), 0)).toBe(price);
+    }
+  });
+
+  it("says what each kind of cut is, in plain words", () => {
+    const e = { ...TWO_FLAWS, damage: { ...TWO_FLAWS.damage!, rough: true, from: "the US", by: "Claude Sonnet 5.5" } };
+    const said = (row: Partial<CutRow>) => cutWords({ kinds: ["fault"], words: ["x"], cut: -0.171, by: "api", ...row }, e);
+    expect(said({ kinds: ["damage"], cut: -0.304, by: "damage" })).toBe("Damage, counted as moderate: −30%. US sellers "
+      + "ask about 30% less for a mid-priced iPhone with moderate damage (191 listings, rough: from US sales) · Claude "
+      + "Sonnet 5.5 decided how bad");
+    expect(said({ kinds: ["battery"], cut: -0.048 })).toBe("Worn battery (under 80% or needs a service): −5%. UK sellers "
+      + "ask about 5% less for one with a worn battery (the AlertFlip API's cut)");
+    expect(said({ kinds: ["battery", "wear"], cut: -0.093, by: "api together" })).toBe("Worn battery (under 80% or needs a "
+      + "service) and Wear: −9% together. UK sellers ask about 9% less for one with all of these (the AlertFlip API's cuts)");
+    expect(said({ kinds: ["lock"], cut: -0.71, by: "parts price" }))
+      .toBe("Locked: −71%, priced at what for-parts ones of this model sell for");
+    expect(said({ kinds: ["lock"], cut: -0.38, by: "lock" }))
+      .toBe("Locked: −38%, a rough cut (too few for-parts sales of this model to go on)");
+    expect(cutWords({ kinds: ["damage"], words: ["x"], cut: null, by: "not on top" }, { ...e, parts_price: true }))
+      .toBe("Damage: not cut on top of the for-parts price");
+  });
+
+  it("says the owner's battery cut, with the figure it went by", () => {
+    // 14 Oct, the owner: "make the battery cut bigger for under 80%", by how low it is
+    const rule = "FlipAssist's battery cut: 10% off at 75–79%, 15% at 70–74% or with no figure, 20% under 70%";
+    const row: CutRow = { kinds: ["battery"], words: ["The battery is 75%"], cut: -0.1, by: "battery" };
+    expect(cutWords(row, { ...TWO_FLAWS, battery: { figure: 75, cut: -0.1 } })).toBe(`Battery at 75%: −10%. ${rule}`);
+    expect(cutWords({ ...row, cut: -0.15 }, { ...TWO_FLAWS, battery: { figure: null, cut: -0.15 } }))
+      .toBe(`Worn battery, no figure given: −15%. ${rule}`);
+    // the battery cut is the owner's rule, not one measured on phones: no "rough for a MacBook" for it
+    expect(cautions({ ...PRICED, kind: "macbook", model: "macbook air 13 m1", ram_gb: 8, asked_ram_gb: 8, kinds: ["battery"],
+      cuts: ["battery"], battery: { figure: 75, cut: -0.1 } })).toEqual([]);
+  });
+
+  it("puts a locked one's price first and the flaws not cut on top after it, and names what wasn't cut for", async () => {
+    await check("iphone 14", "iCloud locked, screen smashed. No charger.", { ...TWO_FLAWS, price: 70, kinds: ["lock", "damage"],
+      cuts: [], parts_price: true, damage: null, flaws: ["iCloud locked, screen smashed.", "No charger."],
+      breakdown: [{ kinds: ["lock"], words: ["iCloud locked"], title: false, cut: 70 / 239.6 - 1, by: "parts price" },
+        { kinds: ["damage"], words: ["Screen smashed"], title: false, cut: null, by: "not on top" }],
+      not_cut: ["No charger"] });
+    const flaws = screen.getByLabelText("Flaws it found");
+    expect(within(flaws).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+      "iCloud locked−£170Locked: −71%, priced at what for-parts ones of this model sell for",
+      "Screen smashed–Damage: not cut on top of the for-parts price"]);
+    expect(screen.getByLabelText("How the cuts add up").textContent).toBe("£240 with no flaws − £170 = £70");
+    expect(flaws.textContent).toContain("Not cut for: No charger");
+  });
+
+  it("names a flaw only the title gives as the title's", async () => {
+    await check("iPhone 13 128GB cracked back", "Collection only from Leeds.", { ...PRICED, price: 190, middle: 220,
+      kinds: ["damage"], cuts: ["damage"], flaws: [], damage: { level: "moderate", tier: "middle", cut: -0.136,
+        rough: false, from: null, n: 191, by: "code" },
+      breakdown: [{ kinds: ["damage"], words: ["iPhone 13 128GB cracked back"], title: true, cut: -0.136, by: "damage" }] });
+    const flaws = screen.getByLabelText("Flaws it found");
+    expect(flaws.textContent).toContain("None quoted from the description.");
+    expect(within(flaws).getAllByRole("listitem")[0].textContent).toMatch(/^In the title: iPhone 13 128GB cracked back−£30/);
+  });
+
+  it("words each row as the cut was made (14 Oct review)", () => {
+    const row = (r: Partial<CutRow>): CutRow => ({ kinds: ["fault"], words: ["x"], cut: -0.171, by: "api", ...r });
+    // a Samsung's damage cut is borrowed from US listings: what US sellers ask, not UK ones
+    const samsung = { ...TWO_FLAWS, kind: "samsung", damage: { level: "moderate", tier: "middle", cut: -0.444, rough: true,
+      from: "the US (pooled with the bottom tier)", n: 17, by: "code" } };
+    expect(cutWords(row({ kinds: ["damage"], cut: -0.444, by: "damage" }), samsung)).toBe("Damage, counted as moderate: "
+      + "−44%. US sellers ask about 44% less for a mid-priced Samsung with moderate damage (17 listings, rough: from US "
+      + "sales) · how bad: code");
+    // no for-parts sales to go on: the API's rough cut for a locked one, which nothing is cut on top of
+    const locked = { ...TWO_FLAWS, parts_price: false, breakdown: [row({ kinds: ["lock"], cut: -0.38, by: "lock" }),
+      row({ kinds: ["damage"], cut: null, by: "not on top" })] };
+    expect(cutWords(locked.breakdown[1], locked)).toBe("Damage: not cut on top of the rough cut for a locked one");
+    expect(cutWords(locked.breakdown[1], { ...locked, parts_price: true }))
+      .toBe("Damage: not cut on top of the for-parts price");
+    // wear after a fault adds nothing on top, as the API takes it
+    expect(cutWords(row({ kinds: ["wear"], cut: null, by: "api none" }), TWO_FLAWS))
+      .toBe("Wear: no more off, as it's counted in the cut above (the AlertFlip API's way)");
+    // a MacBook's API cut was measured on phones
+    expect(cutWords(row({}), { ...TWO_FLAWS, kind: "macbook" })).toBe("Fault: −17%. UK sellers ask about 17% less for "
+      + "one with a fault (the AlertFlip API's cut, measured on phones)");
+  });
+
+  it("shows a cut that rounds to nothing as a dash, and leaves it out of the sum", async () => {
+    await check("iPhone 8 64GB", "Small scratches on the frame", { ...PRICED, price: 50, middle: 50, low: 45, high: 55,
+      kinds: ["wear"], cuts: ["wear"], damage: null, flaws: ["Small scratches on the frame"],
+      breakdown: [{ kinds: ["wear"], words: ["Small scratches on the frame"], title: false, cut: -0.048, by: "api" }] });
+    const flaws = screen.getByLabelText("Flaws it found");
+    expect(within(flaws).getAllByRole("listitem")[0].textContent).toMatch(/^Small scratches on the frame–Wear: −5%/);
+    expect(screen.queryByLabelText("How the cuts add up")).toBeNull();
+  });
+
   it("warns of few sales when the listing gives no size, however few", () => {
     const sizeless = { ...PRICED, asked_storage_gb: null, kinds: [], cuts: [], flaws: [] };
     const which = "Couldn't find the storage in the listing: priced as a 128GB one, the size that sells most";
@@ -694,7 +815,8 @@ describe("AI UK price estimate", () => {
       + "flaw-sorting model on this device, "
       + "sorts each flaw into a kind (code's rules do when it isn't installed), and the price is cut by amounts measured on phone listings: any flaw takes a small cut, faults cut the most, "
       + "and different kinds' cuts multiply. Damage is cut by how bad it is (minor, moderate or severe) and how pricey the "
-      + "model is, as measured on 1,697 damaged iPhone, Samsung and MacBook listings. A locked or for-parts one is priced at what for-parts ones of the same model "
+      + "model is, as measured on 1,697 damaged iPhone, Samsung and MacBook listings. A worn battery is cut by how low its "
+      + "health is, as it has to be replaced. A locked or for-parts one is priced at what for-parts ones of the same model "
       + "and size sell for, or at a rough guess when too few have sold, with its other flaws not cut on top.");
     expect(step).not.toMatch(/\d\s?%|per ?cent/);  // the prices API's cut table is its own and can change
   });
