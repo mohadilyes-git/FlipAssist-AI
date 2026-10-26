@@ -200,7 +200,8 @@ export function App() {
                   <div className="screen" hidden={tab !== "message"}><MessageScreen onApproved={loadStyle} /></div>
                   <div className="screen" hidden={tab !== "price"}><PriceScreen /></div>
                   <div className="screen" hidden={tab !== "listing"}>
-                    <ListingScreen writer={running && running !== "down" ? running.listing_model : undefined} />
+                    <ListingScreen writer={running && running !== "down" ? running.listing_model : undefined}
+                      reader={running && running !== "down" ? running.listing_reader : undefined} />
                   </div>
                   {tab === "home" && <HomeScreen go={go} count={count} running={running} reload={loadRunning} />}
                   {tab === "style" && (

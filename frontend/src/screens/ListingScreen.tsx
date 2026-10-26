@@ -21,8 +21,9 @@ const FACTS = ["brand", "model", "storage", "network", "colour", "battery"];
 const FACT_NAMES: Record<string, string> = { battery: "Battery health" };
 const FACT_UNITS: Record<string, string> = { battery: "%" };
 
-/** writer: who writes the draft first, as /health says (Claude Haiku 5.5 in the app since 14 Oct). */
-export function ListingScreen({ writer }: { writer?: string } = {}) {
+/** writer: who writes the draft first, as /health says (Claude Haiku 5.5 in the app since 14 Oct); reader: the model
+ * that reads your notes for it, when the writer phrases what that found (flip-reader-5, 14 Oct). */
+export function ListingScreen({ writer, reader }: { writer?: string; reader?: string } = {}) {
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
@@ -141,8 +142,9 @@ export function ListingScreen({ writer }: { writer?: string } = {}) {
               <span className="tile"><TagIcon size={20} /></span>
               <strong>Your eBay draft shows here</strong>
               <p className="sub">For iPhones only. Add photos and your notes, then Draft listing. Code fills the specs,
-                and {writer?.startsWith("claude") ? `${modelName(writer)} (${modelName("claude-sonnet-5-5")} if a check fails)`
-                  : modelName(writer || "gemma3:4b")} writes the rest from your notes.</p>
+                {reader ? ` ${modelName(reader)} reads your notes,` : ""} and {writer?.startsWith("claude")
+                  ? `${modelName(writer)} (${modelName("claude-sonnet-5-5")} if a check fails)`
+                  : modelName(writer || "gemma3:4b")} writes the rest from {reader ? "what it found" : "your notes"}.</p>
             </div>
           )}
         </div>

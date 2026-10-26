@@ -223,6 +223,9 @@ export type Health = {
   /** who writes List on eBay's draft first: "claude-haiku-5-5" (Claude Sonnet 5.5 when it fails the checks, 14 Oct)
    * or this device's model (FLIP_LISTING_WRITER=gemma) */
   listing_model?: string;
+  /** the model that reads your notes for it, which then phrases what that found ("flip-reader-5", 14 Oct); empty when
+   * the writer reads your notes itself (FLIP_LISTING_WRITER=notes) */
+  listing_reader?: string;
   flip_api_key_set: boolean;
   /** the models Ollama is asked for, by job, and whether this device has each (empty when Ollama isn't running) */
   models?: { job: string; name: string; installed: boolean }[];

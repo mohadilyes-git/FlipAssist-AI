@@ -1110,3 +1110,13 @@ def test_new_said_of_what_comes_with_it_isnt_the_phones_condition(notes, conditi
 ])
 def test_a_no_over_a_list_with_commas_is_a_no_to_each(notes, expected):
     assert promises_in(notes, typos=True) == expected
+
+
+@pytest.mark.parametrize("text", ["There is a black dot on the front screen.", "Small white pixels in one corner.",
+                                  "A green stripe down the display.", "A purple patch near the top."])
+def test_a_colour_said_of_a_mark_isnt_the_phones_colour(text):
+    # 14 Oct: a writer fixed "balck dot" to "black dot", and the check refused it as a Midnight iPhone's colour
+    item = fill_from_catalogue("iPhone 14 128GB Midnight", "", load_catalogue())
+    assert not [p for p in check_listing_answer({"condition_id": "3000", "condition_note": text, "description": text},
+                                                item, load_catalogue(), load_conditions()["phones"], "", "")
+                if "colour" in p]

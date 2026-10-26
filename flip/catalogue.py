@@ -67,7 +67,11 @@ NOT_ITEM_COLOUR = {"case", "cases", "cover", "covers", "bumper", "skin", "strap"
                    "spots", "tint", "mark", "marks", "screen", "display", "light", "cable", "cables",
                    "charger", "lead", "box", "controller", "controllers", "pad", "pads", "dock", "stand",
                    "sleeve", "pouch", "bag", "faceplate", "faceplates", "plates", "shell", "shells", "panels",
-                   "wear", "signs", "use"}
+                   "wear", "signs", "use",
+                   # a mark on the screen or body (14 Oct: "a black dot on the front screen" was read as the colour)
+                   "dot", "dots", "patch", "patches", "pixel", "pixels", "stain", "stains", "smudge", "smudges",
+                   "shadow", "shadows", "blob", "blobs", "bar", "bars", "stripe", "stripes", "blotch", "blotches",
+                   "area", "areas", "burn", "bleed", "discolouration", "discoloration"}
 # words that can sit between a colour and what it describes: "pink SILICONE case"
 DESCRIBING_WORDS = {"silicone", "leather", "clear", "protective", "phone", "rubber", "magsafe", "plastic",
                     "hard", "soft", "glitter", "wallet", "flip", "official", "apple", "genuine", "original",

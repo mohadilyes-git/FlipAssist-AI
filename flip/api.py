@@ -45,6 +45,7 @@ from flip.draft import load_env
 from flip.kinds import model_name as kinds_model, sorter as kinds_sorter
 from flip.prices import estimate, kind_of, settings as prices_settings
 from flip.drafter import draft_listing
+from flip.listing_code import PhrasingWriter
 from flip.message_drafter import MESSAGE_TOKENS, Refused, draft_message, offer_to_draft
 from flip.offers import check_battery_reason, check_condition_talk
 from flip.style_ai import MODEL as STYLE_MODEL
@@ -334,6 +335,9 @@ class Health(BaseModel):
     prices_api_set: bool = Field(False, description="the AlertFlip prices API (fresh UK sales) has its URL and key in .env")
     listing_model: str = Field("", description="who writes List on eBay's draft first: claude-haiku-5-5 (Claude Sonnet "
                                                "5.5 when it fails the checks), or the local model (FLIP_LISTING_WRITER)")
+    listing_reader: str = Field("", description="the model that reads your notes for List on eBay's writer, which "
+                                                "phrases what it found (flip-reader-5, 14 Oct); empty when the writer "
+                                                "reads them itself")
     flip_api_key_set: bool = Field(description=f"the key callers need is set, {MIN_KEY} characters or more; "
                                                 "without it every call is refused")
     models: list[ModelState] = Field(default_factory=list, description="the models Ollama is asked for, by job, and "
@@ -347,9 +351,12 @@ class Setup:
     """The models, the audit log and the catalogue: made once, on the first call that needs them."""
 
     def __init__(self, local, api, log, local_listing=None, reader=None, wording=None, kinds=None, judge=None,
-                 listing=None):
+                 listing=None, listing_facts=False):
         self.local, self.api, self.log = local, api, log
         self.listing = listing  # what writes List on eBay's draft first: a model, or a function giving one (None: local)
+        # whether it's given flip-reader-5's facts to phrase (a function asked each draft, or True/False): the app's way
+        # since 14 Oct (listing_from_facts); a model's own reading of the notes when False
+        self.listing_facts = listing_facts
         self.judge = judge  # how bad the damage is: "settings" in the app (the hybrid, flip.severity), None: code alone
         self.kinds = kinds  # what sorts a price's flaws: a sorter, or a function that gives one (None: code sorts)
         self.wording = wording  # the reason's models (flip.wording): "settings" in the app, None (off) unless given
@@ -366,8 +373,12 @@ class Setup:
 
     def listing_model(self):
         """What writes List on eBay's condition note and description first: Claude Haiku 5.5 in the app (14 Oct,
-        listing_writer), else the local model that writes listings (Gemma 3 4B)."""
+        listing_writer), phrasing the facts flip-reader-5 and code pull out of your notes (flip.listing_code
+        .PhrasingWriter, listing_from_facts), else the local model that writes listings (Gemma 3 4B)."""
         found = self.listing() if callable(self.listing) else self.listing
+        facts = self.listing_facts() if callable(self.listing_facts) else self.listing_facts
+        if found is not None and facts:
+            return PhrasingWriter(found, self.reading_model(), self.flaw_sorter(), self.log)
         return found or self.local_listing
 
     def flaw_sorter(self):
@@ -388,7 +399,8 @@ def setup():
     api = ApiModel(backup_model()) if os.environ.get("ANTHROPIC_API_KEY") else None
     local = LocalModel(max_tokens=MESSAGE_TOKENS)
     return Setup(local, api, audit(), LocalModel(), reader=lambda: reader_for(local), wording="settings",
-                 kinds=lambda: kinds_sorter(local.url), judge="settings", listing=listing_writer)
+                 kinds=lambda: kinds_sorter(local.url), judge="settings", listing=listing_writer,
+                 listing_facts=listing_from_facts)
 
 
 LISTING_WRITER = "claude-haiku-5-5"
@@ -403,6 +415,19 @@ def listing_writer_name():
     if os.environ.get("FLIP_LISTING_WRITER", "").strip().lower() == "gemma" or not os.environ.get("ANTHROPIC_API_KEY"):
         return LocalModel().name
     return LISTING_WRITER
+
+
+def listing_from_facts():
+    """Whether Claude Haiku 5.5 writes List on eBay's draft from the facts flip-reader-5 and code pull out of your notes
+    (14 Oct 2026, the owner: "what if we make gemma 4b make the ebay description"; Gemma 3 4B and Claude Haiku 5.5
+    tested as the phraser). Judged blind by two judges on the same 40 real iPhones, as the app shows them (a draft that
+    fails the checks or leaves a fact out goes to Claude Sonnet 5.5): Haiku phrasing the facts 95% postable as is, 2%
+    saying something the notes don't, 5% leaving a note out, 0.040p a listing; Haiku from the notes 90%, 2%, 26%,
+    0.036p; Gemma 3 4B phrasing the facts 69%, 18%, 8%, 0.153p (Sonnet rewrote 22 of 40: Gemma made up marks).
+    FLIP_LISTING_WRITER=notes in .env goes back to Haiku reading the notes itself; gemma (or no Anthropic key) to
+    Gemma 3 4B."""
+    return listing_writer_name() == LISTING_WRITER and \
+        os.environ.get("FLIP_LISTING_WRITER", "").strip().lower() not in ("notes", "gemma")
 
 
 def listing_writer():
@@ -558,6 +583,7 @@ def health():
     return Health(local_model=local.name, local_running=running, api_model=backup_model(),
                   api_key_set=bool(os.environ.get("ANTHROPIC_API_KEY")), check_model=names["check"],
                   fix_model=names["fix"], prices_api_set=all(prices_settings()), listing_model=listing_writer_name(),
+                  listing_reader=(reader_name() or "") if listing_from_facts() else "",
                   flip_api_key_set=bool(usable_key()), models=models)
 
 
@@ -632,7 +658,8 @@ def draft_a_listing(title: str = Form(min_length=1, max_length=300, description=
             except (OSError, ValueError, subprocess.CalledProcessError):
                 raise HTTPException(422, f"{name}: can't be read as a photo")
     entry = {"id": id or new_id(), "original_title": title, "my_notes": notes}
-    # auto: Claude Haiku 5.5 first in the app (listing_writer), Claude Sonnet 5.5 if it fails; local: this device only
+    # auto: Claude Haiku 5.5 first in the app, phrasing flip-reader-5's facts (listing_writer, listing_from_facts), Claude
+    # Sonnet 5.5 if it fails the checks or leaves a fact out; local: this device only
     first = s.listing_model() if mode == "auto" else s.local_listing
     result = draft_listing(entry, s.catalogue, s.conditions, first, s.api, mode, encoded, s.log)
     answer, item = result["answer"] or {}, result["item"]
