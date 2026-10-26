@@ -21,8 +21,8 @@ import re
 import time
 
 from flip.ai import Reply
-from flip.checks import (FOR_PARTS, MAX_CONDITION_NOTE, MAX_DESCRIPTION, NO_LIST, WORKING_PARTS, check_mark_places,
-                         promises_in, works_said)
+from flip.checks import (FOR_PARTS, MAX_CONDITION_NOTE, MAX_DESCRIPTION, NO_LIST, UNSURE, WORKING_PARTS,
+                         check_mark_places, promises_in, works_said)
 from flip.offers import battery_now
 from flip.prices import flaw_items, kinds_of, sorted_each, tidy
 from flip.reader import parts_of, read_listing_with_ai
@@ -93,7 +93,7 @@ class ReaderCodeWriter:
     def __init__(self, reader, sorter=None, log=None):
         self.reader, self.sorter, self.log = reader, sorter, log
 
-    def write(self, entry, item, model, condition):
+    def write(self, entry, item, model, condition, photos=()):
         """The Reply a writing model would give: the condition note and description from your title and notes, the
         colour "unsure" when code couldn't fill it (the photos are for a model to look at)."""
         started = time.monotonic()
@@ -311,8 +311,11 @@ Rules:
    with it and what doesn't.
 4. Never mention the seller, notes, facts, a checklist or photos. No prices, no contact details, no specs such as screen
    size or chip.
+5. colour (only when asked): the phone's own colour in the photos, one of the list given. If the photos don't show the
+   phone's own colour clearly (dark, blurry, in a case), answer "unsure". The photos are for the colour only: say
+   nothing else they show.
 
-Answer with JSON only: {"condition_note": "...", "description": "..."}"""
+Answer with JSON only: {"condition_note": "...", "description": "..."}, with "colour" too when it's asked for."""
 FACTS_SCHEMA = {"type": "object", "properties": {"condition_note": {"type": "string"}, "description": {"type": "string"}},
                 "required": ["condition_note", "description"], "additionalProperties": False}
 CONDITION_NAMES = {"1000": "New", "1500": "Opened - never used", "3000": "Used", FOR_PARTS: "For parts or not working"}
@@ -389,11 +392,22 @@ class PhrasingWriter:
         self.name = f"{phraser.name} + facts"
         self.last_facts, self.last_missing = None, []
 
-    def write(self, entry, item, model, condition):
+    def write(self, entry, item, model, condition, photos=()):
+        """The draft, phrased from the facts. When code couldn't fill the colour and there are photos, the phraser picks
+        it from them in the same call (as the writer did before the facts, 14 Oct): never a second, dearer look."""
         started = time.monotonic()
         flaws, notes, text = read_flaws(entry, self.reader, self.sorter, self.log)
         facts = facts_of(item, model, condition, flaws, notes, text)
-        reply = self.phraser.ask(FACTS_SYSTEM, facts_text(facts), [], FACTS_SCHEMA)
+        look = bool(photos) and not item.get("colour")
+        told = facts_text(facts)
+        schema = FACTS_SCHEMA
+        if look:
+            colours = [*(model or {}).get("colours", []), UNSURE]
+            told += f"\nColour: not known. Pick the phone's own colour from the photos, one of: {', '.join(colours)}"
+            schema = {**FACTS_SCHEMA, "properties": {**FACTS_SCHEMA["properties"],
+                                                     "colour": {"type": "string", "enum": colours}},
+                      "required": [*FACTS_SCHEMA["required"], "colour"]}
+        reply = self.phraser.ask(FACTS_SYSTEM, told, list(photos) if look else [], schema)
         self.last_facts, self.last_missing = facts, []
         if reply.answer is None:
             return reply
@@ -406,7 +420,7 @@ class PhrasingWriter:
                          tokens_in=reply.tokens_in, tokens_out=reply.tokens_out, tokens_cached=reply.tokens_cached,
                          tokens_cache_write=reply.tokens_cache_write, seconds=round(time.monotonic() - started, 2))
         if not item.get("colour"):
-            answer["colour"] = "unsure"
+            answer["colour"] = str(reply.answer.get("colour") or UNSURE) if look else UNSURE
         return Reply(model=reply.model, answer=answer, tokens_in=reply.tokens_in, tokens_out=reply.tokens_out,
                      seconds=round(time.monotonic() - started, 2), tokens_cached=reply.tokens_cached,
                      tokens_cache_write=reply.tokens_cache_write)

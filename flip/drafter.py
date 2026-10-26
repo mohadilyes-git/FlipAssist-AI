@@ -57,7 +57,7 @@ def draft_listing(entry, catalogue, conditions, local=None, api=None, mode="auto
     result["answer"] = try_models(
         mode, {"local": local, "api": api},
         # a writer that's code (flip.listing_code: flip-reader-5 reads, code writes) is given the facts, not a prompt
-        ask=lambda ai: ai.write(entry, item, model, condition) if hasattr(ai, "write")
+        ask=lambda ai: ai.write(entry, item, model, condition, list(photos)) if hasattr(ai, "write")
         else ai.ask(system, user, list(photos), schema),
         check=lambda answer: check_listing_answer(answer, item, catalogue, allowed, sources, notes),
         result=result, log=log, job="listing")  # its own job in the audit log: Home says "writing the eBay listing"

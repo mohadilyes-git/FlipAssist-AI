@@ -249,6 +249,21 @@ def test_a_draft_that_leaves_a_fact_out_goes_to_the_paid_backup(client):
         ("claude-haiku-5-5", ["it left out what your notes say: box"]), ("claude-sonnet-5-5", [])]
 
 
+def test_the_phraser_picks_the_colour_from_the_photos_in_the_same_call(client):
+    # the photos are for the colour only, and only when the title and notes don't name it: Haiku looks as it phrases,
+    # never a second look by Claude Sonnet 5.5 (20 times the price)
+    no_colour = {**PHRASED, "colour": "Blue", "description": PHRASED["description"].replace(", in Midnight", "")}
+    haiku = FakeModel("claude-haiku-5-5", no_colour)
+    client.use(local=FakeModel("gemma3:4b"), api_model=FakeModel("claude-sonnet-5-5", {"colour": "Red"}),
+               listing=haiku, listing_facts=True, reader=FakeModel("flip-reader-5", READ_NOTES))
+    draft = client.post("/listings/draft", data={**FORM, "title": "iPhone 13 128GB unlocked"},
+                        files=[("photos", ("back.jpg", JPEG, "image/jpeg"))]).json()
+    assert (draft["colour"], draft["colour_from"], draft["colour_by"]) == ("Blue", "photos", "claude-haiku-5-5")
+    assert [a["model"] for a in draft["attempts"]] == ["claude-haiku-5-5"] and len(haiku.asked[0]["photos"]) == 1
+    assert haiku.asked[0]["user"].endswith("Colour: not known. Pick the phone's own colour from the photos, one of: "
+                                           "Midnight, Starlight, Blue, Pink, Green, (PRODUCT)RED, unsure")
+
+
 def test_the_app_phrases_the_facts_unless_set_back(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "pretend-anthropic-key")
     monkeypatch.delenv("FLIP_LISTING_WRITER", raising=False)
