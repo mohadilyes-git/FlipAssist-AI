@@ -1,0 +1,240 @@
+{
+ "about": "What each iPhone model's official colours look like on the phone (its back and frame; the screen is black when off), for the AI that picks the colour from the photos (14 Oct 2026). Every catalogue iPhone has every one of its colours here (tests/test_prompts.py).",
+ "models": {
+  "iphone-se-1": {
+   "Space Grey": "dark grey metal back, black front",
+   "Silver": "light silver metal back, white front",
+   "Gold": "pale gold metal back, white front",
+   "Rose Gold": "pinkish gold metal back, white front"
+  },
+  "iphone-se-2": {
+   "White": "white glass back",
+   "Black": "black glass back",
+   "(PRODUCT)RED": "bright red back"
+  },
+  "iphone-se-3": {
+   "Midnight": "near-black back with a dark blue tint",
+   "Starlight": "warm off-white back with a light champagne tint",
+   "(PRODUCT)RED": "bright red back"
+  },
+  "iphone-8": {
+   "Gold": "pale pinkish-gold glass back, white front",
+   "Silver": "white glass back, white front",
+   "Space Grey": "black glass back, black front",
+   "(PRODUCT)RED": "bright red glass back, black front"
+  },
+  "iphone-8-plus": {
+   "Gold": "pale pinkish-gold glass back, white front",
+   "Silver": "white glass back, white front",
+   "Space Grey": "black glass back, black front",
+   "(PRODUCT)RED": "bright red glass back, black front"
+  },
+  "iphone-x": {
+   "Silver": "white glass back, shiny silver steel frame",
+   "Space Grey": "black glass back, dark steel frame"
+  },
+  "iphone-xr": {
+   "Black": "black back and frame",
+   "White": "white back, white-silver frame",
+   "Blue": "light sky-blue back and frame",
+   "Yellow": "bright yellow back and frame",
+   "Coral": "orange-pink back and frame",
+   "(PRODUCT)RED": "bright red back and frame"
+  },
+  "iphone-xs": {
+   "Silver": "white glass back, shiny silver steel frame",
+   "Space Grey": "black glass back, dark steel frame",
+   "Gold": "pale cream-gold glass back, shiny gold steel frame"
+  },
+  "iphone-xs-max": {
+   "Silver": "white glass back, shiny silver steel frame",
+   "Space Grey": "black glass back, dark steel frame",
+   "Gold": "pale cream-gold glass back, shiny gold steel frame"
+  },
+  "iphone-11": {
+   "Purple": "pale lavender back and frame",
+   "Green": "pale mint-green back and frame",
+   "Yellow": "pale yellow back and frame",
+   "Black": "black back and frame",
+   "White": "white back and frame",
+   "(PRODUCT)RED": "bright red back and frame"
+  },
+  "iphone-11-pro": {
+   "Silver": "matte white back, silver steel frame",
+   "Space Grey": "matte dark grey back, dark steel frame",
+   "Gold": "matte pale cream-gold back, gold steel frame",
+   "Midnight Green": "matte dark grey-green back, dark green steel frame"
+  },
+  "iphone-11-pro-max": {
+   "Silver": "matte white back, silver steel frame",
+   "Space Grey": "matte dark grey back, dark steel frame",
+   "Gold": "matte pale cream-gold back, gold steel frame",
+   "Midnight Green": "matte dark grey-green back, dark green steel frame"
+  },
+  "iphone-12": {
+   "Black": "black back and frame",
+   "White": "white back and frame",
+   "(PRODUCT)RED": "bright red back and frame",
+   "Green": "light green back and frame",
+   "Blue": "strong mid-blue back and frame",
+   "Purple": "pale lavender back and frame"
+  },
+  "iphone-12-mini": {
+   "Black": "black back and frame",
+   "White": "white back and frame",
+   "(PRODUCT)RED": "bright red back and frame",
+   "Green": "light green back and frame",
+   "Blue": "strong mid-blue back and frame",
+   "Purple": "pale lavender back and frame"
+  },
+  "iphone-12-pro": {
+   "Silver": "matte white back, silver steel frame",
+   "Graphite": "matte dark grey back, dark grey steel frame",
+   "Gold": "matte pale gold back, shiny gold frame",
+   "Pacific Blue": "matte deep navy-blue back, blue frame"
+  },
+  "iphone-12-pro-max": {
+   "Silver": "matte white back, silver steel frame",
+   "Graphite": "matte dark grey back, dark grey steel frame",
+   "Gold": "matte pale gold back, shiny gold frame",
+   "Pacific Blue": "matte deep navy-blue back, blue frame"
+  },
+  "iphone-13": {
+   "Midnight": "near-black back with a dark blue tint",
+   "Starlight": "warm off-white back with a champagne tint",
+   "Blue": "mid sky-blue back and frame",
+   "Pink": "soft pale pink back and frame",
+   "Green": "dark muted green back and frame",
+   "(PRODUCT)RED": "bright red back and frame"
+  },
+  "iphone-13-mini": {
+   "Midnight": "near-black back with a dark blue tint",
+   "Starlight": "warm off-white back with a champagne tint",
+   "Blue": "mid sky-blue back and frame",
+   "Pink": "soft pale pink back and frame",
+   "Green": "dark muted green back and frame",
+   "(PRODUCT)RED": "bright red back and frame"
+  },
+  "iphone-13-pro": {
+   "Graphite": "matte dark grey back, dark grey steel frame",
+   "Gold": "matte pale gold back, gold frame",
+   "Silver": "matte white back, silver steel frame",
+   "Sierra Blue": "matte light sky-blue back and frame",
+   "Alpine Green": "matte dark forest-green back and frame"
+  },
+  "iphone-13-pro-max": {
+   "Graphite": "matte dark grey back, dark grey steel frame",
+   "Gold": "matte pale gold back, gold frame",
+   "Silver": "matte white back, silver steel frame",
+   "Sierra Blue": "matte light sky-blue back and frame",
+   "Alpine Green": "matte dark forest-green back and frame"
+  },
+  "iphone-14": {
+   "Midnight": "near-black back with a dark blue tint",
+   "Starlight": "warm off-white back with a champagne tint",
+   "Blue": "light blue back and frame",
+   "Purple": "light lavender-purple back and frame",
+   "Yellow": "pale yellow back and frame",
+   "(PRODUCT)RED": "bright red back and frame"
+  },
+  "iphone-14-plus": {
+   "Midnight": "near-black back with a dark blue tint",
+   "Starlight": "warm off-white back with a champagne tint",
+   "Blue": "light blue back and frame",
+   "Purple": "light lavender-purple back and frame",
+   "Yellow": "pale yellow back and frame",
+   "(PRODUCT)RED": "bright red back and frame"
+  },
+  "iphone-14-pro": {
+   "Space Black": "matte very dark grey-black back, dark steel frame",
+   "Silver": "matte white back, silver steel frame",
+   "Gold": "matte warm cream-gold back, gold frame",
+   "Deep Purple": "matte dark muted grey-purple back and frame"
+  },
+  "iphone-14-pro-max": {
+   "Space Black": "matte very dark grey-black back, dark steel frame",
+   "Silver": "matte white back, silver steel frame",
+   "Gold": "matte warm cream-gold back, gold frame",
+   "Deep Purple": "matte dark muted grey-purple back and frame"
+  },
+  "iphone-15": {
+   "Black": "frosted very dark grey-black back",
+   "Blue": "frosted very pale blue back",
+   "Green": "frosted very pale green back",
+   "Yellow": "frosted very pale yellow back",
+   "Pink": "frosted pale pink back"
+  },
+  "iphone-15-plus": {
+   "Black": "frosted very dark grey-black back",
+   "Blue": "frosted very pale blue back",
+   "Green": "frosted very pale green back",
+   "Yellow": "frosted very pale yellow back",
+   "Pink": "frosted pale pink back"
+  },
+  "iphone-15-pro": {
+   "Black Titanium": "very dark grey back, dark titanium frame",
+   "White Titanium": "white back, light grey titanium frame",
+   "Blue Titanium": "dark slate blue-grey back and frame",
+   "Natural Titanium": "light silver-grey back, plain grey titanium frame"
+  },
+  "iphone-15-pro-max": {
+   "Black Titanium": "very dark grey back, dark titanium frame",
+   "White Titanium": "white back, light grey titanium frame",
+   "Blue Titanium": "dark slate blue-grey back and frame",
+   "Natural Titanium": "light silver-grey back, plain grey titanium frame"
+  },
+  "iphone-16": {
+   "Black": "dark grey-black back and frame",
+   "White": "white back and frame",
+   "Pink": "bright pastel pink back",
+   "Teal": "blue-green back",
+   "Ultramarine": "bright violet-blue back"
+  },
+  "iphone-16-plus": {
+   "Black": "dark grey-black back and frame",
+   "White": "white back and frame",
+   "Pink": "bright pastel pink back",
+   "Teal": "blue-green back",
+   "Ultramarine": "bright violet-blue back"
+  },
+  "iphone-16e": {
+   "Black": "matte black back and frame",
+   "White": "matte white back and frame"
+  },
+  "iphone-16-pro": {
+   "Black Titanium": "very dark grey back, dark titanium frame",
+   "White Titanium": "white back, light titanium frame",
+   "Natural Titanium": "light grey back, plain grey titanium frame",
+   "Desert Titanium": "sandy beige-gold back and frame"
+  },
+  "iphone-16-pro-max": {
+   "Black Titanium": "very dark grey back, dark titanium frame",
+   "White Titanium": "white back, light titanium frame",
+   "Natural Titanium": "light grey back, plain grey titanium frame",
+   "Desert Titanium": "sandy beige-gold back and frame"
+  },
+  "iphone-17": {
+   "Black": "black back and frame",
+   "White": "white back and frame",
+   "Mist Blue": "pale grey-blue back and frame",
+   "Sage": "pale grey-green back and frame",
+   "Lavender": "pale lilac back and frame"
+  },
+  "iphone-air": {
+   "Space Black": "black back and dark frame",
+   "Cloud White": "white back, light frame",
+   "Light Gold": "pale gold back and frame",
+   "Sky Blue": "pale blue back and frame"
+  },
+  "iphone-17-pro": {
+   "Silver": "silver-white back and frame",
+   "Cosmic Orange": "bright orange back and frame",
+   "Deep Blue": "dark navy-blue back and frame"
+  },
+  "iphone-17-pro-max": {
+   "Silver": "silver-white back and frame",
+   "Cosmic Orange": "bright orange back and frame",
+   "Deep Blue": "dark navy-blue back and frame"
+  }
+ }
+}

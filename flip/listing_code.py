@@ -25,6 +25,7 @@ from flip.checks import (FOR_PARTS, MAX_CONDITION_NOTE, MAX_DESCRIPTION, NO_LIST
                          check_mark_places, promises_in, works_said)
 from flip.offers import battery_now
 from flip.prices import flaw_items, kinds_of, sorted_each, tidy
+from flip.prompts import COLOUR_HOW, SEEN_ON, colour_guide, colour_seen
 from flip.reader import parts_of, read_listing_with_ai
 
 NAME = "flip-reader-5 + code"
@@ -311,11 +312,14 @@ Rules:
    with it and what doesn't.
 4. Never mention the seller, notes, facts, a checklist or photos. No prices, no contact details, no specs such as screen
    size or chip.
-5. colour (only when asked): the phone's own colour in the photos, one of the list given. If the photos don't show the
-   phone's own colour clearly (dark, blurry, in a case), answer "unsure". The photos are for the colour only: say
-   nothing else they show.
+5. colour (only when asked): the phone's own colour in the photos, one of the list given (each with how it looks on
+   this model). Judge it by the phone's back and its frame (the edges): the screen is black when it's off, so it
+   doesn't count, and nor do a case, a skin, the wallpaper, the box or anything around the phone. If the photos don't
+   show the phone's own colour clearly (dark, blurry, in a case), answer "unsure". colour_seen_on: where you saw it
+   (back, frame, back and frame, or not shown). The photos are for the colour only: say nothing else they show.
 
-Answer with JSON only: {"condition_note": "...", "description": "..."}, with "colour" too when it's asked for."""
+Answer with JSON only: {"condition_note": "...", "description": "..."}, with "colour" and "colour_seen_on" too when the
+colour is asked for."""
 FACTS_SCHEMA = {"type": "object", "properties": {"condition_note": {"type": "string"}, "description": {"type": "string"}},
                 "required": ["condition_note", "description"], "additionalProperties": False}
 CONDITION_NAMES = {"1000": "New", "1500": "Opened - never used", "3000": "Used", FOR_PARTS: "For parts or not working"}
@@ -401,12 +405,14 @@ class PhrasingWriter:
         look = bool(photos) and not item.get("colour")
         told = facts_text(facts)
         schema = FACTS_SCHEMA
-        if look:
+        if look:  # the model's own colours, each with how it looks on it, and where it was seen (colour_seen)
             colours = [*(model or {}).get("colours", []), UNSURE]
-            told += f"\nColour: not known. Pick the phone's own colour from the photos, one of: {', '.join(colours)}"
+            told += (f"\nColour: not known. Pick the phone's own colour from the photos, one of this model's colours "
+                     f"(how each looks on an {item['model']}): {colour_guide(model)}; or unsure. {COLOUR_HOW}")
             schema = {**FACTS_SCHEMA, "properties": {**FACTS_SCHEMA["properties"],
-                                                     "colour": {"type": "string", "enum": colours}},
-                      "required": [*FACTS_SCHEMA["required"], "colour"]}
+                                                     "colour": {"type": "string", "enum": colours},
+                                                     "colour_seen_on": {"type": "string", "enum": SEEN_ON}},
+                      "required": [*FACTS_SCHEMA["required"], "colour", "colour_seen_on"]}
         reply = self.phraser.ask(FACTS_SYSTEM, told, list(photos) if look else [], schema)
         self.last_facts, self.last_missing = facts, []
         if reply.answer is None:
@@ -419,8 +425,8 @@ class PhrasingWriter:
             return Reply(model=reply.model, error=f"it left out what your notes say: {', '.join(self.last_missing)}",
                          tokens_in=reply.tokens_in, tokens_out=reply.tokens_out, tokens_cached=reply.tokens_cached,
                          tokens_cache_write=reply.tokens_cache_write, seconds=round(time.monotonic() - started, 2))
-        if not item.get("colour"):
-            answer["colour"] = str(reply.answer.get("colour") or UNSURE) if look else UNSURE
+        if not item.get("colour"):  # only a colour seen on the phone's own back or frame counts
+            answer["colour"] = colour_seen(reply.answer) if look else UNSURE
         return Reply(model=reply.model, answer=answer, tokens_in=reply.tokens_in, tokens_out=reply.tokens_out,
                      seconds=round(time.monotonic() - started, 2), tokens_cached=reply.tokens_cached,
                      tokens_cache_write=reply.tokens_cache_write)

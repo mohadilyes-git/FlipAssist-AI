@@ -252,7 +252,8 @@ def test_a_draft_that_leaves_a_fact_out_goes_to_the_paid_backup(client):
 def test_the_phraser_picks_the_colour_from_the_photos_in_the_same_call(client):
     # the photos are for the colour only, and only when the title and notes don't name it: Haiku looks as it phrases,
     # never a second look by Claude Sonnet 5.5 (20 times the price)
-    no_colour = {**PHRASED, "colour": "Blue", "description": PHRASED["description"].replace(", in Midnight", "")}
+    no_colour = {**PHRASED, "colour": "Blue", "colour_seen_on": "back",
+                 "description": PHRASED["description"].replace(", in Midnight", "")}
     haiku = FakeModel("claude-haiku-5-5", no_colour)
     client.use(local=FakeModel("gemma3:4b"), api_model=FakeModel("claude-sonnet-5-5", {"colour": "Red"}),
                listing=haiku, listing_facts=True, reader=FakeModel("flip-reader-5", READ_NOTES))
@@ -260,8 +261,25 @@ def test_the_phraser_picks_the_colour_from_the_photos_in_the_same_call(client):
                         files=[("photos", ("back.jpg", JPEG, "image/jpeg"))]).json()
     assert (draft["colour"], draft["colour_from"], draft["colour_by"]) == ("Blue", "photos", "claude-haiku-5-5")
     assert [a["model"] for a in draft["attempts"]] == ["claude-haiku-5-5"] and len(haiku.asked[0]["photos"]) == 1
-    assert haiku.asked[0]["user"].endswith("Colour: not known. Pick the phone's own colour from the photos, one of: "
-                                           "Midnight, Starlight, Blue, Pink, Green, (PRODUCT)RED, unsure")
+    # the model's own colours, each with how it looks on it, where to look, and where it saw it (14 Oct)
+    assert "Colour: not known. Pick the phone's own colour from the photos, one of this model's colours (how each looks " \
+           "on an iPhone 13): Midnight (near-black back with a dark blue tint); Starlight (warm off-white back with a " \
+           "champagne tint); Blue (mid sky-blue back and frame)" in haiku.asked[0]["user"]
+    assert "colour_seen_on" in haiku.asked[0]["schema"]["properties"]
+
+
+def test_a_colour_not_seen_on_the_phones_back_or_frame_is_unsure(client):
+    # only the screen, or the phone in a case: the colour Haiku names doesn't count, and Sonnet looks once
+    in_a_case = {**PHRASED, "colour": "Pink", "colour_seen_on": "not shown",
+                 "description": PHRASED["description"].replace(", in Midnight", "")}
+    sonnet = FakeModel("claude-sonnet-5-5", {"colour": "unsure", "seen_on": "not shown"})
+    client.use(local=FakeModel("gemma3:4b"), api_model=sonnet, listing=FakeModel("claude-haiku-5-5", in_a_case),
+               listing_facts=True, reader=FakeModel("flip-reader-5", READ_NOTES))
+    draft = client.post("/listings/draft", data={**FORM, "title": "iPhone 13 128GB unlocked"},
+                        files=[("photos", ("back.jpg", JPEG, "image/jpeg"))]).json()
+    assert (draft["colour"], draft["colour_from"]) == (None, None) and "colour" in " ".join(draft["reasons"])
+    assert [(a["model"], a["colour_only"]) for a in draft["attempts"]] == [("claude-haiku-5-5", False),
+                                                                          ("claude-sonnet-5-5", True)]
 
 
 def test_the_app_phrases_the_facts_unless_set_back(monkeypatch):
@@ -279,7 +297,8 @@ def test_the_app_phrases_the_facts_unless_set_back(monkeypatch):
 
 def test_a_colour_gemma_couldnt_see_comes_from_haikus_look_and_says_so(client):
     unsure = {**LISTED, "colour": "unsure", "description": LISTED["description"].replace(" in Midnight", "")}
-    client.use(local=FakeModel("gemma3:4b", unsure), api_model=FakeModel("claude-haiku-5-5", {"colour": "Blue"}))
+    client.use(local=FakeModel("gemma3:4b", unsure),
+               api_model=FakeModel("claude-haiku-5-5", {"colour": "Blue", "seen_on": "back and frame"}))
     draft = client.post("/listings/draft", data={"title": "iPhone 13 128GB unlocked",
                                                  "notes": "boxed, battery 87%, light scratch on the back"},
                         files=[("photos", ("back.jpg", JPEG, "image/jpeg"))]).json()

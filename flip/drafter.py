@@ -28,7 +28,7 @@ from flip.attempts import try_models
 from flip.catalogue import fill_from_catalogue
 from flip.checks import UNSURE, canonical, check_listing_answer, condition_for, sources_text
 from flip.ebay import item_specifics
-from flip.prompts import answer_schema, colour_schema, listing_prompt
+from flip.prompts import answer_schema, colour_schema, colour_seen, listing_prompt
 from flip.title import build_title
 
 
@@ -114,8 +114,10 @@ def unsure(colour):
 def second_look(api, system, user, photos, model, result, log):
     """The paid model's look at the colour alone, with the same prompt and
     photos, held to the model's colours: (colour, the model that said it), or
-    (None, None) if its answer failed. It's an attempt like any other (cost,
-    audit log), marked colour_only so the draft is still the local model's."""
+    (None, None) if its answer failed. A colour it didn't see on the phone's
+    own back or frame (only the screen, a case) is "unsure" (colour_seen,
+    14 Oct). It's an attempt like any other (cost, audit log), marked
+    colour_only so the draft is still the local model's."""
     look = {"item_id": result["item_id"], "reasons": [], "attempts": []}
     colours = [*model["colours"], UNSURE]
     answer = try_models("api", {"api": api}, ask=lambda ai: ai.ask(system, user, list(photos), colour_schema(model)),
@@ -123,7 +125,7 @@ def second_look(api, system, user, photos, model, result, log):
                         [f"the colour {found.get('colour')!r} isn't one of this model's"], result=look,
                         log=ColourLook(log) if log else None)
     result["attempts"] += [{**a, "colour_only": True} for a in look["attempts"]]
-    return (answer["colour"], look["attempts"][-1]["model"]) if answer else (None, None)
+    return (colour_seen(answer), look["attempts"][-1]["model"]) if answer else (None, None)
 
 
 class ColourLook:

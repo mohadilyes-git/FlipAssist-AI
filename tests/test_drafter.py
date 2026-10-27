@@ -156,7 +156,8 @@ def test_your_notes_typed_in_a_hurry_back_gemmas_answer():
     api = FakeModel("claude-haiku-5-5", {"colour": "unsure"})
     result = draft(entry, local=FakeModel("gemma3:4b", gemma), api=api)
     assert (result["attempts"][0]["problems"], result["reasons"]) == ([], ["fill in: colour"])
-    assert list(api.asked[0]["schema"]["properties"]) == ["colour"]  # Haiku looked at the colour only, nothing redrafted
+    # Haiku looked at the colour only (and says where it saw it), nothing redrafted
+    assert list(api.asked[0]["schema"]["properties"]) == ["colour", "seen_on"]
     assert result["title"] == "Apple iPhone 13 mini 128GB Unlocked"
 
 
@@ -251,7 +252,9 @@ def test_the_prompt_gives_your_title_and_notes_never_the_sellers_description():
     assert "boxed, battery 87%, light scratch on the back" in user
     assert "Reseller's title for it: iPhone 13 128GB unlocked" in user
     assert ENTRY["original_description"] not in user and "original seller" not in system
-    assert "Pick from: Midnight, Starlight" in user
+    # the model's own colours, each with how it looks on it (14 Oct: data/iphone_colours.json)
+    assert "Pick one of this model's colours (how each looks on an iPhone 13): Midnight (near-black back with a dark " \
+           "blue tint); Starlight (warm off-white back with a champagne tint)" in user
     assert "Photos attached: 2" in user
 
 
@@ -360,7 +363,8 @@ UNSURE_GEMMA = {**GOOD, "colour": "unsure", "description": GOOD["description"].r
 
 def test_gemma_unsure_of_the_colour_gets_haikus_look_at_the_colour_alone(tmp_path):
     log = AuditLog(tmp_path / "audit.sqlite3")
-    local, api = FakeModel("gemma3:4b", UNSURE_GEMMA), FakeModel("claude-haiku-5-5", {"colour": "Midnight"})
+    local, api = FakeModel("gemma3:4b", UNSURE_GEMMA), FakeModel("claude-haiku-5-5", {"colour": "Midnight",
+                                                                                     "seen_on": "back"})
     result = draft(local=local, api=api, log=log)
     assert (result["status"], result["item"]["colour"], result["colour_from"], result["colour_by"]) == \
         ("ready", "Midnight", "photos", "claude-haiku-5-5")

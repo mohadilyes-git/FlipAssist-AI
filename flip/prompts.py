@@ -7,8 +7,10 @@ write, so the answer is always valid JSON in it; the checks then decide whether
 what it says is true.
 """
 
+import json
 import re
 
+from flip.catalogue import DATA
 from flip.checks import UNSURE
 from flip.money import pounds
 from flip.offers import quoted, reason_for_ai
@@ -25,7 +27,32 @@ Rules:
 4. condition_id: the condition in the settled facts, decided from the notes. Write the condition note and description to match it: "7000" (For parts or not working) means a fault, something that doesn't work properly; marks, scratches and cracks on their own are "3000" (Used).
 5. condition_note: one or two short sentences on the condition, as the notes give it: each mark and where it is (only if the notes say where), and any fault or repair. When the settled facts have a battery health figure, give it, exactly that figure; when they have none, say nothing about the battery's health. Don't call the battery or the phone good, great or excellent unless the notes do. Leave it empty for "1000" and "1500".
 6. description: two to four short sentences in British English. First the phone: the model with its storage, colour and network when the facts give them. Then its condition in plain words, and what comes with it if the notes say (if they don't, say nothing about it). No specs such as screen size, processor, chip, iOS or 5G: eBay shows them already. Describe the phone, not the photos: never mention a case, box or anything else just because a photo shows it. No prices, contact details, links, payment terms or exaggeration.
-7. colour (only when asked): the colour from the list that matches the phone itself in the photos. If the photos don't show the phone's own colour clearly (dark, blurry, in a case, or no photos), answer "unsure"."""
+7. colour (only when asked): the colour from the list that matches the phone itself in the photos. Judge it by the phone's back and its frame (the edges): the screen is black when it's off, so it doesn't count, and nor do a case, a skin, the wallpaper, the box or anything around the phone. If the photos don't show the phone's own colour clearly (dark, blurry, in a case, or no photos), answer "unsure". When asked where you saw it (seen_on), answer back, frame, back and frame, or not shown."""
+
+# what each iPhone model's colours look like on the phone (data/iphone_colours.json, 14 Oct 2026, the owner: "make sure
+# that the ebay filling from the photos knows which model and what are the possible answers and then checks")
+COLOUR_LOOKS = json.loads((DATA / "iphone_colours.json").read_text(encoding="utf-8"))["models"]
+# where the colour was seen: only the phone's own back or frame shows it
+SEEN_ON = ["back", "frame", "back and frame", "not shown"]
+PHONE_SURFACES = {"back", "frame", "back and frame"}
+COLOUR_HOW = ("Judge it by the phone's back and its frame (the edges): the screen is black when it's off, so it "
+              "doesn't count, and nor do a case, a skin, the wallpaper, the box or anything around the phone. Say where "
+              "you saw it: back, frame, back and frame, or not shown (only the screen, or the phone in a case).")
+
+
+def colour_guide(model):
+    """The model's colours with how each looks on it: "Midnight (near-black back with a dark blue tint); Starlight
+    (...)", just the names for a model the guide hasn't."""
+    looks = COLOUR_LOOKS.get(model["id"], {})
+    return "; ".join(f"{c} ({looks[c]})" if c in looks else c for c in model["colours"])
+
+
+def colour_seen(answer):
+    """The colour an answer gives, when it was seen on the phone's own back or frame; "unsure" when it wasn't (only
+    the screen, a case) or the answer says so."""
+    colour = str(answer.get("colour") or UNSURE)
+    seen = answer.get("seen_on", answer.get("colour_seen_on"))
+    return colour if colour != UNSURE and seen in PHONE_SURFACES else UNSURE
 
 
 def answer_schema(item, model, conditions):
@@ -40,9 +67,11 @@ def answer_schema(item, model, conditions):
 
 
 def colour_schema(model):
-    """The shape for a second look at the colour alone: one of the model's colours, or "unsure"."""
-    return {"type": "object", "properties": {"colour": {"type": "string", "enum": [*model["colours"], UNSURE]}},
-            "required": ["colour"], "additionalProperties": False}
+    """The shape for a second look at the colour alone: one of the model's colours, or "unsure", and where it was seen
+    (colour_seen: it counts only on the phone's own back or frame)."""
+    return {"type": "object", "properties": {"colour": {"type": "string", "enum": [*model["colours"], UNSURE]},
+                                             "seen_on": {"type": "string", "enum": SEEN_ON}},
+            "required": ["colour", "seen_on"], "additionalProperties": False}
 
 
 def listing_prompt(item, model, entry, photo_count, condition=None):
@@ -56,7 +85,8 @@ def listing_prompt(item, model, entry, photo_count, condition=None):
     if item.get("colour"):
         facts.append(f"Colour: {item['colour']}")
     else:
-        facts.append(f"Colour: not known. Pick from: {', '.join(model['colours'])}, or unsure")
+        facts.append(f"Colour: not known. Pick one of this model's colours (how each looks on an {item['model']}): "
+                     f"{colour_guide(model)}; or unsure")
     if item["category"] == "phones":
         facts.append(f"Network: {item['network'] or 'not known'}")
         if item.get("battery"):  # read from the notes by code: "78, few scratches" is 78%
