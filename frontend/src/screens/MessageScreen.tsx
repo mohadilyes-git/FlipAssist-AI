@@ -5,7 +5,7 @@
 // Only Rewrite has an AI write: Gemma 3 4B rewords it (14 Oct). Nothing is sent
 // from here: you copy it into the marketplace, and approving it teaches your style.
 import { useEffect, useMemo, useState } from "react";
-import { api, type FlawsSaid, type Kind, type Length, type Listing, type MessageDraft } from "../api";
+import { api, type FlawsSaid, type Kind, type Listing, type MessageDraft } from "../api";
 import { cost, readBy, reasonLine, seconds, writerName } from "../format";
 import { gapOf, lowerPrice, money, morePrice, sliderRange, toPence } from "../prices";
 import { CheckIcon, ChevronIcon, Chip, Head, PriceSlider, SparkleIcon, Steps, Warn, WarningIcon } from "../ui";
@@ -45,7 +45,6 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
   const [draft, setDraft] = useState<MessageDraft | null>(null);
   const [draftedFor, setDraftedFor] = useState(""); // the title and description the draft on screen was made from
   const [text, setText] = useState("");
-  const [length, setLength] = useState<Length>("usual"); // the length on screen: Rewrite keeps it
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [approval, setApproval] = useState<Approval | null>(null);
@@ -56,7 +55,6 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
       setDraft(null);
       setText("");
       setApproval(null);
-      setLength("usual");
       setError("");
     }
   }, [title, description, draft, draftedFor]);
@@ -75,7 +73,8 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
   // only an offer lower gives a flaw as its reason (14 Oct): paying asking or more never names one
   const saysFlaws = mention === "yes";
 
-  async function write(asked: Length, overrides: { previous?: string; rewrite_of?: string } = {}) {
+  // the message is always the usual length: Make it longer is gone (14 Oct, the owner: "remove that one")
+  async function write(overrides: { rewrite_of?: string } = {}) {
     if (!prices) return;
     if (mention === null) {
       setPickMention(true); // nothing is written until you pick Yes or No
@@ -100,28 +99,26 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
         // whether to say it's in good condition
         mention: mention === "yes" ? true : kind === "more" ? null : false,
         flaws_said: saysFlaws ? flaws : null,
-        length: asked,
-        previous: overrides.previous ?? null,
+        length: "usual",
+        previous: null,
         // no AI writing, except Rewrite: Gemma 3 4B rewords the message on screen (14 Oct)
         writer: overrides.rewrite_of ? "ai" : "template",
         rewrite_of: overrides.rewrite_of ?? null,
         check_later: true,
-        // Make it longer and Rewrite keep the reason the message on screen gives (it may be Sonnet's fix), but only for
-        // the same listing: a listing you've changed since gets its reason worded again (3 Oct: a new listing was
-        // given the last one's "there's a scratch on the screen")
-        reason: (overrides.previous ?? overrides.rewrite_of) && draft?.reason && draftedFor === thisListing
+        // Rewrite keeps the reason the message on screen gives (it may be Sonnet's fix), but only for the same
+        // listing: a listing you've changed since gets its reason worded again (3 Oct: a new listing was given the
+        // last one's "there's a scratch on the screen")
+        reason: overrides.rewrite_of && draft?.reason && draftedFor === thisListing
           ? { ...draft.reason, quotes: worded(draft) } : null,
       });
-      const changing = overrides.previous ?? overrides.rewrite_of;
-      if (!found.message && changing) {
+      if (!found.message && overrides.rewrite_of) {
         // no new version passed the checks: the one on screen stays, as it was
-        setError(`${overrides.previous ? "No longer message" : "No new wording"} passed the checks, so your message is unchanged`);
+        setError("No new wording passed the checks, so your message is unchanged");
         return;
       }
       setDraft(found);
       setDraftedFor(thisListing);
       setText(found.message ?? "");
-      setLength(asked);
       if (found.reason?.checked === "pending" && found.message) void checkReason(found, listing);
     } catch (e) {
       setError((e as Error).message);
@@ -258,14 +255,12 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
 
           {shown ? (
             <Drafted draft={shown} text={text} setText={setText} busy={busy} approval={approval}
-              longer={length === "longer"}
-              onLength={() => void (length === "longer" ? write("usual") : write("longer", { previous: text }))}
-              onRewrite={() => void write(length, { rewrite_of: text })} onApprove={() => void approve()} />
+              onRewrite={() => void write({ rewrite_of: text })} onApprove={() => void approve()} />
           ) : (
             <>
               <p className="note">Code sets the price and checks every draft before you see it.</p>
               <button type="button" className="main" aria-busy={busy} disabled={busy || !prices || !title.trim()}
-                onClick={() => void write("usual")}>
+                onClick={() => void write()}>
                 {busy ? "Writing…" : "Write my message"}
               </button>
             </>
@@ -277,7 +272,7 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
 }
 
 /** The lines a draft's reason was worded from: the picked ones when you picked how many flaws, else the reader's whole
- * sentences (its quotes), else its flaws. Haiku's check reads these, and Make it longer and Rewrite send them back. */
+ * sentences (its quotes), else its flaws. Haiku's check reads these, and Rewrite sends them back. */
 const worded = (draft: MessageDraft) => draft.reason_from ?? draft.reading.quotes ?? draft.reading.flaws;
 
 type DraftedProps = {
@@ -286,13 +281,11 @@ type DraftedProps = {
   setText: (text: string) => void;
   busy: boolean;
   approval: Approval | null;
-  longer: boolean;
-  onLength: () => void;
   onRewrite: () => void;
   onApprove: () => void;
 };
 
-function Drafted({ draft, text, setText, busy, approval, longer, onLength, onRewrite, onApprove }: DraftedProps) {
+function Drafted({ draft, text, setText, busy, approval, onRewrite, onApprove }: DraftedProps) {
   const [why, setWhy] = useState(false);
   const reading = draft.reading;
   const steps = [...reading.attempts, ...draft.attempts];
@@ -304,11 +297,6 @@ function Drafted({ draft, text, setText, busy, approval, longer, onLength, onRew
         {draft.warnings.map((w) => <Warn key={w}>{w}</Warn>)}
         {draft.note && <p className="orange">{draft.note}</p>}
         {draft.reasons.map((r) => <p className="orange" key={r}>{r}</p>)}
-        <p className="end">
-          <button type="button" className="link" onClick={onLength} disabled={busy || !text.trim()}>
-            {longer ? "Make it shorter" : "Make it longer"}
-          </button>
-        </p>
       </div>
 
       <div className="tips">

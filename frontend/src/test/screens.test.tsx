@@ -217,8 +217,6 @@ describe("AI message", () => {
     expect(await screen.findByDisplayValue("reworded")).toBeTruthy();
     const rewrite = sent(fetch, "POST /api/messages/draft", 1);
     expect([rewrite.writer, rewrite.rewrite_of]).toEqual(["ai", DRAFT.message]);
-    await user.click(screen.getByRole("button", { name: "Make it longer" }));
-    expect(sent(fetch, "POST /api/messages/draft", 2).writer).toBe("template"); // longer is your sentences again
   });
 
   it("shows the draft at once, then the reason's check, and a fix replaces the message only if you haven't edited it", async () => {
@@ -257,7 +255,7 @@ describe("AI message", () => {
     expect([check.quotes, check.flaws]).toEqual([["I dropped it and cracked the back"], ["cracked the back"]]);
   });
 
-  it("checks the reason against only the flaws you picked, and keeps them for Make it longer", async () => {
+  it("checks the reason against only the flaws you picked, and keeps them for Rewrite", async () => {
     const picked = ["Face ID not working"];
     const pending: MessageDraft = { ...DRAFT, reason_from: picked,
       reading: { ...DRAFT.reading, flaws: ["Back glass cracked", "Face ID not working", "Battery 79%"],
@@ -273,9 +271,9 @@ describe("AI message", () => {
     await user.click(screen.getByRole("button", { name: "Write my message" }));
     expect(await screen.findByText("Reason by flip-wording-4b · checked by Claude Haiku 5.5")).toBeTruthy();
     expect(sent(fetch, "POST /api/messages/check-reason").quotes).toEqual(picked);
-    await user.click(screen.getByRole("button", { name: "Make it longer" }));
-    const longer = sent(fetch, "POST /api/messages/draft", 1);
-    expect([longer.reason.quotes, longer.flaws_said]).toEqual([picked, 1]);
+    await user.click(screen.getByRole("button", { name: "Rewrite" }));
+    const rewrite = sent(fetch, "POST /api/messages/draft", 1);
+    expect([rewrite.reason.quotes, rewrite.flaws_said]).toEqual([picked, 1]);
   });
 
   it("no longer asks for a UK price: that has its own tab (4 Oct)", async () => {
@@ -360,25 +358,14 @@ describe("AI message", () => {
     expect(await navigator.clipboard.readText()).toBe(DRAFT.message + " Cheers");
   });
 
-  it("makes the message on screen longer, keeping your edits", async () => {
-    const fetch = serve({ "POST /api/messages/draft": [[200, DRAFT], [200, { ...DRAFT, draft_id: 8 }]] });
-    const user = userEvent.setup();
-    render(<MessageScreen />);
-    await user.type(await draft(user), " Cheers");
-    await user.click(screen.getByRole("button", { name: "Make it longer" }));
-    const body = sent(fetch, "POST /api/messages/draft", 1);
-    expect([body.length, body.previous]).toEqual(["longer", DRAFT.message + " Cheers"]);
-    expect(body.reason).toBeNull(); // this draft has no worded reason to keep
-  });
-
-  it("makes it longer keeping the checked reason on screen, not wording it again", async () => {
+  it("rewrites keeping the checked reason on screen, not wording it again", async () => {
     const checkedReason = { clause: "there's a black dot on the screen", by: "claude-sonnet-5-5", checked: "fixed" };
     const fetch = serve({ "POST /api/messages/draft": [[200, { ...DRAFT, reason: checkedReason }],
       [200, { ...DRAFT, draft_id: 8, reason: checkedReason }]] });
     const user = userEvent.setup();
     render(<MessageScreen />);
     await draft(user);
-    await user.click(screen.getByRole("button", { name: "Make it longer" }));
+    await user.click(screen.getByRole("button", { name: "Rewrite" }));
     expect(sent(fetch, "POST /api/messages/draft", 1).reason).toEqual({ ...checkedReason, quotes: DRAFT.reading.flaws });
   });
 
@@ -400,22 +387,15 @@ describe("AI message", () => {
     expect(screen.queryByDisplayValue("the new one")).toBeNull(); // the title too
   });
 
-  it("flips Make it longer to Make it shorter, and a rewrite keeps the length on screen", async () => {
-    const LONGER = { ...DRAFT, draft_id: 8, message: DRAFT.message + " Is it unlocked? Does it come with a charger?" };
-    const fetch = serve({ "POST /api/messages/draft": [[200, DRAFT], [200, LONGER], [200, { ...LONGER, draft_id: 9 }],
-      [200, { ...DRAFT, draft_id: 10 }]] });
+  it("has no Make it longer: every message is the usual length (14 Oct, the owner)", async () => {
+    const fetch = serve({ "POST /api/messages/draft": [[200, DRAFT], [200, { ...DRAFT, draft_id: 8 }]] });
     const user = userEvent.setup();
     render(<MessageScreen />);
     await draft(user);
-    await user.click(screen.getByRole("button", { name: "Make it longer" }));
-    expect(await screen.findByDisplayValue(LONGER.message!)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Make it (longer|shorter)/ })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Rewrite" }));
-    const rewrite = sent(fetch, "POST /api/messages/draft", 2);
-    expect([rewrite.length, rewrite.rewrite_of, rewrite.previous]).toEqual(["longer", LONGER.message, null]);
-    await user.click(await screen.findByRole("button", { name: "Make it shorter" }));
-    const shorter = sent(fetch, "POST /api/messages/draft", 3);
-    expect([shorter.length, shorter.previous, shorter.rewrite_of]).toEqual(["usual", null, null]);
-    expect(await screen.findByRole("button", { name: "Make it longer" })).toBeTruthy();
+    const rewrite = sent(fetch, "POST /api/messages/draft", 1);
+    expect([rewrite.length, rewrite.previous, rewrite.rewrite_of]).toEqual(["usual", null, DRAFT.message]);
   });
 
   it("keeps your message when no new wording passes, and shows what's worth knowing", async () => {
