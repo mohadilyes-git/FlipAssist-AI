@@ -1582,7 +1582,7 @@ def test_a_battery_said_with_the_damage_has_its_own_row():
     sentence = "cracked back and the battery is 75%"  # the owner's screenshot: −30% said, −33% cut
     found = prices.estimate("iphone 14", [sentence], opener=cutting(), description=sentence)
     assert rows(found) == [(["Cracked back"], ["damage"], "damage", -0.304),
-                           (["The battery is 75%"], ["battery"], "battery", -0.1)]  # the owner's battery cut
+                           (["Battery is 75%"], ["battery"], "battery", -0.1)]  # the owner's battery cut
     assert abs(made_by_rows(found) - found["price"]) < 1
 
 
@@ -1777,3 +1777,45 @@ def test_a_flaws_words_go_on_after_and(sentence, words):
     text = "iPhone 13. " + sentence
     kinds = prices.kinds_of([sentence], text)
     assert [w for w, _ in prices.split_flaw(sentence, kinds, lambda w: prices.kinds_of([w], text))] == words
+
+
+# 14 Oct, the owner's screenshot: "iPhone 15 128 GB unlocked 82% BH" was listed as not cut for (the reader quoted the
+# title for its battery figure), and the damage row read "The price reflects the cracked back"
+def test_the_title_quoted_by_the_reader_isnt_a_flaw_not_cut_for():
+    title = "iPhone 15 128 GB unlocked 82% BH"
+    quote = "The price reflects the cracked back which can be repaired for 40£"
+    found = prices.estimate(title, [title, quote], opener=cutting(), description=f"82% battery health. {quote}")
+    assert (rows(found), found["not_cut"]) == ([(["The cracked back"], ["damage"], "damage", -0.304)], [])
+
+
+@pytest.mark.parametrize("words, shown", [
+    ("The price reflects the cracked back", "The cracked back"),
+    ("Price includes the scratched screen", "The scratched screen"),
+    ("Priced to reflect a dent on the corner", "A dent on the corner"),
+    ("Due to the cracked screen", "The cracked screen"),
+    ("price reflects it", "Price reflects it"),  # nothing but "it" left: as said
+    ("Cracked back", "Cracked back"),
+])
+def test_a_flaws_words_leave_out_the_sellers_framing(words, shown):
+    assert prices.flaw_words(words) == shown
+
+
+
+def test_a_battery_rows_words_are_its_figure():
+    # 14 Oct, the owner's screenshot: "78% battery health lasts all day"
+    found = prices.estimate("iPhone 15 128 GB unlocked", ["78% battery health lasts all day"], opener=cutting(),
+                            description="Front and sides are perfect condition. 78% battery health lasts all day.")
+    assert rows(found) == [(["78% battery health"], ["battery"], "battery", -0.1)]
+    no_figure = prices.estimate("iPhone 15 128 GB unlocked", ["Battery needs a service"], opener=cutting(),
+                                description="Battery needs a service.")
+    assert rows(no_figure)[0][0] == ["Battery needs a service"]
+
+
+def test_the_biggest_cut_comes_first_so_the_main_flaw_keeps_its_whole_amount():
+    # 14 Oct, the owner: "why same listing the cracked back took more" (−£73 alone, −£66 after a worn battery's −10%)
+    found = prices.estimate("iPhone 15 128 GB unlocked", ["78% battery health lasts all day", "The cracked back"],
+                            opener=cutting(), description="78% battery health lasts all day. The cracked back.")
+    assert [r["kinds"] for r in found["breakdown"]] == [["damage"], ["battery"]]
+    wear_after_fault = prices.estimate("iPhone 14 128GB", ["Scratches on the back and Face ID not working"],
+                                       opener=cutting(), description="Scratches on the back and Face ID not working")
+    assert [(r["kinds"], r["by"]) for r in wear_after_fault["breakdown"]] == [(["fault"], "api"), (["wear"], "api none")]

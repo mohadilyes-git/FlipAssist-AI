@@ -1357,6 +1357,29 @@ def tidy(words):
     return words if first[1:] != first[1:].lower() else words[:1].upper() + words[1:]
 
 
+# the seller's words for why the price is what it is, before the flaw itself: "The price reflects the cracked back"
+# is the cracked back (14 Oct, the owner's screenshot)
+FRAMING = re.compile(r"^(?:(?:the\s+|my\s+|this\s+)?price\s+(?:reflects|includes|accounts\s+for|takes\s+(?:into\s+account|"
+                     r"account\s+of)|is\s+(?:low(?:er)?|reduced|cheap(?:er)?)\s+(?:because\s+of|due\s+to|for)|has\s+been\s+"
+                     r"(?:lowered|reduced|dropped)\s+(?:because\s+of|due\s+to|for))|(?:priced|reduced|discounted)\s+"
+                     r"(?:to\s+reflect|because\s+of|due\s+to|for)|due\s+to|because\s+of)\s+", I)
+
+
+def flaw_words(words):
+    """A flaw's words as the screen gives them: tidied, without the seller's framing ("The price reflects the cracked
+    back" -> "The cracked back")."""
+    said = tidy(words)
+    plain = FRAMING.sub("", said)
+    return tidy(plain) if len(plain.split()) >= 2 else said  # "price reflects it" stays as said
+
+
+def shown(words, kinds):
+    """A flaw's words for its row: a battery flaw with its figure is just that ("78% battery health lasts all day" ->
+    "78% battery health"), any other as flaw_words gives it."""
+    figure = battery_now(words) if list(kinds) == ["battery"] else None
+    return tidy(words[figure[1]:figure[2]]) if figure else flaw_words(words)
+
+
 def split_flaw(quote, kinds, by_code, by_model=None):
     """A flaw sentence as the flaws in it, each with its kinds: "cracked back and the battery is 75%" ->
     [("Cracked back", ["damage"]), ("The battery is 75%", ["battery"])], "No charger, small scratch on the back" ->
@@ -1367,7 +1390,7 @@ def split_flaw(quote, kinds, by_code, by_model=None):
     with it ("scratches top and bottom"); otherwise it goes with the part after it in its clause ("black and white
     lines"), and with no flaw after it in its clause it's left out ("...but everything works", "No charger"). When the
     parts never give every kind, the sentence stays whole with all of them."""
-    whole = [(tidy(quote), list(kinds))]
+    whole = [(shown(quote, kinds), list(kinds))]
     spans = flaw_spans(quote) if kinds else []
     if len(spans) < 2:
         return whole
@@ -1390,7 +1413,7 @@ def split_flaw(quote, kinds, by_code, by_model=None):
                 out[-1][1] = b  # "...top and bottom": the flaw before it goes on
             elif held is None:
                 held = (a, clause)  # "black and white lines": the flaw after it starts here
-        return [(tidy(quote[a:b]), ks) for a, b, ks, _ in out]
+        return [(shown(quote[a:b], ks), ks) for a, b, ks, _ in out]
     return whole
 
 
@@ -1412,10 +1435,16 @@ def flaw_items(each, titled, text, title, description, sorter=None):
         return by_code(words) if asked[words] is None else asked[words]
 
     items = []
+    plain = lambda words: " ".join(words.lower().split()).strip(" .,;:!")  # noqa: E731
     for flaw, kinds, by in each:
+        # the reader can quote the title itself ("iPhone 15 128 GB unlocked 82% BH": a battery figure): no flaw in it is
+        # no flaw to list as not cut, and one that is is the title's (14 Oct, the owner's screenshot)
+        is_title = plain(flaw) == plain(title)
+        if is_title and not kinds:
+            continue
         # flip-kinds only for two or more kinds: a sentence of one kind is cut for it whichever words say it
         model = None if by == "code" or sorter is None or len(kinds) < 2 else by_model
-        items += [(words, ks, False) for words, ks in split_flaw(flaw, kinds, by_code, model)]
+        items += [(words, ks, is_title) for words, ks in split_flaw(flaw, kinds, by_code, model)]
     if titled:
         items.append((title, list(titled), True))
     return items
@@ -1423,8 +1452,8 @@ def flaw_items(each, titled, text, title, description, sorter=None):
 
 def api_cuts(kinds, factor):
     """Each of the API's kinds with its own cut, {kind: -0.17, or None for nothing on top}, as the API takes them
-    (applyCuts, base "clean": the clean premium off once, then each kind's own number, so the premium goes with the
-    first kind and a later kind whose number is 1, wear in the UK, adds nothing on top). One kind has the API's whole
+    (applyCuts, base "clean": the clean premium off once, then each kind's own number; here the premium goes with the
+    kind cut most, so a kind whose number is 1, wear in the UK, adds nothing on top of it). One kind has the API's whole
     answer (factor: its own, unrounded); two or more are split by its table (API_CUTS_UK) when the table makes its
     answer, to within rounding. None when it doesn't (a kind the table hasn't, a table since changed, the for-parts
     floor): the screen gives them as one cut together."""
@@ -1432,19 +1461,22 @@ def api_cuts(kinds, factor):
         return {kinds[0]: factor - 1}
     if any(k not in API_CUTS_UK for k in kinds):
         return None
-    own = {k: API_CUTS_UK[k] / (API_CUTS_UK["clean"] if n == 0 else 1) - 1 for n, k in enumerate(kinds)}
+    # the clean premium goes with the kind cut most, whatever order the listing gives them: "scratches and Face ID not
+    # working" splits as "Face ID not working and scratches" does (14 Oct, the biggest cut first)
+    holder = min(kinds, key=lambda k: API_CUTS_UK[k])
+    own = {k: API_CUTS_UK[k] / (API_CUTS_UK["clean"] if k == holder else 1) - 1 for k in kinds}
     together = 1.0
     for cut in own.values():
         together *= 1 + cut
     if abs(together - factor) > 0.015:
         return None
-    return {k: None if n and abs(cut) < 1e-9 else cut for n, (k, cut) in enumerate(own.items())}
+    return {k: None if k != holder and abs(cut) < 1e-9 else cut for k, cut in own.items()}
 
 
 def cut_rows(done, api_price, items, api_factor=None):
     """The price's cuts as the screen gives them: {"breakdown": [{"kinds", "words", "title", "cut", "by"}], "not_cut":
-    [words]}, a row for each kind of flaw in the order the listing gives them, with the flaws' own words (title: they're
-    the title's). cut: the share taken off the price before it (-0.3), the rows' cuts taken in turn making the price
+    [words]}, a row for each kind of flaw, the biggest cut first, with the flaws' own words (title: they're the
+    title's). cut: the share taken off the price before it (-0.3), the rows' cuts taken in turn making the price
     (by rounding); None for no cut. by: "damage" (FlipAssist's damage cut, done["damage"] says how bad), "battery"
     (FlipAssist's battery cut, done["battery"] gives the figure), "api" (the prices API's cut for that kind), "api
     none" (one of its kinds that adds nothing on top of the one before: wear after a fault), "api together" (two or
@@ -1493,4 +1525,15 @@ def cut_rows(done, api_price, items, api_factor=None):
                              "title": all(title_only[x] for x in from_api), "cut": factor - 1, "by": "api together"})
         else:
             rows.append({**row(k), "cut": None, "by": None})
+    # the biggest cut first (14 Oct, the owner): each cut comes off what the one before left, so the main flaw shows its
+    # whole amount (a cracked back is -£73 of £310 with or without a worn battery) and a smaller one what it takes after
+    # it; the price is the same in any order. An API kind that adds nothing on top goes right after the API's cut it's
+    # counted in, and a kind not cut for at all goes last
+    nothing_on_top = [r for r in rows if r["by"] == "api none"]
+    ordered = []
+    for row in sorted((r for r in rows if r["cut"] is not None), key=lambda r: r["cut"]):
+        ordered.append(row)
+        if row["by"] == "api" and nothing_on_top:
+            ordered, nothing_on_top = ordered + nothing_on_top, []
+    rows = ordered + nothing_on_top + [r for r in rows if r["cut"] is None and r["by"] != "api none"]
     return {"breakdown": rows, "not_cut": not_cut}
