@@ -265,6 +265,11 @@ def signed_with(text, sign_off):
         return text
     at = own_tail(text, sign_off)
     body = (text[:at] if at is not None else text).rstrip(" ,-–—")
+    # an emoji the body ends with that your sign-off has too goes: the sign-off brings it ("...on the spot. Many thanks!
+    # 😊", never "...on the spot. 😊 Many thanks! 😊": 14 Oct, the owner's style test)
+    while body and (last := [m for m in WHOLE_EMOJI.finditer(body)][-1:]) and last[0].end() == len(body) and \
+            last[0].group() in sign_off:
+        body = body[:last[0].start()].rstrip(" ,-–—")
     if not body:
         return sign_off
     return f"{body}{'' if body[-1] in '.?!)' or WHOLE_EMOJI.search(body[-2:]) else '.'} {sign_off}"

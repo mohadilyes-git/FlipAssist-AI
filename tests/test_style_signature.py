@@ -2,6 +2,8 @@
 before the thanks ("sam :), cheers"), saying you like the item ("I like the ps5"), and whether you give the flaw counted
 on the listings that had one."""
 
+import pytest
+
 from flip.message_drafter import draft_message
 from flip.style import learned, signature, signed_with, style_card, without
 
@@ -83,3 +85,15 @@ def test_the_item_is_named_the_way_you_name_that_kind():
                         ("MacBook Air M2", "the MacBook"), ("Dyson V15 Detect", "the Dyson")):
         message = draft_message({**LISTING, "title": title}, card, kind="lower", mention=True, writer="template")
         assert f"I like {said}." in message["answer"]["message"], (title, message["answer"]["message"])
+
+
+@pytest.mark.parametrize("text, sign_off, signed", [
+    # 14 Oct, the owner's style test: "...on the spot. 😊 Many thanks! 😊", the habit's 😊 and the sign-off's
+    ("I can collect this evening and pay cash on the spot. 😊", "Many thanks! 😊",
+     "I can collect this evening and pay cash on the spot. Many thanks! 😊"),
+    ("Would you take £100? 😊😊", "Cheers 😊", "Would you take £100? Cheers 😊"),
+    ("Can collect today 👍", "Thanks 😊", "Can collect today 👍 Thanks 😊"),  # another emoji is yours: kept
+])
+def test_a_sign_off_with_an_emoji_brings_it_once(text, sign_off, signed):
+    from flip.style import signed_with
+    assert signed_with(text, sign_off) == signed
