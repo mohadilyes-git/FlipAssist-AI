@@ -282,6 +282,22 @@ def test_a_colour_not_seen_on_the_phones_back_or_frame_is_unsure(client):
                                                                           ("claude-sonnet-5-5", True)]
 
 
+# 14 Oct (the owner): My style On or Off on the AI message tab
+def test_my_style_off_writes_the_default_way_and_approving_then_teaches_it_nothing(client):
+    hi_there = [{"id": f"m{n}", "listing_title": "PS5", "asking_price": "300", "marketplace": "facebook",
+                 "my_message": f"Hi there, hope you're well! Would you consider £{250 + n}? Many thanks! 😊"} for n in range(4)]
+    client.use(local=FakeModel("gemma3:4b", READ, READ), messages=hi_there)
+    on = client.post("/messages/draft", json={"listing": LISTING, "writer": "template", "mention": False}).json()
+    client.use(local=FakeModel("gemma3:4b", READ))
+    off = client.post("/messages/draft", json={"listing": LISTING, "writer": "template", "mention": False,
+                                               "style": False}).json()
+    assert on["message"].startswith("Hi there, hope you're well!") and "Many thanks! 😊" in on["message"]
+    assert not off["message"].startswith("Hi there") and "Many thanks" not in off["message"]
+    before = len(client.book.messages())
+    done = client.post(f"/drafts/{off['draft_id']}/approve", json={"sent": off["message"], "learn": False}).json()
+    assert done["saved_to_style"] is False and len(client.book.messages()) == before
+
+
 def test_the_app_phrases_the_facts_unless_set_back(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "pretend-anthropic-key")
     monkeypatch.delenv("FLIP_LISTING_WRITER", raising=False)

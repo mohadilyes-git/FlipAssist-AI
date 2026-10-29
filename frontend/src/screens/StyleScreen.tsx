@@ -33,7 +33,7 @@ export async function remove(row: Learned, reload: () => Promise<void>) {
 /** One thing your style learned, with the button that removes it. */
 export function LearnedRow({ row, onRemove, kind }: { row: Learned; onRemove: (row: Learned) => void; kind: "trait" | "phrase" }) {
   const button = (
-    <button type="button" className="remove" aria-label={`Remove “${row.value}” from your style`} onClick={() => onRemove(row)}>
+    <button type="button" className="remove" aria-label={`Remove “${row.value}” from My style`} onClick={() => onRemove(row)}>
       Remove
     </button>
   );
@@ -90,7 +90,7 @@ export function StyleScreen({ style, reload, setUp }: Props) {
   const sentences = sentencesOf(style);
   return (
     <>
-      <Head icon={<PenIcon />} title="Your style" sub={`Learned from ${count} of your messages · nothing gets trained`}
+      <Head icon={<PenIcon />} title="My style" sub={`Learned from ${count} of your messages · nothing gets trained`}
         right={<button type="button" className="main small" onClick={setUp}>{setUpAlready ? "Redo setup" : "Do setup"}</button>} />
       {error && <p className="error" role="alert">{error}</p>}
       <div className="split">

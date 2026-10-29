@@ -84,11 +84,6 @@ export function Setup({ step, go, style, onLearned, onLeave, again }: Props) {
       void learn(LISTINGS.map((l, i) => ({ title: l.title, price: String(l.price), marketplace: l.market.toLowerCase(),
         text: kept[i].trim() })).filter((m) => m.text));
     };
-    const skip = () => {
-      const kept = answers.map((a, i) => (i === at ? "" : a));
-      setAnswers(kept);
-      next(kept);
-    };
     return (
       <>
         <div className="progress">
@@ -118,11 +113,11 @@ export function Setup({ step, go, style, onLearned, onLeave, again }: Props) {
                 const text = e.target.value;
                 setAnswers((now) => now.map((a, i) => (i === at ? text : a)));
               }} />
-            <p className="sub">Your words, typos and all. Skip any that don't fit how you buy.</p>
+            <p className="sub">Your words, typos and all: each listing needs a reply.</p>
             {error && <p className="error" role="alert">{error}</p>}
             <div className="buttons">
-              <button type="button" className="second" disabled={busy} onClick={skip}>Skip</button>
-              <button type="button" className="main" aria-busy={busy} disabled={busy} onClick={() => next(answers)}>
+              <button type="button" className="main" aria-busy={busy} disabled={busy || !answers[at].trim()}
+                onClick={() => next(answers)}>
                 {!last ? "Next" : busy ? "Learning…" : "See my style"}
               </button>
             </div>
@@ -149,11 +144,7 @@ export function Setup({ step, go, style, onLearned, onLeave, again }: Props) {
         <div className="welcome result">
           <span className="check-circle"><CheckIcon size={28} stroke={2.6} /></span>
           <p className="caps">{learned ? `Learned from ${learned} ${learned === 1 ? "message" : "messages"}` : "Nothing written"}</p>
-          <h1 className="big-title">Your style</h1>
-          {!learned && (
-            <p className="sub">{again ? `You skipped all ${LISTINGS.length}, so your style stays as it was.`
-              : `You skipped all ${LISTINGS.length}: do the setup any time from Your style.`}</p>
-          )}
+          <h1 className="big-title">My style</h1>
           {learned > 0 && rows.length > 0 && <p className="sub">This is what it'll put in your messages. Remove anything you don't want.</p>}
           {error && <p className="error" role="alert">{error}</p>}
           {(learned > 0 || again) && (
@@ -174,8 +165,8 @@ export function Setup({ step, go, style, onLearned, onLeave, again }: Props) {
     <div className="centre">
       <div className="welcome">
         <Logo big />
-        <p className="caps">{again ? "Your style · about 3 minutes" : "First launch · about 3 minutes"}</p>
-        <h1 className="big-title">Set up your style</h1>
+        <p className="caps">{again ? "My style · about 3 minutes" : "First launch · about 3 minutes"}</p>
+        <h1 className="big-title">Set up my style</h1>
         <p className="lead">
           Teach FlipAssist how you message sellers: reply to {LISTINGS.length} quick listings.
           {again && " Your answers take the place of your last setup's."}

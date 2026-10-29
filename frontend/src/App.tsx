@@ -18,7 +18,7 @@ export type Tab = "message" | "price" | "listing" | "home" | "style";
 const TABS: { tab: Tab; label: string; icon: ComponentType<{ size?: number; stroke?: number }> }[] = [
   { tab: "home", label: "Home", icon: GaugeIcon },
   { tab: "message", label: "AI message", icon: SparkleIcon },
-  { tab: "style", label: "Your style", icon: PenIcon },
+  { tab: "style", label: "My style", icon: PenIcon },  // "My style", not "Your style" (14 Oct, the owner)
   { tab: "price", label: "AI UK price estimate", icon: PoundIcon },
   { tab: "listing", label: "List on eBay", icon: TagIcon },
 ];
@@ -137,7 +137,7 @@ export function App() {
     go(again ? "style" : "home");
   };
 
-  const name = setup ? "Set up your style" : TABS.find((t) => t.tab === tab)!.label;
+  const name = setup ? "Set up my style" : TABS.find((t) => t.tab === tab)!.label;
   useEffect(() => {
     document.title = `FlipAssist · ${name}`;
   }, [name]);
@@ -180,7 +180,7 @@ export function App() {
                 e.preventDefault();
                 go("style");
               }}>
-                <span className="caps">Your style</span>
+                <span className="caps">My style</span>
                 <strong>Learning from {count} of your messages</strong>
                 <span>See what it learned</span>
               </a>

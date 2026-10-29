@@ -19,7 +19,7 @@ const JOBS: Record<string, string> = {
   "reads listings": "reads the listing",
   "words the reason": "words the offer's reason",
   "sorts price flaws": "sorts the flaws for the UK price",
-  "reads your style": "reads your style",
+  "reads your style": "reads My style",
   "writes messages": "rewords a message when you click Rewrite, and writes eBay listings",
 };
 // ...and what does that job when the model isn't installed
@@ -27,7 +27,7 @@ const INSTEAD: Record<string, string> = {
   "reads listings": "Gemma 3 4B reads the listing instead",
   "words the reason": "code words the reason instead",
   "sorts price flaws": "code's rules sort the flaws instead",
-  "reads your style": "code reads your style alone",
+  "reads your style": "code reads My style alone",
   "writes messages": "Rewrite and List on eBay can't run on this device",
 };
 

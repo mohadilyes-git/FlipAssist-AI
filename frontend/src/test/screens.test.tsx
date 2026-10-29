@@ -352,7 +352,7 @@ describe("AI message", () => {
     await user.type(await draft(user), " Cheers");
     await user.click(screen.getByRole("button", { name: "Copy & approve" }));
     expect(await screen.findByText("Copied and saved: you changed it first.")).toBeTruthy();
-    expect(screen.getByText("Saved to your style")).toBeTruthy();
+    expect(screen.getByText("Saved to My style")).toBeTruthy();
     expect(sent(fetch, "POST /api/drafts/7/approve").sent).toBe(DRAFT.message + " Cheers");
     expect(approved).toHaveBeenCalled();
     expect(await navigator.clipboard.readText()).toBe(DRAFT.message + " Cheers");
@@ -385,6 +385,28 @@ describe("AI message", () => {
     expect([body.reason, body.rewrite_of, body.listing.description]).toEqual([null, null, " The phone turns off sometimes."]);
     await user.type(screen.getByLabelText("Listing title"), " Pro");
     expect(screen.queryByDisplayValue("the new one")).toBeNull(); // the title too
+  });
+
+  it("has My style On or Off above Say the flaw: Off writes the default way and teaches it nothing (14 Oct)", async () => {
+    const fetch = serve({ "POST /api/messages/draft": [[200, DRAFT], [200, { ...DRAFT, draft_id: 8 }]],
+      "POST /api/drafts/8/approve": [200, { draft_id: 8, edited: false, at: "now", saved_to_style: false }] });
+    const user = userEvent.setup();
+    render(<MessageScreen />);
+    const groups = screen.getAllByRole("group").map((g) => g.getAttribute("aria-label"));
+    expect(groups.indexOf("My style")).toBe(groups.indexOf("Say the flaw") - 1); // right above it
+    const row = within(screen.getByRole("group", { name: "My style" }));
+    expect(row.getByText("My style")).toBeTruthy();
+    expect(row.getAllByRole("button").map((b) => [b.textContent, b.getAttribute("aria-pressed")])).toEqual(
+      [["On", "true"], ["Off", "false"]]);  // On until you turn it off
+    await draft(user);
+    expect(sent(fetch, "POST /api/messages/draft").style).toBe(true);
+    await user.click(row.getByRole("button", { name: "Off" }));
+    expect(localStorage.getItem("flipassist.myStyle")).toBe("off");  // remembered on this device
+    await user.click(screen.getByRole("button", { name: "Rewrite" }));
+    expect(sent(fetch, "POST /api/messages/draft", 1).style).toBe(false);
+    await user.click(await screen.findByRole("button", { name: "Copy & approve" }));
+    expect(sent(fetch, "POST /api/drafts/8/approve").learn).toBe(false);
+    localStorage.removeItem("flipassist.myStyle");
   });
 
   it("has no Make it longer: every message is the usual length (14 Oct, the owner)", async () => {
@@ -1052,6 +1074,14 @@ describe("List on eBay", () => {
   });
 });
 
+/** Every setup listing answered (14 Oct: no Skip), the first with these words, then See my style */
+async function answerAll(user: ReturnType<typeof userEvent.setup>, first: string) {
+  for (let n = 1; n <= 6; n++) {
+    await user.type(screen.getByLabelText("Your message to this seller"), n === 1 ? first : `Reply ${n}`);
+    await user.click(screen.getByRole("button", { name: n < 6 ? "Next" : "See my style" }));
+  }
+}
+
 describe("the app", () => {
   const usual = { "GET /api/health": [200, HEALTH] as Answer, "GET /api/style": [200, STYLE] as Answer,
     "GET /api/stats": [200, STATS] as Answer };
@@ -1060,7 +1090,7 @@ describe("the app", () => {
     serve({ ...usual, "GET /api/style": [200, NO_STYLE] });
     const user = userEvent.setup();
     render(<App />);
-    expect(screen.getByRole("heading", { name: "Set up your style" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Set up my style" })).toBeTruthy();
     expect(screen.queryByRole("navigation")).toBeNull(); // no sidebar until it's done
     expect(screen.getByText(/reply to 6 quick listings/)).toBeTruthy(); // 14 Oct: it said 8 when there were 6
     expect(screen.queryByText(/\b8\b/)).toBeNull();
@@ -1078,14 +1108,12 @@ describe("the app", () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole("button", { name: "Do the setup" }));
-    await user.type(screen.getByLabelText("Your message to this seller"), "Hi mate, would you take £185 cash? Cheers");
-    await user.click(screen.getByRole("button", { name: "Next" }));
-    for (let n = 2; n <= 6; n++) await user.click(screen.getByRole("button", { name: "Skip" }));
+    await answerAll(user, "Hi mate, would you take £185 cash? Cheers");
     expect(await screen.findByText("This is what it'll put in your messages. Remove anything you don't want.")).toBeTruthy();
     const list = within(screen.getByLabelText("What it learned"));
     expect(list.getByText("about 12 words")).toBeTruthy(); // how long isn't something to remove
     expect(list.getAllByRole("button").map((b) => b.textContent)).toEqual(["Remove", "Remove", "Remove"]);
-    await user.click(screen.getByRole("button", { name: "Remove “paying cash” from your style" }));
+    await user.click(screen.getByRole("button", { name: "Remove “paying cash” from My style" }));
     expect(sent(fetch, "POST /api/style/learned")).toEqual({ key: "mention:cash", used: false });
     await waitFor(() => expect(list.queryByText("paying cash")).toBeNull()); // gone, not greyed out (14 Oct)
     expect(screen.queryByRole("button", { name: /again/ })).toBeNull();
@@ -1101,12 +1129,12 @@ describe("the app", () => {
     const user = userEvent.setup();
     render(<App />);
     const card = within(await screen.findByRole("region", { name: "Style card" }));
-    await user.click(await card.findByRole("button", { name: "Remove “paying cash” from your style" }));
+    await user.click(await card.findByRole("button", { name: "Remove “paying cash” from My style" }));
     expect(sent(fetch, "POST /api/style/learned")).toEqual({ key: "mention:cash", used: false });
     await waitFor(() => expect(card.queryByText("paying cash")).toBeNull());
     expect(screen.queryByRole("button", { name: /again/ })).toBeNull();
     const book = within(screen.getByRole("region", { name: "Phrasebook" }));
-    expect(book.getByRole("button", { name: "Remove “Cheers” from your style" })).toBeTruthy();
+    expect(book.getByRole("button", { name: "Remove “Cheers” from My style" })).toBeTruthy();
   });
 
   it("puts a sentence for one kind of offer or one marketplace in the phrasebook, and Remove deletes it", async () => {
@@ -1127,7 +1155,7 @@ describe("the app", () => {
     }
     const card = within(screen.getByRole("region", { name: "Style card" }));
     expect(card.queryByText("Closing under asking")).toBeNull(); // not a habit on the style card
-    await user.click(book.getByRole("button", { name: "Remove “Can collect today.” from your style" }));
+    await user.click(book.getByRole("button", { name: "Remove “Can collect today.” from My style" }));
     expect(sent(fetch, "POST /api/style/learned")).toEqual({ key: "phrase:closing_lower:can collect today.", used: false });
     await waitFor(() => expect(book.queryByText("Closing under asking")).toBeNull());
   });
@@ -1146,31 +1174,29 @@ describe("the app", () => {
     unmount();
     render(<App />);
     await user.click(await screen.findByRole("button", { name: "Redo setup" }));
-    expect(screen.getByRole("heading", { name: "Set up your style" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Set up my style" })).toBeTruthy();
     expect(screen.getByText(/take the place of your last setup/)).toBeTruthy();
     expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["Go back", "Do the setup"]);
     await user.click(screen.getByRole("button", { name: "Go back" }));
-    expect(await screen.findByRole("heading", { name: "Your style" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "My style" })).toBeTruthy();
     expect(window.location.hash).toBe("#style");
   });
 
-  it("redoing the setup and skipping all 6 sends nothing and keeps your style", async () => {
-    localStorage.setItem(SETUP_DONE, "1");
-    window.location.hash = "#style";
-    const fetch = serve({ ...usual, "GET /api/style/messages": [200, [{ id: "msg-1", title: "PS5", price: "300",
-      text: "Hi mate, £255?", marketplace: "facebook", source: "added", at: "now" }]] });
+  it("has no Skip in the setup: each listing needs a reply before Next (14 Oct, the owner)", async () => {
+    serve({ ...usual, "GET /api/style": [200, NO_STYLE] });
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Redo setup" }));
     await user.click(screen.getByRole("button", { name: "Do the setup" }));
-    for (let n = 1; n <= 6; n++) await user.click(screen.getByRole("button", { name: "Skip" }));
-    expect(await screen.findByText("You skipped all 6, so your style stays as it was.")).toBeTruthy();
-    expect(fetch.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
-    await user.click(screen.getByRole("button", { name: "Done" }));
-    expect(await screen.findByRole("heading", { name: "Your style" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Skip" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Next" }).hasAttribute("disabled")).toBe(true);
+    await user.type(screen.getByLabelText("Your message to this seller"), "   ");
+    expect(screen.getByRole("button", { name: "Next" }).hasAttribute("disabled")).toBe(true); // spaces aren't a reply
+    await user.type(screen.getByLabelText("Your message to this seller"), "Hi there, would you consider £185?");
+    expect(screen.getByRole("button", { name: "Next" }).hasAttribute("disabled")).toBe(false);
+    expect(screen.getByText("Your words, typos and all: each listing needs a reply.")).toBeTruthy();
   });
 
-  it("goes through the 6 listings one at a time, sending only the ones you answered", async () => {
+  it("goes through the 6 listings one at a time, sending every answer", async () => {
     const fetch = serve({ ...usual, "GET /api/style": [[200, NO_STYLE], [200, STYLE]],
       "PUT /api/style/setup": [200, []] });
     const user = userEvent.setup();
@@ -1180,12 +1206,17 @@ describe("the app", () => {
     expect(screen.getByText("Offer lower · £185")).toBeTruthy();
     await user.type(screen.getByLabelText("Your message to this seller"), "Hi mate, £185 given the crack?");
     await user.click(screen.getByRole("button", { name: "Next" }));
-    for (let n = 2; n < 6; n++) await user.click(screen.getByRole("button", { name: "Skip" }));
+    for (let n = 2; n < 6; n++) {
+      await user.type(screen.getByLabelText("Your message to this seller"), `Reply ${n}`);
+      await user.click(screen.getByRole("button", { name: "Next" }));
+    }
     expect(screen.getByText("6 of 6")).toBeTruthy();
     expect(screen.queryByText(/Vinted|Apple Watch/)).toBeNull(); // 3 Oct: those two cards are gone
+    await user.type(screen.getByLabelText("Your message to this seller"), "Reply 6");
     await user.click(screen.getByRole("button", { name: "See my style" }));
-    expect(await screen.findByText("Learned from 1 message")).toBeTruthy();
-    expect(sent(fetch, "PUT /api/style/setup")).toEqual([{ title: "iPhone 13 128GB, cracked back", price: "220",
+    expect(await screen.findByText("Learned from 6 messages")).toBeTruthy();
+    const answers = sent(fetch, "PUT /api/style/setup");
+    expect([answers.length, answers[0]]).toEqual([6, { title: "iPhone 13 128GB, cracked back", price: "220",
       marketplace: "facebook", text: "Hi mate, £185 given the crack?" }]);
   });
 
@@ -1203,7 +1234,7 @@ describe("the app", () => {
     render(<App />);
     expect(screen.getByText("FlipAssist · Home")).toBeTruthy(); // it opens on Home (4 Oct)
     expect(within(screen.getByRole("navigation")).getAllByRole("link").map((l) => l.textContent)).toEqual(
-      ["Home", "AI message", "Your style", "AI UK price estimate", "List on eBay"]);
+      ["Home", "AI message", "My style", "AI UK price estimate", "List on eBay"]);
     await user.click(within(screen.getByRole("navigation")).getByText("AI message"));
     // the shown screen's box: UK price has a Listing title too, kept (hidden) while you're elsewhere
     await user.type(screen.getByRole("textbox", { name: "Listing title" }), "iPhone 13");
@@ -1306,7 +1337,7 @@ describe("Home (fix 2, 14 Oct)", () => {
       ["flip-reader-5", "reads the listing", true, true],
       ["flip-wording-4b", "words the offer's reason", true, true],
       ["flip-kinds-1", "sorts the flaws for the UK price", true, true],
-      ["flip-style-1b", "reads your style", true, true],
+      ["flip-style-1b", "reads My style", true, true],
       ["Gemma 3 4B", "rewords a message when you click Rewrite, and writes eBay listings", true, true],
       ["Claude Haiku 5.5 (paid)", "Only checks each message's reason is sendable", true, false],
       ["Claude Sonnet 5.5 (paid)", "Fixes a reason Claude Haiku 5.5 flags; when this device's models can't, writes a "

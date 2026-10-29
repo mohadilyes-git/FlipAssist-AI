@@ -120,6 +120,9 @@ class MessageRequest(BaseModel):
     reason: ReasonOnScreen | None = Field(None, description="with previous or rewrite_of: the reason the message on "
                                                             "screen gives (draft.reason), kept when that message still "
                                                             "says it")
+    style: bool = Field(True, description="write it in My style (your style card, phrasebook and closest past "
+                                          "messages); false: the default way, as before any setup (14 Oct, the "
+                                          "owner's On/Off on the AI message tab)")
     flaws_said: Literal[1, 2, 3, "all"] | None = Field(None, description="with mention, how many of the listing's "
                                                        "flaws a lower offer gives as its reason: 1, 2 or 3 (the worst, "
                                                        "by how much each cuts the price) or \"all\"; null as before "
@@ -237,6 +240,8 @@ class ListingDraft(BaseModel):
 class Approval(BaseModel):
     sent: str = Field(min_length=1, max_length=5000,
                       description="what you actually sent (a message) or listed (a description), as you sent it")
+    learn: bool = Field(True, description="a message joins the ones My style is learned from; false when it was written "
+                                          "with My style off (14 Oct): it isn't in your style")
 
 
 class Approved(BaseModel):
@@ -602,7 +607,9 @@ def draft_a_message(request: MessageRequest, s: Setup = Depends(setup), book: St
     listing = {**request.listing.model_dump(), "id": request.listing.id or new_id()}
     reading = read_listing_with_ai(listing, s.reading_model(), s.api, request.mode, s.log)
     try:
-        result = draft_message(listing, book.card(), book.index, s.local, s.api, request.mode, s.log, kind=request.kind,
+        # My style off: written the default way, as with no messages to learn from (14 Oct)
+        card, index = (book.card(), book.index) if request.style else (None, None)
+        result = draft_message(listing, card, index, s.local, s.api, request.mode, s.log, kind=request.kind,
                                mention=request.mention, length=request.length, previous=request.previous,
                                reading=reading, writer=request.writer, offer=offer, rewrite_of=request.rewrite_of,
                                wording=s.wording,  # flip-wording, Haiku's check, Sonnet's fix (flip.wording)
@@ -839,7 +846,7 @@ def approve(approval: Approval, draft_id: int = PathParam(ge=1, le=MAX_ID), log:
     found = log.approve(draft_id, approval.sent)
     if found is None:
         raise HTTPException(404, "no draft with that id")
-    listing = log.listing(draft_id)
+    listing = log.listing(draft_id) if approval.learn else None
     if listing is not None:
         book.add([{"id": f"draft-{draft_id}", "listing_title": listing["title"], "asking_price": listing["asking_price"],
                    "marketplace": listing["marketplace"], "my_message": approval.sent}], "approved")

@@ -83,6 +83,8 @@ export type MessageRequest = {
   rewrite_of?: string | null;
   /** the reason comes back as flip-wording wrote it ("pending") and checkReason checks it after the draft is shown */
   check_later?: boolean;
+  /** write it in My style (true, the default) or the default way (false: My style Off, 14 Oct) */
+  style?: boolean;
   /** with previous or rewrite_of: the reason the message on screen gives, and the lines it was worded from
    * (reading.quotes): kept rather than worded and checked again, when this listing still reads the same */
   reason?: (Reason & { quotes: string[] }) | null;
@@ -280,7 +282,9 @@ export const api = {
   estimatePrice: (request: { title: string; description?: string; flaws?: string[] }) =>
     call<PriceEstimate>("/prices/estimate", json(request)),
   draftListing: (form: FormData) => call<ListingDraft>("/listings/draft", { method: "POST", body: form }),
-  approve: (draftId: number, sent: string) => call<Approved>(`/drafts/${draftId}/approve`, json({ sent })),
+  /** learn: the message joins the ones My style is learned from (false when it was written with My style Off) */
+  approve: (draftId: number, sent: string, learn = true) =>
+    call<Approved>(`/drafts/${draftId}/approve`, json({ sent, learn })),
   style: () => call<Style>("/style"),
   styleMessages: () => call<StyleMessage[]>("/style/messages"),
   /** your setup's answers, in place of your last setup's: your style is learned from them afresh */

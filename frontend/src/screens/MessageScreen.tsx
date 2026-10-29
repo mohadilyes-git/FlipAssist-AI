@@ -22,6 +22,7 @@ const REWRITE_HINT = "Gemma 3 4B rewords it on this device, keeping the price, t
   + "for word; Claude Sonnet 5.5 (paid) does it when Gemma 3 4B's tries fail code's checks";
 // the listing's marketplace, now there's none to pick (14 Oct): written for a listing you collect and pay cash for,
 // unless its description says it's posted ("Postage only"), which the API reads from the description itself
+const MY_STYLE_KEY = "flipassist.myStyle"; // "off" when you turned My style off
 const MARKETPLACE = "facebook";
 /** what happened when you approved: copied or not, and whether it joined your style */
 type Approval = { copied: boolean; edited: boolean; saved: boolean };
@@ -47,6 +48,23 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // My style On or Off (14 Oct, the owner): Off writes the default way, and a message approved then isn't learned from.
+  // Remembered on this device
+  const [myStyle, setMyStyle] = useState(() => {
+    try {
+      return localStorage.getItem(MY_STYLE_KEY) !== "off";
+    } catch {
+      return true;
+    }
+  });
+  const pickStyle = (on: boolean) => {
+    setMyStyle(on);
+    try {
+      localStorage.setItem(MY_STYLE_KEY, on ? "on" : "off");
+    } catch {
+      // private storage blocked: it stays as picked until the app restarts
+    }
+  };
   const [approval, setApproval] = useState<Approval | null>(null);
   // a draft belongs to the listing it was written from: change the title or the description and it goes, so you
   // write one for the listing as it is now (3 Oct; a draft that arrives for the old one goes too)
@@ -105,6 +123,7 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
         writer: overrides.rewrite_of ? "ai" : "template",
         rewrite_of: overrides.rewrite_of ?? null,
         check_later: true,
+        style: myStyle,
         // Rewrite keeps the reason the message on screen gives (it may be Sonnet's fix), but only for the same
         // listing: a listing you've changed since gets its reason worded again (3 Oct: a new listing was given the
         // last one's "there's a scratch on the screen")
@@ -167,7 +186,7 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
       copied = false; // the browser said no: the message is still on screen to copy by hand
     }
     try {
-      const done = await api.approve(draft.draft_id, text);
+      const done = await api.approve(draft.draft_id, text, myStyle);
       setApproval({ copied, edited: done.edited, saved: done.saved_to_style });
       if (done.saved_to_style) onApproved?.();
     } catch (e) {
@@ -227,6 +246,11 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
           {kind === "lower" && draft?.reading.no_offers && <Warn>The seller says no offers</Warn>}
 
           <div className="how-written">
+            <div className="chips say-flaw" role="group" aria-label="My style">
+              <span className="label">My style</span>
+              <Chip on={myStyle} label="On" onClick={() => pickStyle(true)} />
+              <Chip on={!myStyle} label="Off" onClick={() => pickStyle(false)} />
+            </div>
             <div className={pickMention && mention === null ? "chips say-flaw flaw-counts missing" : "chips say-flaw"}
               role="group" aria-label="Say the flaw">
               <span className="label">{kind === "lower" ? "Say the flaw" : "Say you don't mind the flaw"}</span>
@@ -336,7 +360,7 @@ function Drafted({ draft, text, setText, busy, approval, onRewrite, onApprove }:
             {!approval.copied ? "Couldn't copy: select the message and copy it by hand."
               : approval.edited ? "Copied and saved: you changed it first." : "Copied and saved: sent as drafted."}
           </p>
-          {approval.saved && <p className="saved-style">Saved to your style</p>}
+          {approval.saved && <p className="saved-style">Saved to My style</p>}
         </>
       )}
     </>
