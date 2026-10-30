@@ -54,7 +54,7 @@ DONT_MIND = re.compile(r"\b(?:doesn'?t|don'?t|won'?t) (?:bother|matter|mind)\b|\
 PRAISE = re.compile(r"\b(?:condition|mint|immaculate|pristine|perfect|flawless|excellent|like new|as new)\b", re.IGNORECASE)
 SHARE = 0.4  # a habit is something at least 40% of your messages do
 HABIT = 2  # a sentence in at least 2 of your messages is one you'd write again
-SENTENCES = re.compile(r"(?<=[.!?])\s+|(?<=[.!?][\U0001F300-\U0001FAFF☀-➿])\s+")  # "£170?😊 Can collect" is two
+SENTENCES = re.compile(r"(?<=[.!?…])\s+|(?<=[.!?…][\U0001F300-\U0001FAFF☀-➿])\s+")  # "£170?😊 Can collect" is two
 # one whole emoji, its skin tone and joins included: "👍🏽" is one, and a lone "🏽" is none
 WHOLE_EMOJI = re.compile("[\U0001F300-\U0001F3FA\U0001F400-\U0001FAFF☀-➿]"
                          "(?:[\U0001F3FB-\U0001F3FF]|\ufe0f|\u200d[\U0001F300-\U0001FAFF☀-➿])*")
@@ -237,17 +237,64 @@ def signature(messages):
     return Counter(tail for tail, k in zip(tails, keys) if k == key).most_common(1)[0][0]
 
 
+def tail_words(tail):
+    """A sign-off's words alone, in lower case, its emojis, smileys and marks left out: "😊 Many thanks! 🙏" -> "many
+    thanks". "Many thanks! 🙏" is "Many thanks! 😊" with another emoji, not another sign-off (14 Oct hunt: drafts ended
+    "Many thanks! 🙏 Many thanks! 😊" and "😊 Cheers, Sam. Cheers, Sam")."""
+    return " ".join(t.group().lower() for t in TAIL_TOKEN.finditer(tail or "") if t.group("word"))
+
+
+# the words of a sign-off that are no name ("Thanks a lot", "Thank you so much", "Ta x"), and what's never a name in
+# one: "Best offer." and "Thanks for it" don't sign off
+SIGN_WORDS = THANKS | {"thank", "you", "a", "lot", "so", "very", "kindly", "then", "in", "advance", "mate", "pal", "bud",
+                       "love", "hun", "warm", "big", "massive", "huge", "x", "xx", "xxx"}
+
+
+def signed_part(text):
+    """Where a text's last part starts when it only signs off, whoever's sign-off it is (SIGNED: "Many thanks",
+    "Kind regards", "Thanks a lot", "Cheers mate, Sam"): its last sentence, else what's after its last comma
+    ("...can collect today, thanks a lot"); None when it ends with no such part. A word in it that's no name ("Best
+    offer.", "Cheers for that") makes it none."""
+    text = text or ""
+    breaks = [m.end() for m in re.finditer(r"[.!?…]+\s+|(?<=[\U0001F300-\U0001FAFF☀-➿])\s+", text.rstrip())]
+    sentence = breaks[-1] if breaks else 0
+    commas = [m.end() for m in re.finditer(r",\s*", text[sentence:])]
+    for at in (sentence, *([sentence + commas[-1]] if commas else [])):
+        part = text[at:]
+        if not part.strip() or not SIGNED.match(part.strip()):
+            continue
+        said = [w for w in tail_words(part).split() if w not in SIGN_WORDS]
+        if len(said) <= 1 and not set(said) & NOT_A_NAME:
+            return at + len(part) - len(part.lstrip())
+    return None
+
+
 def own_tail(text, sign_off):
-    """Where the sign-off a text ends with starts, when that's yours (the same words and smileys) or plain thanks the
-    writer put there ("Cheers", "Thank you"); else None: "...so much", "...soon" or the "Max" of "iPhone 14 Pro Max"
-    stay (3 Oct review)."""
+    """Where the sign-off a text ends with starts, when that's yours (the same words, whatever emoji or smiley it comes
+    with), plain thanks the writer put there ("Cheers", "Thank you") or another sign-off of yours (signed_part: "Many
+    thanks", "Thanks a lot"); else None: "...so much", "...soon" or the "Max" of "iPhone 14 Pro Max" stay (3 Oct
+    review). An emoji or smiley before its first word stays the message's, unless your sign-off starts with one
+    ("...£340? 😊 Cheers, Sam" is signed already)."""
     allowed = CORE_THANKS | {t.group().lower() for t in TAIL_TOKEN.finditer(sign_off) if t.group("word")}
+    found = []
     at = tail_start(text, allowed)
-    if at is None:
+    if at is not None:
+        said = tail_words(text[at:])
+        plain = all(w in CORE_THANKS or w == "you" for w in said.split())
+        if said and (said == tail_words(sign_off) or plain):
+            found.append(at)
+    # ...or the whole last sentence when it only signs off: "Many thanks" or "Kind regards" left "Many." and "Kind."
+    # before yours (14 Oct hunt: "...Can collect today. Many. Thanks, Dan")
+    if (part := signed_part(text)) is not None:
+        found.append(part)
+    if not found:
         return None
-    said = said_tail(text[at:])
-    plain = all(w in CORE_THANKS or w == "you" for w in said.split())
-    return at if said == said_tail(sign_off) or plain else None
+    at = min(found)
+    first = next((t for t in TAIL_TOKEN.finditer(sign_off) if not t.group("mark")), None)
+    if first is not None and first.group("word"):
+        word = next((t for t in TAIL_TOKEN.finditer(text, at) if t.group("word")), None)
+        at = word.start() if word is not None else at
+    return at
 
 
 def unsigned(text, sign_off):
@@ -255,12 +302,13 @@ def unsigned(text, sign_off):
     if not sign_off or not isinstance(text, str):
         return text
     at = own_tail(text, sign_off)
-    return text[:at].rstrip(" ,-–—") if at is not None and said_tail(text[at:]) == said_tail(sign_off) else text
+    return text[:at].rstrip(" ,-–—") if at is not None and tail_words(text[at:]) == tail_words(sign_off) else text
 
 
 def signed_with(text, sign_off):
     """A draft that ends with your sign-off ("...I can come and collect. remi :), cheers"): the one it ends with
-    (a "Cheers" the writer put there, or yours) swapped for yours, as you write it."""
+    (a "Cheers" the writer put there, or yours) swapped for yours, as you write it. A question before it keeps its
+    "?" ("Hi, would you take £295? cheers Dan", not "...£295. cheers Dan": 14 Oct hunt), and "…" is an end."""
     if not sign_off or not isinstance(text, str) or not text.strip():
         return text
     at = own_tail(text, sign_off)
@@ -272,7 +320,10 @@ def signed_with(text, sign_off):
         body = body[:last[0].start()].rstrip(" ,-–—")
     if not body:
         return sign_off
-    return f"{body}{'' if body[-1] in '.?!)' or WHOLE_EMOJI.search(body[-2:]) else '.'} {sign_off}"
+    if body[-1] in ".?!)…" or WHOLE_EMOJI.search(body[-2:]) or re.search(rf"(?:{SMILEY})$", body):
+        return f"{body} {sign_off}"
+    last = [s for s in SENTENCES.split(body) if s.strip()][-1:]
+    return f"{body}{'?' if last and ends_asking(last[0]) else '.'} {sign_off}"
 
 
 # saying you like the item: "I like the switch a lot", "i really like it", "I loved the phone" (seen in a real setup on
@@ -421,7 +472,7 @@ def closing_clause(part):
     a price, a question, or one word."""
     if (not part or ends_asking(part) or "[OFFER]" in part or re.search(r"\d", part) or LIKES.search(part)
             or re.search(MENTIONS["condition"], part, re.IGNORECASE) or DONT_MIND.search(part)
-            or tail_start(part, THANKS) == 0 or len(words(part)) < 2):
+            or tail_start(part, THANKS) == 0 or SIGNED.match(part.strip()) or len(words(part)) < 2):
         return None
     part = re.sub(r"\s+(?:it|them)$", "", part.strip(), flags=re.IGNORECASE)
     if tail_start(part, THANKS) is not None or TAIL_TOKEN.search(part) and re.search(SMILEY, part):
@@ -769,16 +820,18 @@ def style_card(messages):
     card["names_places"] = names_places(texts)
     if (signed := signature(mine)):
         card["signature"] = signed
-        # ...once: out of your closings, where it was learned too, so removing it removes it (3 Oct review)
+        # ...once: out of your closings, where it was learned too, so removing it removes it (3 Oct review), and out of
+        # an offer sentence it ends ("Hi, would you take £185, cheers Dan": 14 Oct hunt, the reason went after it and it
+        # came twice, "...£255, cheers Dan, given the small crack on the back? cheers Dan")
         for book in (card["phrases"], *card["by_market"].values()):
-            for slot in CLOSING_SLOTS:
+            for slot in ("opener", *OFFER_SLOTS, *CLOSING_SLOTS):
                 if isinstance(book.get(slot), str) and book[slot]:
                     left = unsigned(book[slot], signed)
                     book[slot] = left if words(left) else None
         # ...and not on a kind of offer you've sent at least HABIT of without it (signed only under asking)
         allowed = THANKS | sign_off_names(mine)
         signed_kinds = {kind_of(m) for m in mine for at in [tail_start(m["my_message"], allowed)]
-                        if at is not None and said_tail(m["my_message"][at:]) == said_tail(signed)}
+                        if at is not None and tail_words(m["my_message"][at:]) == tail_words(signed)}
         made = Counter(kind_of(m) for m in mine)
         card["signature_skip"] = sorted(k for k in KINDS if made[k] >= HABIT and k not in signed_kinds)
     if (likes := likes_of(mine)):
@@ -866,7 +919,12 @@ def phrasebook(messages):
                 counts.add(sentence, kind)
         if offering and (part := offer_clause(offer)) and not names_item(part):
             offer_parts.add(part, kind)
-        after = clauses(offer[offer.index("[OFFER]"):])[1:] + [c for sentence in sentences[at + 1:] for c in clauses(sentence)]
+        # ...and the parts after it, its sign-off left out: "Cheers mate, Sam" isn't the parts "Cheers mate" and "Sam"
+        # (14 Oct hunt: Offer more ended "...hold it for me. Cheers mate." and "...Jess x.")
+        ends = signed_part(closing)
+        unsigned_closing = closing[:ends] if ends is not None else closing
+        after = clauses(offer[offer.index("[OFFER]"):])[1:] + [c for sentence in SENTENCES.split(unsigned_closing.strip())
+                                                               if sentence.strip() for c in clauses(sentence)]
         for part in dict.fromkeys(filter(None, (closing_clause(c) for c in after))):  # each once a message
             if not names_item(part):
                 closing_parts_.add(part, kind)
@@ -903,10 +961,23 @@ def phrasebook(messages):
         """The parts after your offer you write again and again, written with each of these kinds of offer (as
         closings.habit: "Can collect tonight." from lower offers alone doesn't end one of the asking price), most
         written first, two at most, as a closing; None with none."""
-        habits = [key for key, n in closing_parts_.keys.most_common()
-                  if n >= HABIT and set(kinds) <= closing_parts_.kinds[key]][:2]
-        said = [max(closing_parts_.ways[key], key=closing_parts_.ways[key].get) for key in habits]
-        return ". ".join(said) + "." if said else None
+        said, says = [], set()
+        for key, n in closing_parts_.keys.most_common():
+            if n < HABIT or not set(kinds) <= closing_parts_.kinds[key]:
+                continue
+            way = max(closing_parts_.ways[key], key=closing_parts_.ways[key].get)
+            # ...never two saying the same thing, from different messages (14 Oct hunt: "I can collect this evening.
+            # Can pick up today.", "Can pay cash on collection. Can collect tonight.")
+            habit = {name for name, pattern in HABIT_WORDS.items() if pattern.search(way)}
+            if habit & says:
+                continue
+            said.append(way)
+            says |= habit
+            if len(said) == 2:
+                break
+        # each part ends with a full stop, not after a kiss or an emoji ("Jess x.")
+        ended = [way if re.search(r"(?:[.!?…]|\bx{1,3}|[\U0001F300-\U0001FAFF☀-➿])$", way) else f"{way}." for way in said]
+        return " ".join(ended) if said else None
     if book["closing"] is None:  # ...and the parts after it you write again and again, with every kind you make
         book["closing"] = parts_closing({kind for kind, n in made.items() if n})
     book["sign_off"] = sign_offs.habit()  # "Kind regards, Sam": for_kind's last fallback, whatever the offer

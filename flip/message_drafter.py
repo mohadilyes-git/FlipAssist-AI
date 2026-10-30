@@ -53,7 +53,7 @@ from flip.retrieval import listing_text
 from flip.wording import completed, worded_reason
 from flip.style import (HABIT_WORDS, LOCAL_MARKETS, NOT_A_PLACE, OLD_PRICE, OFFER_SLOTS, POSTED_MARKETS, SENTENCES,
                         WHEN_BEFORE, WHEN_WORD, check_not_removed, describe, for_kind, for_market, opening, question_words,
-                        item_kind, scrubbed, shortened, signed_with, unsigned, without_prices)
+                        item_kind, scrubbed, shortened, signed_part, signed_with, unsigned, without_prices)
 from flip.writer import (ASKS_OFFER, MAX_FLAW, make_longer, priced, reason_sentence, repeats, split_sign_off, the_added,
                          write_offer)
 from flip.writer import NEUTRAL, collecting_from, said_once, with_reason
@@ -915,13 +915,18 @@ def in_your_case(answer, card, offer=None, kind=None, keep=()):
     and places by their capitals ("the Johnny Cash LP", "collect from Manchester")."""
     if not isinstance((answer or {}).get("message"), str):
         return answer
-    # the words you write short ("Could u hold it?"), not in the checked reason or the item's name (keep), then your
+    # the words you write short ("Could u hold it?"), not in the checked reason, the item's name (keep) or the sign-off
+    # the draft ends with, which is yours as you typed it ("Thank you.", never "Thank u.": 14 Oct hunt), then your
     # sign-off as you write it, after them
-    message = shortened(answer["message"], (card or {}).get("shortcuts"), keep)
+    text = answer["message"]
+    ends = signed_part(text)
+    message = shortened(text, (card or {}).get("shortcuts"), (*keep, *([text[ends:]] if ends is not None else [])))
+    if (card or {}).get("lowercase"):  # in lower case, but your sign-off as you write it: "cheers, Dan", not "cheers, dan"
+        message = message.lower()
     signs = kind not in ((card or {}).get("signature_skip") or ())  # not on a kind you send without it
     message = signed_with(message, (card or {}).get("signature")) if signs else message
     style = (card or {}).get("price_style")  # your offer written your way: "170£", "170" (3 Oct), after the checks
     if offer and style in ("after", "bare", "word"):
         said, pounds = offer_words(offer), offer_words(offer).lstrip("£")
         message = message.replace(said, {"after": f"{pounds}£", "bare": pounds, "word": f"{pounds} quid"}[style])
-    return {**answer, "message": message.lower() if (card or {}).get("lowercase") else message}
+    return {**answer, "message": message}

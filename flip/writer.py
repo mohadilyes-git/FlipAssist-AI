@@ -23,7 +23,7 @@ import re
 from contextvars import ContextVar
 from functools import lru_cache
 
-from flip.catalogue import load_catalogue, model_names
+from flip.catalogue import load_catalogue, model_names, words
 from flip.checks import (ASKS_YOU, BATTERY_REPLACED, EMOJI, ESIM, HAD_AFTER_NEED, HOLD, LOWBALL, NO_LONGER, PAY_FIRST,
                          PROBLEM, SIGN_OFF, ends_asking)
 from flip.numbers import TYPED_BATTERY, battery_worded
@@ -223,7 +223,11 @@ REASON_LEAD = (r"given|considering|due to|owing to|what with|with|bearing in min
                # ...and not the "for" of a lead of its own: "allowing for", "to account for", "to make up for" (26 Sep
                # final recheck: "would you take £170 allowing?")
                r"(?<!allowing )(?<!allow )(?<!accounting )(?<!account )(?<!up )(?<!compensate )(?<!compensating )"
-               r"(?<!allowances )(?<!allowance )for(?= (?:the|its|it['’]?s) (?:cond(?:ition|iton|tion)|state)\b)")
+               r"(?<!allowances )(?<!allowance )for(?= (?:the|its|it['’]?s) (?:cond(?:ition|iton|tion)|state)\b)|"
+               # ...and a lead that starts a clause, before "it" or "there": "as it's got a few marks", "because it's
+               # damaged", "since there are some scratches" (14 Oct hunt: refused as the AI's to word, on every listing,
+               # and since 14 Oct the template is the only writer, so no message at all)
+               r"(?:as|since|because|becuase|beacuse|becos|bcos|bcuz|['’]?cos|coz|cuz|seeing as)(?= (?:it|there)\b)")
 GENERIC_WORDS = (r"(?:(?:it['’]?s got|its got|it has|there['’]?s|there is|there are) )?"  # "given it's got a few marks"
                  r"(?:(?:the|its|it['’]?s|all the|any|some|a few|a couple of|a bit of) )?"
                  r"(?:(?:general|usual|normal|overall|current|cosmetic|visible|obvious|light|minor|small|slight|"
@@ -245,12 +249,19 @@ GENERIC_CLAUSE_END = (rf"(?={MATE_OR_PLEASE}(?:\s*(?:[,.?!;:]|$)"
                       r"|\s+(?:tbh|tbf|to be (?:fair|honest)|tho|though|lol|ha(?:ha)+|like(?=\s*(?:[,.?!;:]|$))|at all|"
                       r"instead|as is|rather than|(?:as|so) long as|for a (?:quick|fast) sale|(?:as|and) (?:i|we)|"
                       r"(?:and |i |we )?can (?:collect|come|pick))\b))")
-GENERIC_REASON = re.compile(rf"(?:\s*[,\-–—])?(?:\s+and)?\s+(?P<lead>{REASON_LEAD}) (?P<what>{GENERIC_WORDS}){GENERIC_CLAUSE_END}",
+# ...and the state said as a clause after a lead that starts one: "it's damaged", "it's a bit worn", "it's not in the
+# best condition", "it isn't in perfect nick"
+STATE_WORDS = (r"(?:it['’]?s|it is)\s+(?:(?:a bit|a little|abit|quite|slightly|very|pretty|fairly|rather)\s+)?"
+               r"(?:damaged|marked|scratched|scuffed|worn|used|battered|tatty|rough|cracked|dented|chipped)"
+               r"|(?:it['’]?s|it is|it isn['’]?t|it is not|its)\s+(?:not\s+)?in\s+(?:the\s+)?"
+               r"(?:best|perfect|great|greatest|mint|top|good|amazing)\s+(?:of\s+)?(?:condition|nick|shape)")
+GENERIC_WHAT = rf"(?:{STATE_WORDS}|{GENERIC_WORDS})"
+GENERIC_REASON = re.compile(rf"(?:\s*[,\-–—])?(?:\s+and)?\s+(?P<lead>{REASON_LEAD}) (?P<what>{GENERIC_WHAT}){GENERIC_CLAUSE_END}",
                             re.IGNORECASE)  # its comma or "and" before it goes with it
 # ...or said first, with the offer after it: "Given the condition, would you take £[OFFER]?", "given the state of it
 # would you do £[OFFER]?" (with_reason checks the offer follows: ASKS_OFFER), or as a sentence of its own after your
 # offer, in your closing: "Would you take £150? Given the condition." (point_in_closing, 26 Sep)
-GENERIC_FIRST = re.compile(rf"(?:^|(?<=, ))(?P<lead>{REASON_LEAD}) (?P<what>{GENERIC_WORDS})(?P<comma>\s*,)?(?:\s+|$)",
+GENERIC_FIRST = re.compile(rf"(?:^|(?<=, ))(?P<lead>{REASON_LEAD}) (?P<what>{GENERIC_WHAT})(?P<comma>\s*,)?(?:\s+|$)",
                            re.IGNORECASE)
 # ...and what a reason said first can't leave behind when it goes: "Given the condition, and the fact I can collect
 # today, would you..." isn't "And the fact I can collect today, would you..." (26 Sep red team)
@@ -317,7 +328,7 @@ GOOD_WORD = re.compile(r"^(?:in )?(mint|immaculate|pristine|flawless|perfect|lik
 # what may follow the price in "I can pay £X ...": nothing else from a question makes sense there
 SAFE_TAIL = re.compile(r"^(?:\s*(?:cash(?: on collection| in hand)?|for (?:it|this|them|these)|on collection))?\s*$",
                        re.IGNORECASE)
-SENTENCES = re.compile(r"(?<=[.!?])\s+|(?<=[.!?][\U0001F300-\U0001FAFF☀-➿])\s+")  # "£170?😊 Can collect" is two
+SENTENCES = re.compile(r"(?<=[.!?…])\s+|(?<=[.!?…][\U0001F300-\U0001FAFF☀-➿])\s+")  # "£170?😊 Can collect" is two
 # a greeting at the start of a sentence, as typed, with or without a comma: "Hi mate, ", "Hi mate ", "Hiya 👋 "
 LEADING_GREETING = re.compile(r"(?:hi|hiya|hello|hey|alright|morning|afternoon|evening|yo)\b(?:\s+(?:mate|there|bro|"
                               r"pal|buddy|m8|hun|all))?(?:\s*[,!.?\-–—]+\s*|\s*[\U0001F300-\U0001FAFF☀-➿]+\s*|\s+|$)",
@@ -1202,6 +1213,24 @@ def split_sign_off(sentence):
     return core, sentence[len(core):].strip()
 
 
+def split_end(sentence):
+    """A sentence as (what it says, the marks it ends with, what comes after them): ("Would you take £[OFFER]", "??",
+    "😊"). Every mark of a run goes together ("£255??", never "£255?, given ...?" nor "£255?, given ...!"), a space
+    before it too, and dots that trail off ("...", "…") end it: they're no sign-off to keep after code's own end
+    (14 Oct hunt: "...on the back? ... Can collect today", "I can pay £350. ...")."""
+    core, sign = split_sign_off(sentence)
+    dots = re.match(r"(?:\.{2,}|…)+", sign)
+    if dots:
+        core, sign = core + dots.group(), sign[dots.end():].strip()
+    found = re.search(r"\s*([.?!…]+)$", core)
+    return (core[:found.start()], found.group(1), sign) if found else (core.rstrip(), "", sign)
+
+
+def trailed(end, mark="."):
+    """The end code gives a sentence it rewrote: your dots when you trail off ("I can pay £300..."), else mark."""
+    return end if end and re.fullmatch(r"(?:\.{2,}|…)+", end) else mark
+
+
 def split_greeting(sentence):
     """A sentence's greeting, as typed with what follows it, and the rest:
     ("Hi mate, ", "would you take £[OFFER]?"), ("Hi mate ", "I can pay..."),
@@ -1221,13 +1250,14 @@ def as_statement(sentence):
     'Would you take £[OFFER] cash?' -> 'I can pay £[OFFER] cash.' Only a safe
     ending is kept after the price ("cash", "for it"), and your greeting as
     you type it and the sign-off: "...£[OFFER]?😊" -> "...£[OFFER]. 😊"."""
-    core, sign = split_sign_off(sentence)
+    body, end, sign = split_end(sentence)
+    core = body + end
     if not asks(core) or "[OFFER]" not in core:
         return sentence
     greeting, _ = split_greeting(core)
-    tail = re.sub(r"^\s*(?:quid|pounds)\b", "", core[core.index("[OFFER]") + len("[OFFER]"):].rstrip(" ?.!"))
+    tail = re.sub(r"^\s*(?:quid|pounds)\b", "", body[body.index("[OFFER]") + len("[OFFER]"):].rstrip(" ?.!"))
     tail = tail if SAFE_TAIL.match(tail) else ""
-    return f"{greeting}I can pay £[OFFER]{tail}.{' ' + sign if sign else ''}"
+    return f"{greeting}I can pay £[OFFER]{tail}{trailed(end)}{' ' + sign if sign else ''}"
 
 
 def as_question(sentence):
@@ -1236,13 +1266,14 @@ def as_question(sentence):
     sentence is one you write paying asking. Only a safe ending is kept after
     the price, and your greeting and sign-off: 'Hi mate, I can pay £[OFFER]. 👍'
     -> 'Hi mate, would you take £[OFFER]? 👍'."""
-    core, sign = split_sign_off(sentence)
+    body, end, sign = split_end(sentence)
+    core = body + end
     if asks(core) or "[OFFER]" not in core:
         return sentence
     greeting, _ = split_greeting(core)
-    tail = re.sub(r"^\s*(?:quid|pounds)\b", "", core[core.index("[OFFER]") + len("[OFFER]"):].rstrip(" .!"))
+    tail = re.sub(r"^\s*(?:quid|pounds)\b", "", body[body.index("[OFFER]") + len("[OFFER]"):].rstrip(" .!"))
     tail = tail if SAFE_TAIL.match(tail) else ""
-    ask = f"would you take £[OFFER]{tail}?"
+    ask = f"would you take £[OFFER]{tail}{trailed(end, '?')}"
     return f"{greeting + ask if greeting else ask[:1].upper() + ask[1:]}{' ' + sign if sign else ''}"
 
 
@@ -1251,11 +1282,11 @@ def held(sentence):
     pay £[OFFER] cash if you can hold it for me.", before any sign-off. Once:
     your own reason stays ("if you can save it for me"), and a condition of
     another kind gives way to it ("£[OFFER] if that's ok" -> "£[OFFER] if you can hold it for me")."""
-    core, sign = split_sign_off(sentence)
-    if HELD.search(core):
+    body, end, sign = split_end(sentence)
+    if HELD.search(body):
         return sentence
-    core = re.sub(r"\s+if\b.*$", "", core.rstrip(" .!?"), flags=re.IGNORECASE)
-    return f"{core} if you can hold it for me.{' ' + sign if sign else ''}"
+    core = re.sub(r"\s+if\b.*$", "", body.rstrip(" .!?"), flags=re.IGNORECASE)
+    return f"{core} if you can hold it for me{trailed(end)}{' ' + sign if sign else ''}"
 
 
 def generic_reason(body):
@@ -1307,6 +1338,9 @@ def without_generic(body, found):
     return body[:found.start()] + (rest[:1].upper() + rest[1:] if found.group("lead")[:1].isupper() else rest)
 
 
+CLAUSE_LEADS = {"as", "since", "because", "becuase", "beacuse", "becos", "bcos", "bcuz", "coz", "cuz", "seeing as"}
+
+
 def led(lead, phrases):
     """Your own lead with the listing's flaws (flaw_list), as you capitalise
     it: "given the cracked screen", "cos it doesn't charge", "because of the
@@ -1325,6 +1359,8 @@ def led(lead, phrases):
         reason = " and ".join([*([f"{lead} {' and '.join(things)}"] if things else []), f"{because} {' and '.join(facts)}"])
     elif facts and low in ("with", "what with"):
         reason = f"given {' and '.join(phrases)}"  # "given that it doesn't charge", not "with that it doesn't charge"
+    elif low in CLAUSE_LEADS or re.fullmatch(r"['’]?cos", low):  # "as it's got a few marks": a clause after it (14 Oct)
+        reason = f"{lead} {' and '.join(facts)}" if not things else f"given {' and '.join(phrases)}"
     else:
         reason = f"{lead} {' and '.join(phrases)}"
     return reason[:1].upper() + reason[1:] if lead[:1].isupper() else reason  # "Given the small crack, would you..."
@@ -1346,10 +1382,9 @@ def with_reason(sentence, kind, point):
     words that one, never with a second reason after it (26 Sep)."""
     if kind == "more" and point and point.get("about") != "condition":
         kind = "asking"  # a flaw you don't mind at Offer more is said as at Pay asking: "I don't mind that..." (14 Oct)
-    core, sign = split_sign_off(sentence)
+    body, end, sign = split_end(sentence)
+    core = body + end
     tail = f" {sign}" if sign else ""
-    end = core[-1] if core[-1:] in (".", "?", "!") else ""
-    body = core[:-1] if end else core
     if not point:  # no flaw to give: not your "given the condition" on a mint listing, nor "don't mind the condition"
         if kind == "more":
             return sentence
@@ -1377,11 +1412,11 @@ def with_reason(sentence, kind, point):
             return f"{body[:generic.start('lead')]}{reason}{body[generic.end('what'):]}{end}{tail}"
         if OWN_REASON.search(body):
             return None  # your own reason about the condition ("given the cracked screen"): never a second after it
-        return f"{body}, given {said}{end}{tail}"
+        return f"{after_price(body, f', given {said}')}{end}{tail}"
     if kind == "more":
         if re.search(r"\b(?:condition|mint|immaculate|pristine|perfect|flawless|excellent|like new)\b", body, re.IGNORECASE):
             return sentence  # your own offer already praises it: once
-        return f"{body}, as {said}{end}{tail}"
+        return f"{after_price(body, f', as {said}')}{end}{tail}"
     mind = GENERIC_DONT_MIND.search(body)
     if mind:  # your own "don't mind the condition", with the listing's flaw: "don't mind that it doesn't charge",
         facts = all(p.startswith("that ") for p in phrases)  # "not fussed that it...", not "not fussed about that it"
@@ -1389,7 +1424,21 @@ def with_reason(sentence, kind, point):
                f"{body[mind.end('what'):]}{end}{tail}"
     if re.search(CONDITION_WORDS, body, re.IGNORECASE):  # your own words about the condition, any way round ("don't
         return None  # mind the scratches on the screen", "condition doesn't bother me"): never a second "I don't mind"
-    return f"{core}{'' if core[-1:] in ('.', '?', '!') else '.'} I don't mind {said}.{tail}"
+    return f"{core}{'' if core[-1:] in ('.', '?', '!', '…') else '.'} I don't mind {said}.{tail}"
+
+
+def after_price(body, reason):
+    """An offer sentence with the reason at the end of the price's own clause, where what's tied to the price ends
+    (PAY_CLAUSE_END, as paid_at): "would you take £[OFFER] cash, given that the back glass is cracked, can collect
+    tonight", "would you take £[OFFER], given ..., or is that too cheeky", never after the next clause ("...can collect
+    tonight, given that...": 14 Oct hunt, it read as the reason for collecting tonight)."""
+    price = re.search(r"£?\[OFFER\](?:\s*(?:quid|pounds)\b)?", body)
+    found = PAY_CLAUSE_END.search(body, price.end()) if price else None
+    at = found.start() if found else len(body)
+    rest = body[at:]
+    if rest.strip() and not re.match(r"\s*[,;:.!?…]|\s+[-–—]\s", rest):
+        rest = f",{rest}"  # a clause that carries on gets its comma: ", given the small crack on the back, if I collect"
+    return f"{body[:at]}{reason}{rest}"
 
 
 def point_in_closing(closing, kind, point):
@@ -1405,14 +1454,27 @@ def point_in_closing(closing, kind, point):
     another way ("Condition doesn't bother me.") (26 Sep red team: "I can pay
     £200 cash. I don't mind the small crack on the back. Don't mind the
     condition.")."""
+    if kind == "more" and point and point.get("about") != "condition":
+        kind = "asking"  # a flaw at Offer more is said as at Pay asking (with_reason): your "Don't mind the condition."
+        # takes it, never a second "I don't mind ..." before it (14 Oct hunt)
     if kind == "more" or (kind == "asking" and not point):
         return closing, point
     parts = [part.strip() for part in SENTENCES.split(closing) if part.strip()]
     for at, part in enumerate(parts):
         core, sign = split_sign_off(part)
-        # at asking your "don't mind the condition" anywhere in it; under it a sentence that's only your reason
-        if not (GENERIC_DONT_MIND.search(core) if kind == "asking" else GENERIC_FIRST.fullmatch(core.rstrip(" .!"))):
+        # at asking your "don't mind the condition" anywhere in it; under it a sentence that's only your reason, or
+        # one that gives it after what it says ("I'm offering that because of the condition.": 14 Oct hunt, the
+        # reason was said twice, and with no flaw to give no message was written)
+        whole = GENERIC_FIRST.fullmatch(core.rstrip(" .!"))
+        inside = kind == "lower" and not whole and GENERIC_REASON.search(core)
+        if not (GENERIC_DONT_MIND.search(core) if kind == "asking" else whole or inside):
             continue
+        if inside and not point:  # no flaw to give: the reason goes, and the sentence with it if it was for it
+            left = without_generic(core.rstrip(" .!?"), inside).strip(" ,")
+            dangling = len(words(left)) < 3 or re.search(r"\b(?:that|this|it|it['’]?s|its|just|only|offering|offer|"
+                                                         r"asking|price|so|is|was|be|sorry)$", left, re.IGNORECASE)
+            parts[at] = sign_left(sign) if dangling else f"{left}.{' ' + sign if sign else ''}"
+            return " ".join(part for part in parts if part), None
         said = with_reason(part, kind, point)
         if said is None:
             return None

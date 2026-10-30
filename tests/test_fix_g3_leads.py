@@ -255,14 +255,34 @@ def test_any_flaw_word_of_yours_takes_the_listings_flaw(words):
 
 
 @pytest.mark.parametrize("sentence", ["Would you take £[OFFER] given the cracked screen?",
-                                      "Would you take £[OFFER] given the scratches on the screen?",
-                                      "Would you take £[OFFER] as it's got a few marks?"])
+                                      "Would you take £[OFFER] given the scratches on the screen?"])
 def test_a_reason_of_your_own_about_the_condition_never_gets_a_second_one(sentence):
     """The verifier: never ', given …' after an offer sentence that already gives a condition reason. These name the
     old listing's flaw in words code can't swap, so the AI words them, and they never stay on a mint listing."""
     assert with_reason(sentence, "lower", CRACK) is None
     assert with_reason(sentence, "lower", MARKS_AND_BATTERY) is None
     assert with_reason(sentence, "lower", None) is None
+
+
+@pytest.mark.parametrize("sentence, crack, fact", [
+    ("Would you take £[OFFER] as it's got a few marks?", "Would you take £[OFFER] given the small crack on the back?",
+     "Would you take £[OFFER] as the back glass is cracked?"),
+    ("Would you take £[OFFER] because it's damaged?", "Would you take £[OFFER] given the small crack on the back?",
+     "Would you take £[OFFER] because the back glass is cracked?"),
+    ("Would you take £[OFFER] since it's not in the best condition?",
+     "Would you take £[OFFER] given the small crack on the back?",
+     "Would you take £[OFFER] since the back glass is cracked?"),
+    ("As there are a few scratches, would you take £[OFFER]?", "Given the small crack on the back, would you take £[OFFER]?",
+     "As the back glass is cracked, would you take £[OFFER]?"),
+])
+def test_your_reason_said_as_a_clause_takes_the_listings_flaw_or_goes(sentence, crack, fact):
+    """14 Oct hunt: "as it's got a few marks" was left to the AI, but since 14 Oct the template is the only writer, so
+    that persona got no message on any listing. It's your reason for any listing, like "given the condition": the
+    listing's flaw goes in its place (a fact after your own lead, a thing after "given"), and with none it goes."""
+    assert with_reason(sentence, "lower", CRACK) == crack
+    assert with_reason(sentence, "lower", {"about": "flaw", "says": ["Back glass cracked"],
+                                           "clause": "the back glass is cracked"}) in (fact, crack)
+    assert with_reason(sentence, "lower", None) == "Would you take £[OFFER]?"
 
 
 def test_your_own_reason_on_a_mint_listing_is_left_to_the_ai_not_a_crash():
@@ -274,8 +294,9 @@ def test_your_own_reason_on_a_mint_listing_is_left_to_the_ai_not_a_crash():
 
 @pytest.mark.parametrize("sentence, reasoned", [
     ("Would you take £[OFFER] cash?", "Would you take £[OFFER] cash, given the small crack on the back?"),
+    # the reason goes with the price, before what's said after it (14 Oct hunt: "...can collect tonight, given...")
     ("Would you take £[OFFER] as I can collect today?",
-     "Would you take £[OFFER] as I can collect today, given the small crack on the back?"),
+     "Would you take £[OFFER], given the small crack on the back, as I can collect today?"),
     ("Would you take £[OFFER] with the box?", "Would you take £[OFFER] with the box, given the small crack on the back?"),
     ("Is £[OFFER] ok?", "Is £[OFFER] ok, given the small crack on the back?"),
     ("Would you take £[OFFER] given the condition? 😊", "Would you take £[OFFER] given the small crack on the back? 😊"),

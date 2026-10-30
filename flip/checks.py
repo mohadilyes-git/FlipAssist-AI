@@ -1431,14 +1431,25 @@ def check_no_invented_numbers(what, text, sources, own=()):
     if own:
         mine = {tuple(words(sentence)) for sentence in own}
         times = {clock for sentence in own for _, clock in clock_times(sentence)}
+        # ...and a number of yours with the word you write after it ("in 20 mins"), in a sentence of yours the writer
+        # put the listing's flaw in, or took your reason out of (14 Oct hunt: "Hi, would you take £255, given the
+        # small crack on the back, can be there in 20 mins?" was refused for its 20, so no message was written)
+        def figures(sentence):  # each number with its word, not a clock time ("after 6pm": yours only to collect)
+            clocks = [span for span, _ in clock_times(sentence)]
+            return [n for n in re.finditer(r"\b(\d+)\s*([^\W\d_]+)", sentence)
+                    if not any(start <= n.start() < end for start, end in clocks)]
+        counted = {(n.group(1), n.group(2).lower()) for sentence in own for n in figures(sentence)}
         kept = []  # cut as flip.style cuts your sentences: "£170?😊 Can collect" is two
-        for sentence in re.split(r"(?<=[.!?])\s+|(?<=[.!?][\U0001F300-\U0001FAFF☀-➿])\s+|\n+", text):
+        for sentence in re.split(r"(?<=[.!?…])\s+|(?<=[.!?…][\U0001F300-\U0001FAFF☀-➿])\s+|\n+", text):
             if tuple(words(sentence)) in mine:
                 continue  # yours, word for word
             if COLLECT_TALK.search(sentence):
                 for (start, end), clock in reversed(clock_times(sentence)):
                     if clock in times:
                         sentence = f"{sentence[:start]} {sentence[end:]}"
+            for n in reversed(figures(sentence)):
+                if (n.group(1), n.group(2).lower()) in counted:
+                    sentence = f"{sentence[:n.start()]} {sentence[n.end():]}"
             kept.append(sentence)
         text = " ".join(kept)
     extra = numbers_in(TEXT_SPEAK.sub(" ", text)) - numbers_in(sources)

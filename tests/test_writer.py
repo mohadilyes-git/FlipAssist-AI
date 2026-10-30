@@ -216,7 +216,8 @@ def test_an_offer_at_or_over_asking_is_said_in_plain_words(habit, said):
 
 def test_the_reason_goes_before_a_sign_off():
     flaw = {"about": "flaw", "says": ["Broken back"]}
-    assert with_reason("Would you take £[OFFER]...", "lower", flaw) == "Would you take £[OFFER], given the broken back? ..."
+    # dots that trail off end the sentence, not a sign-off left after code's own "?" (14 Oct hunt: "...back? ...")
+    assert with_reason("Would you take £[OFFER]...", "lower", flaw) == "Would you take £[OFFER], given the broken back..."
     assert with_reason("Would you take £[OFFER] x", "lower", flaw) == "Would you take £[OFFER], given the broken back? x"
 
 
