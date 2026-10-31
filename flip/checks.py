@@ -1220,10 +1220,14 @@ def clauses(message):
     found = []
     for sentence in re.split(r"(?<=[.!?])\s+|\n+", message.strip()):
         question = ends_asking(sentence)
-        for clause in CLAUSES.split(sentence):
-            clause_words = words(clause)
-            if clause_words:
-                found.append((clause, (question and clause_words[0] in QUESTION_WORDS) or bool(INDIRECT.search(clause))))
+        parts = [clause for clause in CLAUSES.split(sentence) if words(clause)]
+        # a short question that's all one part, with no price, asks whatever its first word: "Battery health?",
+        # "Unlocked?", "Boxed?" (14 Oct hunt: "Battery health?" was read as giving the battery as a reason, and every
+        # draft of that style was refused)
+        whole = question and len(parts) == 1 and not re.search(r"£|\d", parts[0])
+        for clause in parts:
+            found.append((clause, whole or (question and words(clause)[0] in QUESTION_WORDS) or
+                          bool(INDIRECT.search(clause))))
     return found
 
 

@@ -120,7 +120,7 @@ TIMES = r"(?:today|tonight|tomorrow|tmrw|tmr|tomoz|2day|2nite|2moro|this (?:even
 WHEN = re.compile(rf"\s*\b(?:(?:until|till|til|by)\s+)?{TIMES}\b", re.IGNORECASE)
 # a sentence where when is the point: "Can collect today, not tomorrow" is no habit of "Can collect tomorrow, not today"
 CONTRAST = re.compile(r"\b(?:not|but|unless|except|instead|rather)\b|n'?t\b", re.IGNORECASE)
-ITEM_AFTER = re.compile(r"\s+(?:for|on) (?:the|your|this|that) (?P<item>[\w'’ -]+?)(?=\s*(?:[?.!]|$))", re.IGNORECASE)
+ITEM_AFTER = re.compile(r"\s+(?:for|on) (?:the|your|ur|yer|this|that) (?P<item>[\w'’ -]+?)(?=\s*(?:[?.!]|$))", re.IGNORECASE)
 LOWERCASE = 2 / 3  # of your messages in lower case: then your drafts are too
 LOWER_THAN = re.compile(r"\b(?:less|lower) than £?\[OFFER\]|\bbelow £?\[OFFER\]|\bunder £?\[OFFER\]", re.IGNORECASE)
 # what after "for the" isn't the item ("Can collect on the day.") and what's an item whatever the title says ("for the phone")
@@ -334,9 +334,16 @@ LIKES = re.compile(r"\bi\s+(?P<really>really\s+|do\s+|absolutely\s+|honestly\s+)
 
 
 # what kind of thing a listing is, from its title, for how you name each kind ("the phone", but "the ps5")
-ITEM_KINDS = (("laptop", r"\b(?:laptop|macbook|notebook|chromebook)\b"), ("tablet", r"\b(?:ipad|tablet)\b"),
-              ("watch", r"\bwatch\b"), ("phone", r"\b(?:iphone|phone|galaxy|pixel)\b"),
-              ("console", r"\b(?:ps[345]|playstation|xbox|switch)\b"), ("headphones", r"\b(?:airpods|headphones|earbuds)\b"))
+ITEM_KINDS = (("laptop", r"\b(?:laptop|macbook|notebook|chromebook)\b"), ("tablet", r"\b(?:ipad|tablet|tab)\b"),
+              ("watch", r"\bwatch\b"), ("headphones", r"\b(?:airpods|headphones|earbuds|buds\w*)\b"),
+              ("phone", r"\b(?:iphone|phone|galaxy|pixel)\b"), ("console", r"\b(?:ps[345]|playstation|xbox|switch)\b"))
+# a sentence that says you like the item, with or without "I" ("Love the phone!", "I like your phone"), and the words that
+# name a kind of item ("the phone", "the console"): a sentence with either is about this listing's item, never a habit
+# for every listing (14 Oct hunt: "I like the phone." from the two iPhone answers ended a PS5's and a MacBook's offers)
+LIKES_ANY = re.compile(r"\b(?:i\s+)?(?:really\s+|do\s+|absolutely\s+)?(?:like|love|loved|liked|luv)\s+"
+                       r"(?:the|your|ur|this|that|it)\b", re.IGNORECASE)
+KIND_WORDS = {"phone", "phones", "iphone", "console", "laptop", "tablet", "headphones", "earbuds", "watch", "handset",
+              "controller", "macbook", "ipad", "airpods"}
 
 
 def item_kind(title):
@@ -899,7 +906,7 @@ def phrasebook(messages):
             continue  # one price, the offer: not "still available at £220?" or "you're asking £220"
         text = without_prices(m["my_message"])
         item = {w for w in words(m.get("listing_title") or "") if w not in TITLE_FILLER}
-        names_item = lambda sentence: bool(item & set(words(sentence)))
+        names_item = lambda sentence: bool((item | KIND_WORDS) & set(words(sentence)) or LIKES_ANY.search(sentence))
         sentences = [s.strip() for s in SENTENCES.split(text.strip()) if s.strip()]
         # each emoji once a message ("🙏🙏" is one message's), and whether it came in a sentence that doesn't call the
         # offer low: one message's 😂 isn't a habit, nor is "Cheeky I know 😂" every time (26 Sep red team)

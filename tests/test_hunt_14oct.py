@@ -175,3 +175,49 @@ def test_your_own_number_is_yours_in_a_sentence_the_reason_went_into():
     text = "Hi, would you take £255, given the small crack on the back, can be there in 20 mins?"
     assert check_no_invented_numbers("message", text, "£255", own) == []
     assert check_no_invented_numbers("message", "I finish work at 6pm.", "£255", ["Can collect after 6pm."])
+
+
+# ── 3, 8, 25: saying you like the item, or naming a kind of item, is never a habit for every listing ──
+
+@pytest.mark.parametrize("liked", ["I like the phone.", "Love the phone!", "I like your phone."])
+def test_liking_the_phone_isnt_learned_for_a_ps5(liked):
+    card = card_of([f"Hi, would you take £{p}? {liked} Can collect today." for p in (185, 255, 100, 115, 450, 190)])
+    assert "phone" not in drafted(MINT, card)
+    assert "phone" not in drafted(MINT, {**card, "likes": None})  # removing your likes removes them all
+
+
+def test_for_ur_phone_is_the_item_named():
+    card = card_of([f"would u take £{p} for ur phone? Can collect tonight." for p in (185, 255, 100, 115, 450, 190)])
+    assert card["phrases"]["offer"] == "would u take £[OFFER]?"
+
+
+# ── 23: the item's name is a word that names it ──
+
+@pytest.mark.parametrize("title, name", [("Space Grey MacBook Pro 14", "MacBook"), ("White AirPods Pro 2", "AirPods"),
+                                         ("Grade A iPad Air 5", "iPad"), ("Brand new sealed PS5", "PS5"),
+                                         ("Kids Nintendo Switch Lite", "Switch"), ("Large Dyson V15 Detect", "Dyson")])
+def test_i_like_the_item_names_the_item(title, name):
+    from flip.message_drafter import liked_name
+    assert liked_name({"item_naming": {"all": "family"}}, None, title) == name
+
+
+def test_buds_and_tabs_arent_phones():
+    from flip.style import item_kind
+    assert item_kind("Samsung Galaxy Buds2 Pro") == "headphones" and item_kind("Galaxy Tab S9 128GB") == "tablet"
+    assert item_kind("Samsung Galaxy S23") == "phone"
+
+
+# ── 16, 28, 29, 30: a style the checks would refuse on every listing still gets a message ──
+
+@pytest.mark.parametrize("closing", ["Can collect and pay straight away.", "I'm local so can collect today.",
+                                     "Can collect at 6 or 7.", "Battery health?", "Is it unlocked?",
+                                     "What's the battery health? Is it unlocked?"])
+def test_your_usual_closing_never_stops_the_message(closing):
+    card = card_of([f"Hi mate, would you take £{p}? {closing}" for p in (185, 255, 100, 115)] +
+                   [f"Hi mate, I'll pay £{p}. {closing}" for p in (450, 190)])
+    listing = {**LISTING, "description": "Unlocked, boxed. Battery health 88%. Small crack on the back glass. "
+                                         "Collection from Leeds LS6."}
+    for kind in ("lower", "asking", "more"):
+        message = drafted(listing, card, kind=kind)
+        assert message, (closing, kind)
+        assert "unlocked" not in message.lower() and "pay straight away" not in message and "battery" not in message.lower()

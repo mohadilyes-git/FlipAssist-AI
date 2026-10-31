@@ -29,7 +29,7 @@ from flip.checks import (ASKS_YOU, BATTERY_REPLACED, EMOJI, ESIM, HAD_AFTER_NEED
 from flip.numbers import TYPED_BATTERY, battery_worded
 from flip.offers import FLAWS, LOW_BATTERY, battery_figure, condition_said
 from flip.prompts import offer_words
-from flip.style import HABIT_WORDS, LIKES, MENTIONS, NOT_A_PLACE, TIMES, WHEN_WORD, for_kind, opening
+from flip.style import HABIT_WORDS, LIKES, LIKES_ANY, MENTIONS, NOT_A_PLACE, TIMES, WHEN_WORD, for_kind, opening
 
 # the offer in plain words, for when your messages have no habit for it
 NEUTRAL = {"lower": "would you take £[OFFER] for it?", "asking": "I can pay £[OFFER] for it.",
@@ -1918,7 +1918,7 @@ def write_offer(card, kind, offer, point=None, questions=(), at_least=0, item="i
     # that reads after "the" ("the ps5", not "the the ps5", "the ITEM" or "the Wanted: iPhone 14": 3 Oct review)
     # liked: the item named the way you name it ("the phone", "the ps5": flip.style.item_naming), else its model
     named = re.sub(r"^the\s+", "", liked or item or "", flags=re.IGNORECASE).strip()
-    said_already = LIKES.search(" ".join(filter(None, (opener, offer_sentence, closing))))
+    said_already = LIKES_ANY.search(" ".join(filter(None, (opener, offer_sentence, closing))))
     fits = bool(re.search(r"[A-Za-z]", named)) and named.lower() not in ("item", "items") and \
         not re.search(r"[:*]|\b(?:free|wanted|swap|collect\w*|job ?lot)\b", named, re.IGNORECASE)
     liked = [f"{card['likes'].replace('{item}', named)}."] if card.get("likes") and fits and not said_already else []

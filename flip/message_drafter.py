@@ -37,11 +37,11 @@ import time
 
 from flip.ai import Reply
 from flip.attempts import try_models
-from flip.catalogue import fill_from_catalogue, load_catalogue, models_disagree, words
-from flip.checks import (COLLECT_TALK, HOLD, LOCK_TALK, NO_CASH, NO_COLLECT, check_message, check_message_manner,
+from flip.catalogue import COMMON_COLOURS, fill_from_catalogue, load_catalogue, models_disagree, words
+from flip.checks import (COLLECT_TALK, HOLD, LOCK_TALK, NO_CASH, NO_COLLECT, PAY_FIRST, check_message, check_message_manner,
                          check_no_unasked_promises, ends_asking, names_other_model, offers_collection, promised_in,
                          says_no_cash)
-from flip.checks import LOWBALL, UNDER_ASKING_TALK, prices_in
+from flip.checks import LOWBALL, MAX_QUESTIONS, UNDER_ASKING_TALK, prices_in
 from flip.money import offer_for, to_pence
 from flip.offers import battery_now, check_condition_talk, copied_question, point_for, question_for, says_point
 from flip.picking import left_out_said, pick_flaws
@@ -53,10 +53,10 @@ from flip.retrieval import listing_text
 from flip.wording import completed, worded_reason
 from flip.style import (HABIT_WORDS, LOCAL_MARKETS, NOT_A_PLACE, OLD_PRICE, OFFER_SLOTS, POSTED_MARKETS, SENTENCES,
                         WHEN_BEFORE, WHEN_WORD, check_not_removed, describe, for_kind, for_market, opening, question_words,
-                        item_kind, scrubbed, shortened, signed_part, signed_with, unsigned, without_prices)
+                        item_kind, scrubbed, sendable, shortened, signed_part, signed_with, unsigned, without_prices)
 from flip.writer import (ASKS_OFFER, MAX_FLAW, make_longer, priced, reason_sentence, repeats, split_sign_off, the_added,
                          write_offer)
-from flip.writer import NEUTRAL, collecting_from, said_once, with_reason
+from flip.writer import NEUTRAL, collecting_from, colour_words, said_once, with_reason
 
 USUAL_WORDS = 15  # how long a message is before you have past messages to go by
 CODE_SENTENCE_ROOM = 5  # of code's own sentence, still counted against the 250: it's a little over what the AI is told
@@ -312,6 +312,13 @@ def item_name(model_id, title):
 # a word of a title that isn't the item's short name: a brand before its family, or selling words
 NOT_THE_NAME = {"apple", "samsung", "sony", "nintendo", "microsoft", "google", "selling", "sale", "my", "for", "genuine",
                 "boxed", "new", "used", "brand", "the", "a", "an", "unlocked", "official", "original"}
+# ...nor a word that says how it is or how it's sold ("Grade A iPad", "Brand new sealed PS5", "Kids Nintendo Switch")
+NOT_A_FAMILY = {"grade", "graded", "sealed", "kids", "kid", "childs", "childrens", "large", "huge", "quick", "urgent",
+                "immaculate", "mint", "pristine", "refurbished", "refurb", "excellent", "good", "great", "perfect",
+                "faulty", "broken", "spares", "cheap", "bargain", "rare", "limited", "special", "lovely", "stunning",
+                "amazing", "like", "as", "barely", "hardly", "working", "wanted", "swap", "job", "lot", "joblot",
+                "bundle", "box", "unboxed", "bnib", "bnwt", "condition", "free", "delivery", "postage", "fast",
+                "quality", "cracked", "damaged", "used", "boxed", "space", "rose", "midnight", "starlight", "graphite"}
 # what a kind of item is called in general ("I like the phone"): the catalogue's category, else the title's (item_kind)
 GENERIC_NAMES = {"phones": "phone", "consoles": "console", "headphones": "headphones"}
 
@@ -321,7 +328,8 @@ def liked_name(card, model, title):
     (flip.style.item_naming): "phone" ("generic"), the title's short name, "PS5", "iPhone", "Dyson" ("family"), or None
     for its model name, as before."""
     naming = (card or {}).get("item_naming") or {}
-    kind = item_kind(title) or {"phones": "phone", "consoles": "console"}.get((model or {}).get("category"))
+    # the catalogue's kind first: Galaxy Buds are headphones, whatever "galaxy" says (14 Oct hunt)
+    kind = GENERIC_NAMES.get((model or {}).get("category")) or item_kind(title)
     way = naming.get(kind) or naming.get("all")
     if way == "generic":
         found = GENERIC_NAMES.get((model or {}).get("category")) or kind
@@ -329,8 +337,11 @@ def liked_name(card, model, title):
             return found
         way = "family"  # no general word for it: its short name
     if way == "family":
-        short = next((w for w in re.findall(r"[A-Za-z][\w'’-]*", TITLE_CUT.split(title.strip())[0])
-                      if w.lower() not in NOT_THE_NAME and not re.fullmatch(r"\d+\w*", w)), None)
+        # the title's first word that names it: no colour, size or selling word, nor letters off a number ("GB" of
+        # "128GB"): "I like the MacBook", never "the Space", "the Grade" or "the sealed" (14 Oct hunt)
+        short = next((w for w in re.findall(r"(?<![\w'’-])[A-Za-z][\w'’-]*", TITLE_CUT.split(title.strip())[0])
+                      if len(w) > 1 and w.lower() not in NOT_THE_NAME | NOT_A_FAMILY | colour_words() | COMMON_COLOURS),
+                     None)
         return short or (model["model"].split()[0] if model else None)
     return None
 
@@ -450,6 +461,12 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
             card = without_cash(card)
         if no_collecting:
             card = without_collecting(card)
+        # ...and no question of yours the listing answers, nor more than a message asks (14 Oct hunt: no message at
+        # all on an unlocked listing for "Is it unlocked?", nor for two questions after a lower offer's own)
+        card = without_answered(card, sources, battery_in(sources, model), kind)
+        # ...nor a sentence of yours the checks refuse whatever the listing (a story, a second price, paying first where
+        # you meet the seller): the template is the only writer now, so one would mean no message at all (14 Oct hunt)
+        card = without_refused(card, in_person)
     # the reader's whole sentences (V8: a long one is split, never dropped; reader-5's 12-word cut gave some messages
     # no reason at all); flip-wording words the reason from these same sentences when it's on (flip/wording.py)
     point = point_for(kind, sources, reading["flaws"], battery_in(sources, model))
@@ -869,6 +886,63 @@ def without_collecting(card):
                sentences_without(text, talks) if slot in ("opener", "closing") else text
                for slot, text in (card.get("phrases") or {}).items()}
     return for_this_listing({**card, "phrases": phrases}, "collecting")
+
+
+# paying first said as a part of its own: "and pay straight away", ", can pay now", "& pay upfront"
+PAY_FIRST_PART = re.compile(r"\s*(?:,|\band\b|&)\s*(?:(?:i|we) ?(?:'?ll|will|can) |can |will |happy to )?pay\b[^,.!?]*",
+                            re.IGNORECASE)
+
+
+def without_refused(card, in_person):
+    """Your style card without the sentences of your opener and closing that the checks refuse on any listing
+    (flip.style.sendable: "I'm local so can collect today.", "Can collect at 6 or 7."), and where you meet the
+    seller, paying first: only its part when the rest reads ("Can collect and pay straight away." -> "Can collect."),
+    else the sentence, its sign-off kept."""
+    phrases = dict(card.get("phrases") or {})
+    for slot in ("opener", "closing"):
+        text = phrases.get(slot)
+        if not isinstance(text, str) or not text:
+            continue
+        kept = []
+        for sentence in (s.strip() for s in SENTENCES.split(text) if s.strip()):
+            if in_person and PAY_FIRST.search(sentence):
+                cut = PAY_FIRST_PART.sub("", sentence)
+                if PAY_FIRST.search(cut) or len(words(cut)) < 2:
+                    kept.append(split_sign_off(sentence)[1])  # its sign-off stays ("x")
+                    continue
+                sentence = re.sub(r"\s+([.!?])", r"\1", cut)
+            kept.append(sentence if sendable(sentence) else split_sign_off(sentence)[1])
+        phrases[slot] = " ".join(k for k in kept if k)
+    return {**card, "phrases": phrases}
+
+
+BATTERY_ASKED = re.compile(r"\b(?:battery|batt|bh)\b", re.IGNORECASE)
+
+
+def without_answered(card, sources, battery, kind):
+    """Your style card for this listing with no question in your opener or closing that the listing answers ("Is it
+    unlocked?" on an unlocked listing, "Does it come with the box?" on a boxed one, "What's the battery health?" when
+    it gives the figure), and no more questions than a message asks (MAX_QUESTIONS, the lower offer's own counted):
+    your first ones stay. Each is a sentence of its own that goes whole, its sign-off kept."""
+    phrases = dict(card.get("phrases") or {})
+    room = MAX_QUESTIONS - (1 if kind == "lower" else 0)
+    for slot in ("opener", "closing"):
+        text = phrases.get(slot)
+        if not isinstance(text, str) or not text:
+            continue
+        kept = []
+        for sentence in (s.strip() for s in SENTENCES.split(text) if s.strip()):
+            if ends_asking(sentence) and not prices_in(sentence):
+                answered = check_no_answered_questions(sentence, sources) or battery and BATTERY_ASKED.search(sentence)
+                if answered or room <= 0:
+                    core, sign = split_sign_off(sentence)
+                    if sign:
+                        kept.append(sign)
+                    continue
+                room -= 1
+            kept.append(sentence)
+        phrases[slot] = " ".join(kept)
+    return {**card, "phrases": phrases}
 
 
 def written_without_ai(result, check, card, kind, offer, point, longer, at_least, item, pickup, previous, log,

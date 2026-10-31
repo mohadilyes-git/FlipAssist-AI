@@ -58,22 +58,23 @@ def test_a_time_paying_puts_in_the_offer_is_said_once():
     assert drafted(FACEBOOK, yours, "asking", 20000) == ("Hi mate, I can pay £200 cash today. Can collect.", [])
 
 
-@pytest.mark.parametrize("offer, closing, found", [
-    ("I'll pay £{p} for it.", "Can pay now.", "pay now"),
-    ("I can pay £{p} cash.", "Can pay straight away.", "pay straight away"),  # the verifier's probe
+@pytest.mark.parametrize("offer, closing, message", [
+    ("I'll pay £{p} for it.", "Can pay now.", "Hi mate, I'll pay £200 for it."),
+    ("I can pay £{p} cash.", "Can pay straight away.", "Hi mate, I can pay £200 cash."),  # the verifier's probe
 ])
-def test_paying_first_never_goes_into_the_offer_where_you_meet_the_seller(offer, closing, found):
-    """On Facebook "Can pay now." became "I'll pay £200 now for it.", which got past the pay-first check. It stays as
-    you wrote it, and the check refuses it, as it does on main."""
+def test_paying_first_never_goes_into_the_offer_where_you_meet_the_seller(offer, closing, message):
+    """On Facebook "Can pay now." became "I'll pay £200 now for it.", which got past the pay-first check. Paying first
+    is never said where you meet the seller: it was kept for the check to refuse, but since 14 Oct the template is the
+    only writer, so that was no message at all (14 Oct hunt). Now it's left out, and the rest is sent."""
     yours = card(*((f"Hi mate, {offer.format(p=p)} {closing}", p) for p in ("200", "150", "90")))
-    assert drafted(FACEBOOK, yours, "asking", 20000) == \
-        (None, [f'the message offers to pay before collecting: "{found}"'])
+    assert drafted(FACEBOOK, yours, "asking", 20000) == (message, [])
 
 
-def test_a_lower_offer_that_pays_first_is_still_refused():
-    """The verifier's control: no "I'll pay" in the offer, so nothing was ever moved; refused before and now."""
+def test_a_lower_offer_never_pays_first_where_you_meet_the_seller():
+    """The verifier's control: no "I'll pay" in the offer, so nothing was ever moved; the pay-first sentence is left
+    out (it was refused, so no message, until the 14 Oct hunt)."""
     yours = card(*((f"Hi mate, would you take £{p}? Can pay now.", a) for p, a in LOWER))
-    assert drafted(FACEBOOK, yours, "lower") == (None, ['the message offers to pay before collecting: "pay now"'])
+    assert drafted(FACEBOOK, yours, "lower") == ("Hi mate, would you take £170?", [])
 
 
 @pytest.mark.parametrize("closing, message", [

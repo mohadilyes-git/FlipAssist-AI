@@ -54,7 +54,8 @@ NAMES_TOWNS = (("Hi mate, would you take £240? Can collect from Wakefield tonig
 @pytest.mark.parametrize("closing, expected", [
     ("Can collect at yours today.", "Hi mate, would you take £170? Can collect at yours today."),
     ("Can collect this Saturday.", "Hi mate, would you take £170? Can collect from Bradford BD7 this Saturday."),
-    ("Can collect the phone today.", "Hi mate, would you take £170? Can collect the phone from Bradford BD7 today."),
+    # (not "Can collect the phone today.": a sentence naming a kind of item is no habit for every listing, 14 Oct hunt)
+    ("Can collect it today.", "Hi mate, would you take £170? Can collect it from Bradford BD7 today."),
 ])
 def test_the_listings_place_goes_where_it_reads_not_in_front_of_where_or_what(closing, expected):
     """time-place-02: "Can collect from Bradford BD7 at yours today.", "Can collect this from Bradford BD7 Saturday."."""
