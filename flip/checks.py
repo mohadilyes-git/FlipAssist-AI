@@ -23,7 +23,9 @@ MAX_DESCRIPTION = 1500     # our own limit: short listings read better and cost 
 MAX_MESSAGE = 500
 SHORT_MESSAGE = 250  # characters: a usual message in AlertFlip's style
 MAX_QUESTIONS = 2  # in a usual message
-GREETING_WORDS = {"hi", "hiya", "hello", "hey", "alright", "morning", "afternoon", "evening", "yo"}
+GREETING_WORDS = {"hi", "hiya", "hello", "hey", "alright", "morning", "afternoon", "evening", "yo",
+                  # ...and the ones a draft dropped (14 Oct hunt): "Heya", "Hii", "Ey up", "Howdy", "Alreet"
+                  "heya", "hii", "hiii", "howdy", "alreet", "ello", "hallo", "ey", "eyup"}
 EMOJI = re.compile("[\U0001F1E6-\U0001F1FF\U0001F300-\U0001FAFF☀-➿⬀-⯿‼⁉]")  # flags, stars and "‼️" too
 # AlertFlip's rules for a message to a seller (check_message_manner): iCloud and locks are asked once the
 # seller replies; nothing is paid before you collect; no compliments, which read as softening them up
@@ -112,23 +114,23 @@ CASH_NOT_PAYING = re.compile(r"\b(?:need|needing|want|wanting|raise|raising|spar
 # (you come to them), and a listing that also offers collection (offers_collection) is collected (26 Sep)
 NO_COLLECT = re.compile(
     r"(?<!\bor )(?<!/)(?<!& local )(?<!and local )(?<!& )(?<!and )\b(?:postage|post(?:ed)?|postal|posting|delivery|"
-    r"shipping|courier)\s+only\b(?!\s*(?:£|\d|extra|costs?))|"
-    r"\b(?:can |will )?only\s+(?:be\s+)?(?:posted|post(?:ing)?|send(?:ing)?|ship(?:ped|ping)?)\b"
+    r"shipping|courier|ship|p\s?&\s?p)\s+only\b(?!\s*(?:£|\d|extra|costs?))|"
+    r"\b(?:can |will )?only\s+(?:be\s+)?(?:posted|post(?:ing)?|send(?:ing)?|sent|ship(?:ped|ping)?)\b"
     r"(?!\s+(?:tracked|recorded|signed|special|insured|first class|second class|1st|2nd|to (?:the )?uk|to uk|within|"
     r"in the uk|uk|with|via|by|abroad|overseas|to the|to mainland))|"
     r"\bno\s+(?:collections?|collecting|pick[- ]?ups?)\b(?!\s+(?:on|before|after|until|till|at|between|during|from|"
     r"tomorrow|today|tonight|weekends?|(?:mon|tues|wednes|thurs|fri|satur|sun)days?|evenings?|mornings?|nights?)\b)|"
     r"\bcollections?(?:\s+in person)?\s+(?:is not|isn'?t|are not|aren'?t|not)\s+(?:possible|available|an option)\b"
     r"(?!\s+(?:before|after|until|till|on|at|between|during|tomorrow|today|tonight)\b)|"
-    r"\\bcollections?\\s+(?:is\\s+)?unavailable\\b(?!\\s+(?:on|before|after|until|till|til|at|between|during|in the|this|next|over the|tomorrow|today|tonight|weekends?|"
-    r"(?:mon|tues|wednes|thurs|fri|satur|sun)days?|evenings?|mornings?|nights?)\\b)|\\bnot available for collection\\b"
-    r"(?!\\s+(?:on|before|after|until|till|til|at|between|during|in the|this|next|over the|tomorrow|today|tonight|weekends?|"
-    r"(?:mon|tues|wednes|thurs|fri|satur|sun)days?|evenings?|mornings?|nights?)\\b)|"
+    r"\bcollections?\s+(?:is\s+)?unavailable\b(?!\s+(?:on|before|after|until|till|til|at|between|during|in the|this|next|over the|tomorrow|today|tonight|weekends?|"
+    r"(?:mon|tues|wednes|thurs|fri|satur|sun)days?|evenings?|mornings?|nights?)\b)|\bnot available for collection\b"
+    r"(?!\s+(?:on|before|after|until|till|til|at|between|during|in the|this|next|over the|tomorrow|today|tonight|weekends?|"
+    r"(?:mon|tues|wednes|thurs|fri|satur|sun)days?|evenings?|mornings?|nights?)\b)|"
     r"\b(?:cannot|can'?t|won'?t) be collected\b(?!\s+(?:before|after|until|till|on|at|between|during|tomorrow|today)\b)|"
     # "If you can't collect I can post": the buyer's, collection is the default
-    r"(?<!if you )(?<!if u )(?<!if you're )(?<!if youre )(?<!if you are )\\b(?:can(?:'|no)?t|cannot|unable to|won'?t|"
-    r"don'?t|not doing)\\s+(?:do\\s+|offer\\s+)?collect(?:ion|ions)?\\b(?!\\s+(?:on|before|after|until|till|til|at|between|during|in the|this|next|over the|tomorrow|today|tonight|weekends?|"
-    r"(?:mon|tues|wednes|thurs|fri|satur|sun)days?|evenings?|mornings?|nights?)\\b)",
+    r"(?<!if you )(?<!if u )(?<!if you're )(?<!if youre )(?<!if you are )\b(?:can(?:'|no)?t|cannot|unable to|won'?t|"
+    r"don'?t|not doing)\s+(?:do\s+|offer\s+)?collect(?:ion|ions)?\b(?!\s+(?:on|before|after|until|till|til|at|between|during|in the|this|next|over the|tomorrow|today|tonight|weekends?|"
+    r"(?:mon|tues|wednes|thurs|fri|satur|sun)days?|evenings?|mornings?|nights?)\b)",
     re.IGNORECASE)
 # a listing that offers collection: "Collection only", "Collection from Leeds", "collection or post", "Local pickup"
 COLLECTION_OFFERED = re.compile(
@@ -153,7 +155,18 @@ COLLECT_TALK = re.compile(r"\b(?:collect(?:ing|ion|ed)?|pick(?:ing)? (?:it |them
                           r"anywhere)|come (?:and |& )?view|come to (?:you|yours|your (?:place|house|address))|"
                           r"drop (?:round|over|in)|get (?:it|them) (?:today|tonight|tomorrow|tmrw|2day|now|later|this \w+)|"
                           r"where(?: ?abouts)? (?:can|could|shall|should) we meet|"
-                          r"drive over|head over|be there|grab (?:it|them))\b", re.IGNORECASE)
+                          r"drive over|head over|be there|grab (?:it|them)|"
+                          # ...and every other way of coming to the seller (14 Oct hunt: on a posted listing "Can be at
+                          # yours tonight.", "Can meet you halfway tonight." and "Happy to travel." were kept)
+                          r"be (?:at|round|over at|over to) (?:yours|your (?:place|house|address|end))|"
+                          r"(?:round|over) (?:to )?yours|get (?:to|over to|round to) (?:you|yours)|be with you|with you in|"
+                          r"bring (?:the |ya |your )?(?:money|cash|it)\s+(?:round|over|to you)|"
+                          r"(?:have|take) a (?:look|quick look)(?: at it| at them)?(?: first| before)|"
+                          r"come (?:and |& )?(?:have|take) a look|view (?:it|them) (?:first|before)|in person|"
+                          r"hand (?:over )?(?:the )?(?:money|cash)(?: over)?|"
+                          r"meet (?:you )?(?:half ?way|in the middle)(?= (?:today|tonight|tomorrow|tmrw|later|this \w+|"
+                          r"somewhere|at|in)\b)|(?:happy|willing|able|can|will) (?:to )?travel|"
+                          r"call (?:round|by|over|in))\b", re.IGNORECASE)
 CASH_TALK = re.compile(r"\bcash\b", re.IGNORECASE)
 # a word of the title that names a set, not a pickup: "the whole collection", "my record collection"
 SET_OF = re.compile(r"\b(?:the|whole|full|entire|new|my|your|his|her|their|this|that|our|record|card|game|summer|"
@@ -357,6 +370,16 @@ HOLD = re.compile(r"\b(?:(?<!\bon )hold(?:ing)?(?! (?:[\w']+ ){0,3}?charge\b| (?
                   r"hang (?:on ?to|onto) (?:it|them)|mark (?:it |them )?(?:as )?(?:sold|reserved|pending)|"
                   r"take (?:it|the (?:ad|advert|listing|post)) down|off the market|end (?:the |your )?listing)\b",
                   re.IGNORECASE)
+# a listing that won't be held: "No holds", "Will not hold", "won't reserve", "first come first served" (not a battery
+# that "won't hold charge"). Over asking the reason is then taking the listing down, and at asking nothing asks for a
+# hold (14 Oct hunt: "Could you hold it for me?" on a "No holds." listing)
+NO_HOLDS = re.compile(r"\bno (?:holds?|holding|reserv(?:es|ations?|ing))\b|"
+                      r"\b(?:won'?t|wont|will not|can'?t|cannot|can not|not|unable to)\s+(?:be\s+)?"
+                      r"(?:hold(?:ing)?|held|reserv(?:e|ing|ed))\b(?!\s+(?:a\s+|its\s+|the\s+|any\s+|much\s+)?charge)|"
+                      r"\bfirst come,? first serv(?:ed|e)\b", re.IGNORECASE)
+# taking the listing down, which HOLD counts as the reason to pay more too
+TAKEN_DOWN = re.compile(r"\btake (?:it|the (?:ad|advert|listing|post)) down\b|\boff the market\b|"
+                        r"\bend (?:the |your )?listing\b", re.IGNORECASE)
 # for an offer at or over asking, nothing that calls it low: "I know it's a bit cheeky", "sorry it's under asking",
 # nor an apology that compares it with what they want for it (26 Sep red team: "I know it's a bit less than you're
 # after", "I appreciate it's lower than you wanted", "I know it's not quite what you're asking" went out on an offer of

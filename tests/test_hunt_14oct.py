@@ -221,3 +221,72 @@ def test_your_usual_closing_never_stops_the_message(closing):
         message = drafted(listing, card, kind=kind)
         assert message, (closing, kind)
         assert "unlocked" not in message.lower() and "pay straight away" not in message and "battery" not in message.lower()
+
+
+# ── 15, 18, 20, 21, 22, 27, 6, 17, 24: collecting, cash, holds and greetings for the kind of listing ──
+
+@pytest.mark.parametrize("says", ["Not available for collection, postage £5.", "Collection unavailable, will post.",
+                                  "Can't do collection, will post.", "Will ship only.", "P&P only."])
+def test_a_listing_that_cant_be_collected_is_read(says):
+    from flip.checks import NO_COLLECT
+    assert NO_COLLECT.search(says)
+    message = drafted({**LISTING, "description": f"Small crack on the back glass. {says}"}, {}, mention=False)
+    assert "collect" not in message.lower() and "cash" not in message.lower(), message
+
+
+@pytest.mark.parametrize("closing", ["Can be at yours tonight.", "I'll bring the money round tonight.",
+                                     "Can meet you halfway tonight.", "Happy to travel.", "Can call round tonight."])
+def test_a_posted_listing_never_gets_meeting_talk(closing):
+    card = card_of([f"Hi, would you take £{p}? {closing}" for p in (185, 255, 100, 115)] +
+                   [f"Hi, I'll pay £{p}. {closing}" for p in (450, 190)])
+    assert drafted({**LISTING, "marketplace": "ebay", "description": "Small crack on the back glass."}, card) == \
+        "Hi, would you take £255?"
+
+
+def test_a_sentence_dropped_for_one_word_keeps_the_rest():
+    card = card_of([f"Hey! Would you take £{p}? I can collect today and pay cash 👍" for p in (185, 255, 100, 115)] +
+                   [f"Hey! I'll pay £{p}. I can collect today and pay cash 👍" for p in (450, 190)])
+    assert drafted({**LISTING, "description": "Bank transfer only. Collection from Leeds LS6."}, card) == \
+        "Hey! Would you take £255? I can collect today 👍"
+    kiss = card_of([f"hiya would you take £{p} for it? can collect tonight x" for p in (185, 255, 100, 115, 450, 190)])
+    assert drafted({**LISTING, "description": "Postage only."}, kiss).endswith("? x")
+
+
+def test_paying_said_once_keeps_the_collecting():
+    card = card_of([f"Hi, would you take £{p}? Can collect today, can pay cash." for p in (185, 255, 100, 115)] +
+                   ["Hi, I can pay £450. Can collect today, can pay cash.",
+                    "Hi, I can pay £190 if you hold it. Can collect today, can pay cash."])
+    assert drafted(MINT, card, kind="asking") == "Hi, I can pay £350. Can collect today."
+
+
+def test_cash_is_said_once_at_the_asking_price():
+    card = card_of([f"Hi, would you take £{p} cash? Can collect today and pay cash." for p in (185, 255, 100, 115)] +
+                   ["Hi, I'll pay £450. Can collect today and pay cash.",
+                    "Hi, I'll pay £190 if you hold it. Can collect today and pay cash."])
+    assert drafted(MINT, card, kind="asking").count("cash") == 1
+
+
+@pytest.mark.parametrize("kind", ["asking", "more"])
+def test_a_no_holds_listing_is_never_asked_to_hold_it(kind):
+    listing = {**MINT, "description": "Like new. No holds. Collect from Bradford BD1."}
+    message = drafted(listing, {}, kind=kind)
+    assert "hold" not in message.lower(), message
+    card = card_of([f"Hi mate, would you take £{p} cash? Can collect today." for p in (185, 255, 100, 115)] +
+                   ["Hi mate, I'll pay £450 cash. Can collect today.", "Hi mate, I'll pay £190 if you hold it. Can collect today."])
+    assert "hold" not in drafted(listing, card, kind=kind).lower()
+
+
+@pytest.mark.parametrize("offer", ["best I can do is £{p}", "can only do £{p} I'm afraid", "my max is £{p}"])
+def test_the_most_you_can_pay_isnt_said_at_or_over_asking(offer):
+    card = card_of([f"Hi, {offer.format(p=p)}. Can collect today." for p in (185, 255, 100, 115)] +
+                   ["Hi, I'll pay £450. Can collect today.", "Hi, I'll pay £190 if you hold it. Can collect today."])
+    for kind in ("asking", "more"):
+        message = drafted(MINT, card, kind=kind)
+        assert not any(w in message for w in ("best I can", "afraid", "max")), message
+
+
+@pytest.mark.parametrize("greeting", ["Hi bud", "Hiya pet", "Hello love", "Heya", "Ey up mate"])
+def test_your_greeting_stays_whole_at_the_asking_price(greeting):
+    card = card_of([f"{greeting}, would you take £{p}? Can collect tonight." for p in (185, 255, 100, 115)] +
+                   [f"{greeting}, I'll pay £450. Can collect tonight.", f"{greeting}, I'll pay £190 if you hold it. Can collect tonight."])
+    assert drafted(MINT, card, kind="asking").startswith(f"{greeting}, I can pay £350")

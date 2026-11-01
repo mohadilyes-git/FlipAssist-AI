@@ -41,7 +41,7 @@ from flip.catalogue import COMMON_COLOURS, fill_from_catalogue, load_catalogue, 
 from flip.checks import (COLLECT_TALK, HOLD, LOCK_TALK, NO_CASH, NO_COLLECT, PAY_FIRST, check_message, check_message_manner,
                          check_no_unasked_promises, ends_asking, names_other_model, offers_collection, promised_in,
                          says_no_cash)
-from flip.checks import LOWBALL, MAX_QUESTIONS, UNDER_ASKING_TALK, prices_in
+from flip.checks import LOWBALL, MAX_QUESTIONS, NO_HOLDS, TAKEN_DOWN, UNDER_ASKING_TALK, prices_in
 from flip.money import offer_for, to_pence
 from flip.offers import battery_now, check_condition_talk, copied_question, point_for, question_for, says_point
 from flip.picking import left_out_said, pick_flaws
@@ -54,7 +54,8 @@ from flip.wording import completed, worded_reason
 from flip.style import (HABIT_WORDS, LOCAL_MARKETS, NOT_A_PLACE, OLD_PRICE, OFFER_SLOTS, POSTED_MARKETS, SENTENCES,
                         WHEN_BEFORE, WHEN_WORD, check_not_removed, describe, for_kind, for_market, opening, question_words,
                         item_kind, scrubbed, sendable, shortened, signed_part, signed_with, unsigned, without_prices)
-from flip.writer import (ASKS_OFFER, MAX_FLAW, make_longer, priced, reason_sentence, repeats, split_sign_off, the_added,
+from flip.writer import (ASKS_OFFER, MAX_FLAW, make_longer, priced, reason_sentence, repeats, sign_left, signed_off,
+                         split_sign_off, the_added,
                          write_offer)
 from flip.writer import NEUTRAL, collecting_from, colour_words, said_once, with_reason
 
@@ -454,6 +455,8 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
         "the listing names another way to pay" if says_no_cash(listing.get("description") or "") else \
         "the listing says it's posted, not collected" if no_collect and not posted and not CASH_ON.search(sources) else ""
     cash_ok = not posted and not no_cash
+    # a listing that won't be held ("No holds"): as on eBay, no asking for a hold, and over asking taking it down is why
+    no_holds = bool(NO_HOLDS.search(sources))
     if card:
         card = for_market(card, market)  # your sentences for where you're buying, when you have them there
         card = for_kind(card, kind)  # ...and how you end this kind of offer, which the AI is told too (describe)
@@ -625,6 +628,8 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
                 no_cash=no_cash, no_collecting=no_collecting,
                 pay_first=not posted, title=title, short_extra=written.get("added", 0) + extra + picked_room())
             problems += check_not_removed(message, card)
+            if no_holds and HOLD.search(TAKEN_DOWN.sub("", message)):  # whoever wrote it (14 Oct hunt)
+                problems.append("the listing says it won't be held, but the message asks them to hold it")
             sentences = re.split(r"(?<=[.!?])\s+|\n+", message)
             if model and any(names_other_model(words(sentence), model, catalogue) for sentence in sentences):
                 problems.append("the message names a different item from the listing's")
@@ -655,7 +660,7 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
         ready = written_without_ai(result, lambda answer, extra=0: check(answer, rewrite=False, extra=extra), card,
                                    kind, offer, point if mention else None, longer, at_least,
                                    item_name(found.get("model_id"), title), pickup, previous, log, in_person,
-                                   cash_ok, posted=bool(no_collecting), liked=liked_name(card, model, title))
+                                   cash_ok, posted=bool(no_collecting) or no_holds, liked=liked_name(card, model, title))
         again = ready and rewrite_of and words(result["answer"]["message"]) == words(rewrite_of)
         if again and writer == "auto":
             yours = result["answer"]  # the AI words the rewrite; this stays if it can't
@@ -829,11 +834,39 @@ CASH_AFTER_PRICE = re.compile(r"(£\[OFFER\]|\[OFFER\])\s*,?\s*(?:(?:in|with|for
 LEFT_OVER = re.compile(r",\s*[?.!]|\bor\s+\w+\s*[?.!]?\s*$", re.IGNORECASE)
 
 
-def sentences_without(text, talks):
-    """Your sentences (an opener or a closing) without the ones that talk of
-    it (talks: a search): "Can collect today." goes whole, "I'm happy to
-    collect at a time that suits you. Kind regards, Sam" keeps "Kind regards, Sam"."""
-    return " ".join(s.strip() for s in SENTENCES.split(text) if s.strip() and not talks(s)) if text else text
+# a part of a sentence that pays cash, or comes to the seller, joined to the rest: "and pay cash", ", cash on
+# collection", "and collect tonight"
+CASH_PART = re.compile(r"\s*(?:,|\band\b|&)\s*(?:(?:i|we) ?(?:'?ll|will|can) |can |will |happy to )?(?:pay\s+)?"
+                       r"(?:(?:in|with|by)\s+)?cash(?:\s+(?:on collection|in hand|on the day|ready|waiting))?\b",
+                       re.IGNORECASE)
+COLLECT_PART = re.compile(r"\s*(?:,|\band\b|&)\s*(?:(?:i|we) ?(?:'?ll|will|can) |can |will |happy to )?"
+                          r"(?:collect|pick (?:it |them )?up|come (?:and |& )?(?:get|grab|collect))\b[^,.!?]*", re.IGNORECASE)
+
+
+def sentences_without(text, talks, part=None):
+    """Your sentences (an opener or a closing) without what talks of it
+    (talks: a search): only its part when that comes out and the rest reads
+    ("I can collect today and pay cash 👍" -> "I can collect today 👍"),
+    else the sentence, its sign-off kept: "Can collect today." goes whole,
+    "Can collect tonight x" leaves "x" and "I'm happy to collect at a time
+    that suits you. Kind regards, Sam" keeps "Kind regards, Sam" (14 Oct
+    hunt: a kiss or thanks typed on it went too, and a no-cash listing lost
+    your collecting)."""
+    if not text:
+        return text
+    kept = []
+    for sentence in (s.strip() for s in SENTENCES.split(text) if s.strip()):
+        if not talks(sentence):
+            kept.append(sentence)
+            continue
+        core, sign = signed_off(sentence)
+        left = part.sub("", core) if part is not None else core
+        if part is not None and left != core and not talks(left) and len(words(left)) >= 2:
+            left = re.sub(r"[ ,]+([.!?])", r"\1", left).rstrip(" ,")
+            kept.append(f"{left}{sign}")
+        elif sign_left(sign):
+            kept.append(sign_left(sign))
+    return " ".join(kept)
 
 
 def for_this_listing(card, habit):
@@ -866,7 +899,7 @@ def without_cash(card):
         return None if talks(cut) or LEFT_OVER.search(cut) else cut
 
     phrases = {slot: offer_sentence(text) if slot in OFFER_SLOTS else
-               sentences_without(text, talks) if slot in ("opener", "closing") else text
+               sentences_without(text, talks, CASH_PART) if slot in ("opener", "closing") else text
                for slot, text in (card.get("phrases") or {}).items()}
     return for_this_listing({**card, "phrases": phrases}, "cash")
 
@@ -883,7 +916,7 @@ def without_collecting(card):
                     or "collecting" in promised_in(sentence))
 
     phrases = {slot: (None if text and talks(text) else text) if slot in OFFER_SLOTS else
-               sentences_without(text, talks) if slot in ("opener", "closing") else text
+               sentences_without(text, talks, COLLECT_PART) if slot in ("opener", "closing") else text
                for slot, text in (card.get("phrases") or {}).items()}
     return for_this_listing({**card, "phrases": phrases}, "collecting")
 

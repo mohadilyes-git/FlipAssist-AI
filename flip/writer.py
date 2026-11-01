@@ -29,7 +29,7 @@ from flip.checks import (ASKS_YOU, BATTERY_REPLACED, EMOJI, ESIM, HAD_AFTER_NEED
 from flip.numbers import TYPED_BATTERY, battery_worded
 from flip.offers import FLAWS, LOW_BATTERY, battery_figure, condition_said
 from flip.prompts import offer_words
-from flip.style import HABIT_WORDS, LIKES, LIKES_ANY, MENTIONS, NOT_A_PLACE, TIMES, WHEN_WORD, for_kind, opening
+from flip.style import CALLED, HABIT_WORDS, LIKES, LIKES_ANY, MENTIONS, NOT_A_PLACE, TIMES, WHEN_WORD, for_kind, opening
 
 # the offer in plain words, for when your messages have no habit for it
 NEUTRAL = {"lower": "would you take £[OFFER] for it?", "asking": "I can pay £[OFFER] for it.",
@@ -329,9 +329,18 @@ GOOD_WORD = re.compile(r"^(?:in )?(mint|immaculate|pristine|flawless|perfect|lik
 SAFE_TAIL = re.compile(r"^(?:\s*(?:cash(?: on collection| in hand)?|for (?:it|this|them|these)|on collection))?\s*$",
                        re.IGNORECASE)
 SENTENCES = re.compile(r"(?<=[.!?…])\s+|(?<=[.!?…][\U0001F300-\U0001FAFF☀-➿])\s+")  # "£170?😊 Can collect" is two
+# the most you'd pay, which only fits under asking: "best I can do", "can only do £X I'm afraid", "my max", "final offer"
+CEILING = re.compile(r"\bbest (?:i|we) (?:can|could) (?:do|offer|go)\b|\b(?:my|the) max(?:imum)?\b|\bmost (?:i|we) can\b|"
+                     r"\bfinal offer\b|\b(?:can|could) only (?:do|offer|go to|stretch to|pay)\b|\bi'?m afraid\b|"
+                     r"\btake it or leave it\b|\b(?:my|the) budget\b|\ball (?:i|we) (?:can|could|have)\b|\bmax\b",
+                     re.IGNORECASE)
 # a greeting at the start of a sentence, as typed, with or without a comma: "Hi mate, ", "Hi mate ", "Hiya 👋 "
-LEADING_GREETING = re.compile(r"(?:hi|hiya|hello|hey|alright|morning|afternoon|evening|yo)\b(?:\s+(?:mate|there|bro|"
-                              r"pal|buddy|m8|hun|all))?(?:\s*[,!.?\-–—]+\s*|\s*[\U0001F300-\U0001FAFF☀-➿]+\s*|\s+|$)",
+# ...with what you call them as you do ("Hi bud,", "Hiya pet", "Hello love": style.CALLED, 14 Oct hunt: at Pay asking
+# "Hi bud, would you..." became "Hi I can pay...")
+LEADING_GREETING = re.compile(r"(?:hi|hiya|hello|hey|alright|morning|afternoon|evening|yo|heya|hii+|howdy|alreet|ello|"
+                              r"hallo|ey ?up)\b"
+                              rf"(?:\s+(?:{'|'.join(sorted(CALLED, key=len, reverse=True))}))?"
+                              r"(?:\s*[,!.?\-–—]+\s*|\s*[\U0001F300-\U0001FAFF☀-➿]+\s*|\s+|$)",
                               re.IGNORECASE)  # "$": an opener that's only "Hi" is a greeting too, so not "Hi Hi I can pay"
 # a hold, as it's taken out on eBay and Vinted at the asking price (you'd just buy it): "...if you can hold it for me",
 # "Could you hold it for me?"
@@ -1587,7 +1596,7 @@ def priced(text, offer):
 
 
 def default_offer(kind, offer, point=None, questions=(), at_least=0, item="item", pickup="", in_person=False,
-                  cash=True):
+                  cash=True, posted=False):
     """With no past messages, the message AlertFlip writes (LOCAL, POSTED):
     the reason for a lower offer in a sentence of its own, and at or over
     asking after the offer as with your own sentences. in_person: on Facebook or
@@ -1595,6 +1604,8 @@ def default_offer(kind, offer, point=None, questions=(), at_least=0, item="item"
     and pay cash. cash: False when the listing says no cash ("would you take
     £[OFFER] for it?"). None if the listing's point can't be said."""
     opener, offer_sentence, closing = (LOCAL if in_person else POSTED)[kind]
+    if posted and HELD.search(closing):  # a listing that won't be held, where you meet the seller: not asked (14 Oct)
+        closing = ""
     if not cash:
         offer_sentence = re.sub(r"\s+cash\b", "", offer_sentence)
     offer_sentence, closing = collecting_from(offer_sentence, pickup), collecting_from(closing, pickup)
@@ -1695,6 +1706,26 @@ def times_in(sentence):
         waits = (when.group("till") or "").lower() in ("until", "untill", "till", "til")  # "wait until tonight"
         found.add((time_of(when.group("time")), waits or bool(last and last[0].group("come"))))
     return found
+
+
+# paying said as a part of its own, after the rest ("..., can pay cash", "...and I'll pay cash") or before it ("Can pay
+# cash and collect today")
+PAY_AFTER = re.compile(r"\s*(?:,|\band\b|&)\s*(?:(?:i|we) ?(?:'?ll|will|can) |ill |can |will |happy to |i'?m happy to )?"
+                       r"pay\b[^,.!?]*", re.IGNORECASE)
+PAY_BEFORE = re.compile(r"^(?P<lead>(?:(?:i|we) ?(?:'?ll|will|can)|ill|can|will|happy to|i'?m happy to)\s+)pay\b[^,.!?]*?"
+                        r"\s*(?:,|\band\b|&)\s*(?:(?:i|we) ?(?:'?ll|will|can) |can |will )?(?P<rest>.+)$", re.IGNORECASE)
+
+
+def without_paying(sentence):
+    """A closing sentence that says you'll collect and pay, without the paying, once the offer says it: "Can collect
+    today, can pay cash." -> "Can collect today.", "Can pay cash and collect today." -> "Can collect today."; None
+    when what's left doesn't say you'd collect."""
+    left = PAY_AFTER.sub("", sentence)
+    before = PAY_BEFORE.match(sentence)
+    if left == sentence and before:
+        left = before.group("lead") + before.group("rest")
+    left = re.sub(r"[ ,]+([.!?])", r"\1", left).strip(" ,")
+    return left if left != sentence.strip() and collects(left) and not PAY_SAID.search(left) else None
 
 
 def collects(sentence):
@@ -1816,7 +1847,7 @@ def write_offer(card, kind, offer, point=None, questions=(), at_least=0, item="i
     no asking them to hold it at the asking price, and over it the reason is
     "if you take the listing down and sell it to me"."""
     if not card:
-        return default_offer(kind, offer, point, questions, at_least, item, pickup, in_person, cash)
+        return default_offer(kind, offer, point, questions, at_least, item, pickup, in_person, cash, posted)
     # the closing you write with this kind of offer, with no hold under asking and nothing calling it low at or over
     # it (flip.style.for_kind: "Could you hold it for me?" ended a lower offer, 26 Sep red team)
     card = for_kind(card, kind)
@@ -1857,8 +1888,16 @@ def write_offer(card, kind, offer, point=None, questions=(), at_least=0, item="i
         own_hold = kind == "more" and not posted and phrases.get("offer_more") and HELD.search(offer_sentence) \
             and not asks(offer_sentence)
         offer_sentence = offer_sentence if own_hold else as_statement(offer_sentence)
-        if LOWBALL.search(offer_sentence):
+        # ...nor the most you'd pay, from your lower offers: "best I can do is £300" at the asking price (14 Oct hunt)
+        if LOWBALL.search(offer_sentence) or CEILING.search(offer_sentence):
             offer_sentence = NEUTRAL[kind]
+        # ...and cash, or collecting, said once: "I can pay £300. Can collect today and pay cash.", not "£300 cash. ...
+        # and pay cash" (14 Oct hunt: the offer's from one message of yours and the closing from another)
+        if closing and HABIT_WORDS["cash"].search(closing):
+            offer_sentence = re.sub(r"(\[OFFER\])\s*,?\s*(?:(?:in|with)\s+)?cash(?:\s+(?:on collection|in hand))?\b",
+                                    r"\1", offer_sentence)
+        elif closing and collects(closing):
+            offer_sentence = re.sub(r"(\[OFFER\]\s*cash)\s+on collection\b", r"\1", offer_sentence)
         opener = opener if not LOWBALL.search(opener) else greeting_opener(card)
         closing = closing if not LOWBALL.search(closing) else ""
     if kind == "more" and posted:  # eBay, Vinted: why you'd pay more there, not holding it for you
@@ -1897,6 +1936,8 @@ def write_offer(card, kind, offer, point=None, questions=(), at_least=0, item="i
             pays_first = PAY_FIRST.search(part) or when and re.fullmatch(PAID_NOW, when.group("when"), re.IGNORECASE)
             if in_person and pays_first:
                 kept.append(part)  # "Can pay now." where you meet the seller: as it is, for the pay-first check (26 Sep)
+            elif not when and PAY_SAID.search(part) and collects(core) and (left := without_paying(core)):
+                kept.append(f"{left}{sign}")  # "Can collect today, can pay cash.": the collecting stays (14 Oct hunt)
             elif when or PAY_SAID.search(part):
                 if when and not (paid or WHEN_SAID.search(offer_sentence) or
                                  re.search(rf"\b(?:{PAID_NOW})\b", offer_sentence, re.IGNORECASE)):
