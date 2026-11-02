@@ -24,7 +24,7 @@ type Props = {
 // each listing shows one way you might message a seller (3 Oct: no Vinted or posted-flaw card: the eBay AirPods
 // card teaches posted deals, and how you give a flaw is the same posted or collected)
 const LISTINGS: { title: string; price: number; market: string; description: string; kind: Kind; teaches: string }[] = [
-  { title: "iPhone 13 128GB, cracked back", price: 220, market: "Facebook", kind: "lower", teaches: "whether you mention flaws",
+  { title: "iPhone 13 128GB, cracked back", price: 220, market: "Facebook", kind: "lower", teaches: "how you mention flaws",
     description: "Back glass cracked when I dropped it, screen perfect. Battery 86%. Collection from Leeds LS6." },
   { title: "PS5 Disc Edition + 2 pads", price: 300, market: "Facebook", kind: "lower", teaches: "your plain offer",
     description: "Works perfectly, boxed with both controllers. Collect from Bradford BD1." },
