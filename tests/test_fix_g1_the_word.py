@@ -24,8 +24,8 @@ def drafted(title, description, flaws=None, asking="200", card=None, kind="lower
     """draft_message with no AI, as the red team ran it: flaws are the reader's quotes, None for code's own reading."""
     listing = {"id": "x", "title": title, "description": description, "asking_price": asking, "marketplace": market}
     reading = None if flaws is None else {"flaws": flaws, "pickup": pickup, "no_offers": "", "read_by": "gemma3:4b"}
-    return draft_message(listing, card=card, local=local, api=None, kind=kind, reading=reading,
-                         **({"mention": True} if flaws is not None else {}))
+    # Say the flaw: Yes, as you'd pick it on the message (14 Oct: whether you give it isn't learned from your style)
+    return draft_message(listing, card=card, local=local, api=None, kind=kind, reading=reading, mention=True)
 
 
 def message(result):

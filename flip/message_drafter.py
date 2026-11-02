@@ -493,10 +493,10 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
             lines = picked if left_out else lines
             point = point_for(flaw_kind, sources, said, battery_in(sources, model), most=flaws_said) or point
     style_decides = mention is None
-    if style_decides:  # your style decides; before you have one, AlertFlip's: a lower offer gives its reason
+    if style_decides:  # not picked: AlertFlip's way, a lower offer gives its reason (whether you give the flaw is never
+        # learned from your style: 14 Oct, the owner), and over asking your style's praise for good condition decides
         mention = says_point(previous, point) if previous and point else \
-            (card.get("praise", "condition" in card.get("mentions", [])) if kind == "more" else
-             "condition" in card.get("mentions", [])) if card else kind == "lower"
+            card.get("praise", False) if kind == "more" and card else kind == "lower"
     mention = bool(point and mention)
     longer = None
     if length == "longer":

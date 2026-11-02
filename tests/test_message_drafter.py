@@ -52,9 +52,11 @@ def test_your_style_card_is_worked_out_by_code():
     assert style_card([]) == {}
 
 
-def test_mentioning_condition_is_your_style_when_you_usually_do():
-    assert "condition" in style_card(TALKER)["mentions"]
-    assert "condition" not in style_card(PAST)["mentions"]
+def test_whether_you_give_the_flaw_is_never_learned_from_your_style():
+    """14 Oct, the owner: "do not take whether u say the flaw or not from my style, just take the other habits": you pick
+    it on each message (Say the flaw, Yes or No). How you give it stays yours: your offer sentence, as you wrote it."""
+    assert "condition" not in style_card(TALKER)["mentions"] and "condition" not in style_card(PAST)["mentions"]
+    assert style_card(TALKER)["phrases"]["offer"] is None or "[OFFER]" in style_card(TALKER)["phrases"]["offer"]
 
 
 def test_old_prices_are_hidden_in_the_examples():
@@ -140,15 +142,14 @@ def test_the_flaw_goes_in_by_itself_when_your_messages_usually_mention_condition
     assert 'as the reason for the offer: "Broken back"' in local.asked[0]["user"]
 
 
-def test_otherwise_the_draft_leaves_it_out_and_asks_you():
-    result = ai_draft(BROKEN, style_card(PAST), local=FakeModel("gemma3:4b", GOOD))
-    assert (result["status"], result["mentioned"]) == ("ready", False)
-    assert result["ask"] == 'The listing says "Broken back". Mention it as the reason for your offer?'
-    # you say yes: drafted again with it, and nothing more to ask
-    again = ai_draft(BROKEN, style_card(PAST), local=FakeModel("gemma3:4b", WITH_FLAW), mention=True)
-    assert (again["status"], again["mentioned"], again["ask"]) == ("ready", True, None)
-    # you said no: it stays out, and you aren't asked again
-    assert ai_draft(BROKEN, local=FakeModel("gemma3:4b", GOOD), mention=False)["ask"] is None
+def test_not_picked_a_lower_offer_gives_its_reason_whatever_your_style():
+    """Whether you give the flaw is yours to pick on each message, never your style's (14 Oct): not picked, a lower
+    offer gives it, as before any setup (your PAST messages never give one)."""
+    result = ai_draft(BROKEN, style_card(PAST), local=FakeModel("gemma3:4b", WITH_FLAW))
+    assert (result["status"], result["mentioned"], result["ask"]) == ("ready", True, None)
+    # you said no: it stays out, and you aren't asked
+    said_no = ai_draft(BROKEN, style_card(PAST), local=FakeModel("gemma3:4b", GOOD), mention=False)
+    assert (said_no["status"], said_no["mentioned"], said_no["ask"]) == ("ready", False, None)
 
 
 def test_a_draft_that_leaves_out_the_flaw_you_said_yes_to_fails():
@@ -194,7 +195,7 @@ def test_longer_is_about_twice_the_usual_at_least_30_words_and_at_most_70():
 
 def test_a_longer_draft_says_more_with_the_questions_the_listing_doesnt_answer():
     local = FakeModel("gemma3:4b", LONG)
-    result = ai_draft(BROKEN, style_card(PAST), local=local, length="longer")
+    result = ai_draft(BROKEN, style_card(PAST), local=local, length="longer", mention=False)  # Say the flaw: No
     assert (result["status"], result["length"], result["words"]) == ("ready", "longer", 30)  # usual 12 -> 30
     assert result["questions"] == ["What's the battery health?", "Does it come with a charger?",
                                    "Does it come with the box?"]
@@ -314,10 +315,12 @@ def test_with_no_past_messages_a_lower_offer_gives_the_low_battery_as_its_reason
         "asking": "Hi, is this still available? I'll pay the full £250 cash and can come and collect. "
                   "Could you hold it for me?",
         "more": "Hi, I'll pay £265 cash if you take the listing down and sell it to me. I can come and collect."}
-    # 86% and up isn't a reason, and nor is the battery of a phone your style doesn't mention condition for
+    # 86% and up isn't a reason; with your style, not picked, 80% is the reason too: whether you give it is never
+    # learned from your style (14 Oct), and picking No leaves it out
     high = {**listing, "description": listing["description"].replace("80%", "90%")}
     assert draft_message(high, kind="lower", offer=23500)["point"] == []
-    assert draft_message(listing, style_card(PAST), kind="lower", offer=23500)["mentioned"] is False
+    assert draft_message(listing, style_card(PAST), kind="lower", offer=23500)["mentioned"] is True
+    assert draft_message(listing, style_card(PAST), kind="lower", offer=23500, mention=False)["mentioned"] is False
 
 
 def test_a_replaced_battery_is_the_reason_whoever_replaced_it():

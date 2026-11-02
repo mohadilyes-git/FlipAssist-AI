@@ -492,7 +492,7 @@ def test_what_your_style_learned_is_yours_to_remove(client):
     assert next(r for r in style.json()["learned"] if r["key"] == "mention:cash")["used"] is False
     assert {"k": "Mentions", "v": "collecting and today"} in style.json()["traits"]
     # your own offer sentence says cash, so it's refused, and the AI is told never to say it
-    draft = client.post("/messages/draft", json={"listing": LISTING}).json()
+    draft = client.post("/messages/draft", json={"listing": LISTING, "mention": False}).json()  # Say the flaw: No
     assert (draft["status"], draft["written_by"]) == ("ready", "gemma3:4b") and "cash" not in draft["message"]
     assert "the message mentions paying cash, which you removed from your style" in draft["attempts"][0]["problems"]
     assert "Never mentions paying cash" in local.asked[-1]["user"]

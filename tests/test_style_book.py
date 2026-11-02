@@ -53,7 +53,7 @@ def test_the_card_is_the_one_your_messages_give_and_changes_with_them(tmp_path):
 def test_the_card_in_words():
     card = style_card(SENT)
     assert traits(card) == [("Opens with", "'Hi mate'"), ("Length", "about 10 words"),
-                            ("Mentions", "collecting, cash and today"), ("Says the flaw", "no")]
+                            ("Mentions", "collecting, cash and today")]
     # the greeting and the offer share a sentence, so there's no opener of its own
     assert phrase_rows(card) == [("Offer sentence", "Hi mate, would you take £… cash?"), ("Closing", "Can collect today.")]
     assert traits({}) == [] and phrase_rows({}) == []

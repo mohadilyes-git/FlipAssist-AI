@@ -37,9 +37,10 @@ def habit(sentence, closing="Can collect today.", opener="Hi mate,"):
                                          ("300", "380", "iPhone 14 Pro"))]
 
 
-def drafted(lst, messages, read, kind="lower"):
+def drafted(lst, messages, read, kind="lower", mention=True):
     """code's own message for the listing, and whether it passed the checks."""
-    result = draft_message(lst, style_card(messages), kind=kind, reading=read, writer="template")
+    # Say the flaw: Yes, as you'd pick it on the message (14 Oct: whether you give it isn't learned from your style)
+    result = draft_message(lst, style_card(messages), kind=kind, reading=read, writer="template", mention=mention)
     return result["status"], (result["answer"] or {}).get("message")
 
 
@@ -49,8 +50,9 @@ def test_your_reason_goes_whole_when_theres_no_flaw_to_give():
     """'given the state it's in' came out 'would you take £170 it's in?' on every lower offer: only 'given the state'
     was taken out. ('state' isn't learned as condition talk, so the cracked listing has nothing to give either.)"""
     state = habit("Would you take £X given the state it's in?", closing="Can collect today, cash ready.")
-    for lst, read in ((CRACKED, reading("Small crack on the back")), (MINT, reading())):
-        assert drafted(lst, state, read) == ("ready", "Hi mate, would you take £170? Can collect today, cash ready.")
+    for lst, read in ((CRACKED, reading("Small crack on the back")), (MINT, reading())):  # Say the flaw: No
+        assert drafted(lst, state, read, mention=False) == \
+            ("ready", "Hi mate, would you take £170? Can collect today, cash ready.")
     assert drafted(MINT, habit("would you take £X given the condition it's in?"), reading()) == \
         ("ready", "Hi mate, would you take £170? Can collect today.")
 

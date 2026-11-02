@@ -61,9 +61,11 @@ def mixed(asking_sentence, lower_sentence="would you take £X cash?", opener="Hi
                                                    ("250", "250", "iPhone 13", asking_sentence))]
 
 
-def drafted(lst, messages, read, kind="lower", writer_="template", local=None):
+def drafted(lst, messages, read, kind="lower", writer_="template", local=None, mention=True):
     """code's own message (or the AI's turn) for the listing: its status, message and the last try's problems."""
-    result = draft_message(lst, style_card(messages), kind=kind, reading=read, writer=writer_, local=local)
+    # Say the flaw: Yes, as you'd pick it on the message (14 Oct: whether you give it isn't learned from your style)
+    result = draft_message(lst, style_card(messages), kind=kind, reading=read, writer=writer_, local=local,
+                           mention=mention)
     problems = result["attempts"][-1]["problems"] if result["attempts"] else result["reasons"]
     return result["status"], (result["answer"] or {}).get("message"), problems
 
@@ -86,7 +88,7 @@ def test_a_dont_mind_with_its_own_subject_stays_as_you_typed_it_with_no_flaw_to_
     as_typed = f"Hi mate, {sentence.replace('£X', '£200')} Can collect today."
     for name in ("cracked", "mint"):
         lst, read = READ[name]
-        status, message, _ = drafted(lst, mixed(sentence), read, kind="asking")
+        status, message, _ = drafted(lst, mixed(sentence), read, kind="asking", mention=False)  # Say it: No
         assert (status, message) == ("ready", as_typed), name
 
 

@@ -788,24 +788,19 @@ def style_card(messages):
         return {}
     share = lambda found: sum(found) / len(texts) >= SHARE
     said = [statements(t) for t in texts]
-    # the flaw is a reason for a lower offer: whether you give it is counted on those, when there are enough; good
-    # condition is a reason for paying more, counted on those (26 Sep)
+    # good condition is a reason for paying more, counted on those (26 Sep)
     kinds = [kind_of(m) for m in mine]
     pool = lambda kind: [s for s, k in zip(said, kinds) if k == kind] if kinds.count(kind) >= HABIT else said
-    # ...on the listings that had a flaw, when the titles show that for at least HABIT of them: "I like the PS5"
-    # under a flawless one says nothing of whether you give a flaw (3 Oct: 1 of 5 lower offers gave one, but 1 of
-    # the 2 with a flaw did)
-    flawed = [s for s, k, m in zip(said, kinds, mine) if k == "lower" and FLAW_IN_TITLE.search(m.get("listing_title") or "")]
-    lower = flawed if len(flawed) >= HABIT else pool("lower")
-    gives_flaw = sum(map(gives_flaw_in, lower)) / len(lower) >= SHARE
     praised = lambda said: any(PRAISE.search(part) and not DONT_MIND.search(part) for part in SENTENCES.split(said))
     praises = sum(map(praised, pool("more"))) / len(pool("more")) >= SHARE
     card = {"messages": len(texts), "words": int(statistics.median(len(t.split()) for t in texts)),
             "questions": int(statistics.median(t.count("?") for t in texts)),
             "emoji": share(bool(EMOJI.search(t)) for t in texts),
-            "mentions": [name for name, pattern in MENTIONS.items()
-                         if (gives_flaw if name == "condition" else
-                             share(bool(re.search(pattern, t, re.IGNORECASE)) for t in said))]}
+            # ...never whether you give the flaw: that's yours to pick on each message (Say the flaw, Yes or No), not a
+            # habit to learn (14 Oct, the owner: "do not take whether u say the flaw or not from my style, just take the
+            # other habits"). How you give it ("given the condition") is still yours: the phrasebook keeps it
+            "mentions": [name for name, pattern in MENTIONS.items() if name != "condition" and
+                         share(bool(re.search(pattern, t, re.IGNORECASE)) for t in said)]}
     card["praise"] = praises
     card["asks_lower"] = asks_lower(mine)
     greeting, times = Counter(opening(t).lower() for t in texts).most_common(1)[0]
@@ -1193,8 +1188,6 @@ def learned(card, removed=(), finder=""):
     for habit, name in HABIT_NAMES.items():
         if habit in card.get("mentions", []) or habit in card.get("promises", []):
             add(f"mention:{habit}", "Mentions", name)
-    if "condition" in card.get("mentions", []):
-        add("says-flaw", "Says the flaw", "as the reason for a lower offer")
     if card.get("praise"):
         add("praise", "Says it's in good condition", "as the reason for paying more")
     if card.get("emoji"):
@@ -1313,8 +1306,8 @@ def without(card, removed):
             card["promises"] = [p for p in card.get("promises", []) if p != rest]
             gone["habits"].append(rest)
         elif kind == "says-flaw":
-            card["mentions"] = [m for m in card.get("mentions", []) if m != "condition"]
-            gone["flaw"] = True
+            pass  # not learned any more (14 Oct): whether you say the flaw is picked on each message, so an old removal
+            # of it changes nothing, and your examples keep the way you give it
         elif kind == "emoji":
             card["emoji"] = False
             for book in books:
@@ -1469,8 +1462,8 @@ def and_list(names):
 
 def traits(card):
     """The style card as the app shows it: [("Opens with", "'Hi mate'"),
-    ("Length", "about 12 words"), ("Mentions", "cash and collecting"),
-    ("Says the flaw", "yes")]. Empty before there are any messages."""
+    ("Length", "about 12 words"), ("Mentions", "cash and collecting")]. Empty before there are any messages
+    (never whether you give the flaw: that's picked on each message, 14 Oct)."""
     if not card:
         return []
     said = [name for name in card["mentions"] if name != "condition"]
@@ -1484,7 +1477,6 @@ def traits(card):
         rows.append(("Writes", "all in lower case"))
     if card.get("uppercase"):
         rows.append(("Writes", "all in capitals"))
-    rows.append(("Says the flaw", "yes" if "condition" in card["mentions"] else "no"))
     return rows
 
 

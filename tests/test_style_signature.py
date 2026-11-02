@@ -43,9 +43,11 @@ def test_saying_you_like_the_item_is_learned_with_the_items_name_left_out():
     assert style_card(MESSAGES[:1] + [{**MESSAGES[1], "my_message": "Hi, would you take £255?"}]).get("likes") is None
 
 
-def test_the_flaw_is_counted_on_the_listings_that_had_one():
-    # 1 of the 4 lower offers gives a flaw, but 1 of the 2 listings with one (cracked back, scratches) does
-    assert "condition" in style_card(MESSAGES)["mentions"]
+def test_whether_you_give_the_flaw_is_never_learned():
+    # 1 of the 2 listings with a flaw (cracked back, scratches) gives it, which once made "Says the flaw" a habit: now
+    # it's picked on each message (14 Oct, the owner), and never listed on My style
+    card = style_card(MESSAGES)
+    assert "condition" not in card["mentions"] and all(r["key"] != "says-flaw" for r in learned(card))
 
 
 def test_learned_lists_them_and_each_can_be_removed():

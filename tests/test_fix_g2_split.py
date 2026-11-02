@@ -29,7 +29,8 @@ def draft(description, title="iPhone 13", flaws=None, card=None, kind="lower", a
     """The message the template sends for a Facebook listing: code's own reading when flaws is None."""
     listing = {"id": "x", "title": title, "description": description, "asking_price": asking, "marketplace": "facebook"}
     reading = None if flaws is None else {"flaws": flaws, "pickup": "", "no_offers": "", "read_by": "flip-reader-5"}
-    result = draft_message(listing, card=card, local=None, api=None, kind=kind, reading=reading)
+    # Say the flaw: Yes, as you'd pick it on the message (14 Oct: whether you give it isn't learned from your style)
+    result = draft_message(listing, card=card, local=None, api=None, kind=kind, reading=reading, mention=True)
     assert (result["status"], result["writer"]) == ("ready", "template"), result["attempts"]
     return result["answer"]["message"]
 
