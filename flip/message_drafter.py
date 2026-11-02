@@ -1030,6 +1030,8 @@ def in_your_case(answer, card, offer=None, kind=None, keep=()):
     message = shortened(text, (card or {}).get("shortcuts"), (*keep, *([text[ends:]] if ends is not None else [])))
     if (card or {}).get("lowercase"):  # in lower case, but your sign-off as you write it: "cheers, Dan", not "cheers, dan"
         message = message.lower()
+    elif (card or {}).get("uppercase"):  # ...or all in capitals, code's own words too (14 Oct hunt)
+        message = message.upper()
     signs = kind not in ((card or {}).get("signature_skip") or ())  # not on a kind you send without it
     message = signed_with(message, (card or {}).get("signature")) if signs else message
     style = (card or {}).get("price_style")  # your offer written your way: "170£", "170" (3 Oct), after the checks

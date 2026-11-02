@@ -72,10 +72,18 @@ VERB_INSIDE = re.compile(r"\b(?:is|are|was|were|has|have|doesn'?t|don'?t|won'?t|
 # cushions worn", "Face ID not working" -> "the screen is cracked"
 STATES = (r"(?:slightly |a bit |very |quite |badly |really )?(?:cracked|smashed|shattered|damaged|broken|faded|worn|"
           r"scratched|chipped|dented|marked|scuffed|bent|stuck|loose|stiff|missing|faulty|dead|swollen|lifting|"
-          r"peeling|discoloured|discolored|yellowed|blank|not working|not charging|not turning on|no good)")  # (26 Sep)
+          r"peeling|discoloured|discolored|yellowed|blank|not working|not charging|not turning on|no good|"
+          # ...and the ones code worded as "the front camera blurry" (14 Oct hunt)
+          r"blurry|blurred|quiet|sticky|weak|unavailable|repaired|muffled|noisy|crackly|unresponsive|laggy|slow|dim|"
+          r"cloudy|foggy|hazy|scratchy|rattly|rattling|buzzing|flickering|intermittent|temperamental|glitchy|"
+          r"unreliable|patchy|dodgy|squeaky|wobbly|tight|cracking|fading|burnt|burned|burnt in|bleeding|dirty|"
+          r"stained|tarnished|split|torn|frayed|bad|poor|low|drained|draining)")  # (26 Sep)
 # ...the part never ending on a verb of its own: "both cameras are scratched" is said as written, not "are are" (the
 # fourth red team, 26 Sep), and "battery might be dead" not "might be is"
-PART_STATE = re.compile(rf"^(?P<part>(?:[\w-]+ ){{0,3}}(?!(?:is|are|was|were|be|been) )[\w-]+?) (?P<state>{STATES})$",
+PART_STATE = re.compile(rf"^(?P<part>(?:[\w-]+ ){{0,3}}(?!(?:is|are|was|were|be|been|a|bit|abit|slightly|very|quite|"
+                        rf"really|badly|got|get|gets|getting|has|had|have|became|become|went|gone|seems|looks)\b)[\w-]+?) "
+                        rf"(?P<state>{STATES}(?: on calls| at times| sometimes| occasionally| now and then| in places)?"
+                        rf"(?: (?:after|since|following|from) (?:a |an |the |its )?[\w-]+(?: [\w-]+){{0,2}})?)$",
                         re.IGNORECASE)
 # ...but not a cause or how much: "Water damaged", "Slightly faded" -> "that it's water damaged"
 NOT_A_PART = re.compile(r"^(?:water|liquid|sun|heat|smoke|rain|moisture|fire|slightly|very|quite|badly|lightly|heavily|"
@@ -303,7 +311,10 @@ RUN_ON = re.compile(r"(?<=\w)(?<!\band) (it|which) (?=(?:turns|keeps|won'?t|does
 ONE_ISSUE = re.compile(r"^(?:one|1)\s+(issue|problem|fault)\b", re.IGNORECASE)
 # a seller's own story ("I dropped it", "my son cracked it") isn't yours to say
 FIRST_PERSON = re.compile(r"\b(?:I|I'?ve|I'?m|I'?d|[Mm]y|[Mm]e|[Mm]ine|[Ww]e|[Ww]e'?ve|[Oo]ur|us)\b")
-SPARES = re.compile(r"\bfor parts\b|\bspares(?:\s*(?:or|and|/|&)\s*repairs?)?\b|\brepairs?\b", re.IGNORECASE)
+# ...only the selling words: "for parts", "spares or repairs", "sold as repair", never "after a screen repair" (14 Oct hunt:
+# "that it's sold as repair", a claim the listing never made, and its real fault left out)
+SPARES = re.compile(r"\bfor parts\b|\bspares(?:\s*(?:or|and|/|&)\s*repairs?)?\b|\b(?:sold|selling|being sold)\s+(?:as|for)\s+"
+                    r"repairs?\b|^(?:for\s+)?repairs?(?:\s+only)?$", re.IGNORECASE)
 NEGATED_SPARES = re.compile(r"\b(?:not|no|never|isn'?t)\s+(?:sold\s+)?(?:as\s+|for\s+)?(?:spares|repairs|parts)\b",
                             re.IGNORECASE)
 # adjectives on their own: "Faulty", "Slightly scratched", "Cracked and scratched", "Bent". Not "unlocked": that's a
@@ -430,7 +441,7 @@ def clean_flaw(part):
     label put in order ("Screen: cracked" -> "Screen cracked", "Back: small
     crack" -> "small crack on the back"), and shouting or Title Case lowered."""
     part = BRACKET_ASIDE.sub("", part)  # "(visible in photos)", "(Hence low price)": an aside, not the flaw
-    part = re.sub(r"\s+", " ", NOT_WORDS.sub(" ", part)).strip(" .,!;:-–—")
+    part = re.sub(r"\s+", " ", NOT_WORDS.sub(" ", part)).strip(" .,!?;:-–—…")
     part = PHOTO_LEAD.sub("", part, count=1)
     aside = PHOTO_ASIDE.search(part, 1)
     if aside:  # the aside goes when the flaw follows it, else the quote ends there
@@ -438,7 +449,7 @@ def clean_flaw(part):
         joined = ", " if aside.group().rstrip().endswith(",") and aside.group().lstrip().startswith(",") else " "
         part = f"{part[:aside.start()]}{joined}{rest}" if VERB_INSIDE.search(rest) or \
             re.search(STATES, rest, re.IGNORECASE) or PROBLEM.search(rest) else part[:aside.start()]
-        part = re.sub(r"\s+", " ", part).strip(" .,!;:-–—")
+        part = re.sub(r"\s+", " ", part).strip(" .,!?;:-–—…")
     labelled = LABELLED.match(part)
     if labelled:
         label, value = labelled.group("label").strip(), labelled.group("value").strip()
@@ -456,7 +467,7 @@ def clean_flaw(part):
     seen = SEEN_ONLY.search(part, 1)  # when it shows, after a mark: "dent on the corner unless you look closely"
     if seen and not fault_before(part[:seen.start()]):  # not a fault's condition: "Doesn't charge unless you wiggle it"
         part = part[:seen.start()].strip()
-    part = KISSES.sub("", untitled(calmed(part))).strip(" .,!;:-–—")
+    part = KISSES.sub("", untitled(calmed(part))).strip(" .,!?;:-–—…")
     part = LEAD_IN.sub("", part, count=1)  # "iPhone 14 Pro Max just back cracked": the lead-in after the model
     tokens = part.split()
     while tokens and tokens[-1].lower() in DANGLING and not (  # "Won't turn on": the "on" is the fault
@@ -850,7 +861,8 @@ def worded_flaw(part):
     spares = SPARES.search(part)
     if spares:  # in the seller's own words: "for parts", "spares or repairs"
         return None if NEGATED_SPARES.search(part) else \
-            "that it's sold for parts" if "part" in spares.group().lower() else f"that it's sold as {spares.group().lower()}"
+            "that it's sold for parts" if "part" in spares.group().lower() else \
+            f"that it's sold as {spares.group().lower()}" if "spares" in spares.group().lower() else "that it's sold for repair"
     if JUST_SAYS.match(part):
         return f"that it's {lower_first(part)}"  # "that it's faulty", "that it's slightly scratched"
     both = STATE_AND_DOES.match(part)
@@ -953,6 +965,8 @@ CUT_CLAUSE = re.compile(r"\s+(?:and|&)\s+(?:(?:the|its)\s+)?(?:(?!(?:and|or|but|
                         r"(?:is|are|was|were|has|have)\s*$", re.IGNORECASE)
 CUT_SAME = re.compile(r"\s+(?:and|&)\s+(?:(?:it|that|this)\s+)?(?:is|are|was|were|has|have)\s*$", re.IGNORECASE)
 AND_JOINS = re.compile(r"\s+(?:and|&)\s+", re.IGNORECASE)  # where two flaws may join: "Back cracked & screen scratched"
+# ...and a comma, as sellers list them ("back cracked, face id not working": 14 Oct hunt, worded as one verbless run-on)
+COMMA_JOINS = re.compile(r"\s*,\s*(?:and\s+|&\s+)?")
 # ...or run on after a fault said with "on": "wont turn on screen cracked" is two (not "it wont turn on the screen
 # cracked")
 # ...but not a part's own name: "power on button sticks" is the power-on button, nor a light: "The light on the back
@@ -1023,6 +1037,7 @@ def joins(part):
     or before it (STATE_THEN_FAULT: "Screen cracked wont turn on")."""
     masked = FIXED_PAIRS.sub(lambda pair: "_" * len(pair.group()), part)  # the same length, so places stay
     found = [(m.start(), m.end()) for m in AND_JOINS.finditer(masked)] + \
+            [(m.start(), m.end()) for m in COMMA_JOINS.finditer(masked)] + \
             [(m.start("gap"), m.end("gap")) for m in [*TURN_ON_THEN.finditer(masked), *STATE_THEN_FAULT.finditer(masked)]]
     return sorted(found, reverse=True)
 
@@ -1047,7 +1062,7 @@ def half_kind(half):
     that it works, a selling point, a good battery figure, the seller's
     story), None for anything else ("frame", a bare part a list carries on
     with) and for the seller's own story ("I dropped it"), which the AI words."""
-    half = half.strip(" .,!;:-–—")
+    half = half.strip(" .,!?;:-–—…")
     if not half or FIRST_PERSON.search(half):
         return None
     if fault_in(half):
@@ -1068,7 +1083,7 @@ def own_clause(text):
     it: "Back cracked", "the screen has a chip", "it flickers", "Cracked the
     back", "Battery health 79%" (not "Scratches on the frame", "Doesn't
     charge" or "Cracked")."""
-    text = text.strip(" .,!;:-–—")
+    text = text.strip(" .,!?;:-–—…")
     return bool(PART_STATE.match(text) or SUBJECT.match(text) or PRONOUN_FIRST.match(text) or DONE_TO_PART.match(text) or
                 VERB_INSIDE.search(text) and not VERB_START.match(text) or battery_figure(text))
 
@@ -1499,7 +1514,7 @@ def join(*parts):
     sentence carries on in lower case; after a full stop it starts with a capital."""
     text = ""
     for part in (p.strip() for p in parts if p and p.strip()):
-        if text.endswith(",") and part[:1].isupper() and not re.match(r"I\b", part):
+        if text.endswith(",") and part[:1].isupper() and not re.match(r"I\b|[A-Z]{2,}\b", part):  # nor "WOULD"
             part = part[:1].lower() + part[1:]
         elif text[-1:] in (".", "?", "!") and part[:1].islower() and not re.match(r"x{1,3}\b", part):
             part = part[:1].upper() + part[1:]  # ...but a kiss isn't a sentence: "...till tomorrow. x", not ". X"
@@ -1517,7 +1532,7 @@ def greeting_apart(sentence):
     rest = sentence[typed.end():].lstrip(" ,") if typed else ""
     if not re.search(r"\w", rest):
         return "", sentence
-    if not typed.group(1) and rest[:1].isupper() and not re.match(r"I\b|I'", rest):
+    if not typed.group(1) and rest[:1].isupper() and not re.match(r"I\b|I'|[A-Z]{2,}\b", rest):  # nor "WOULD"
         # on a line of its own ("Hey⏎Would you take..."): a comma, so never "Hey Would you take"
         return f"{greeting},", rest[:1].lower() + rest[1:]
     return f"{greeting}{typed.group(1)}", rest

@@ -625,12 +625,25 @@ def list_items(segment):
     return items + [item]
 
 
+# where a seller's story starts after the flaw: "Screen cracked WHEN I dropped it", "...AFTER I dropped it", "..., I
+# dropped it"
+STORY_AFTER = re.compile(r"\s*(?:,\s*|\s+(?:when|after|as|because|cos|since|while|where)\s+)(?=(?:i|we|my|me|our)\b)",
+                         re.IGNORECASE)
+
+
 def trimmed(flaw):
     """A seller's own story cut to the flaw: "I dropped it and cracked the
-    back" -> "cracked the back". Anything else stays as it is."""
-    if not FIRST_PERSON.search(flaw):
+    back" -> "cracked the back", and a story after the flaw cut from where it
+    starts: "Screen cracked when I dropped it last week" -> "Screen cracked"
+    (14 Oct hunt: it became "cracked when I dropped it last week", its part
+    lost, so the reason said the flaw twice). Anything else stays as it is."""
+    first = FIRST_PERSON.search(flaw)
+    if not first:
         return flaw
     problem = PROBLEM.search(flaw)
+    if problem and problem.start() < first.start():  # the flaw first, the story after it
+        story = STORY_AFTER.search(flaw, problem.end())
+        return flaw[:story.start()].strip(" ,") if story else flaw
     return flaw[problem.start():].strip() if problem else flaw
 
 

@@ -24,11 +24,13 @@ def test_an_aside_or_praise_after_the_flaw_is_left_out(quote, phrase):
 
 
 @pytest.mark.parametrize("quote, phrase", [
-    ("Cracked screen, camera not working", "the cracked screen, camera not working"),
-    ("Scratches on the back, speakers don't work", "that the scratches on the back, speakers don't work"),
+    # each said, the comma a join as "and" is (14 Oct hunt: "given the back cracked, face id not working")
+    ("Cracked screen, camera not working", "the cracked screen and that the camera is not working"),
+    ("Scratches on the back, speakers don't work", "the scratches on the back and that the speakers don't work"),
 ])
 def test_a_second_fault_after_the_comma_stays(quote, phrase):
-    assert flaw_phrase(quote) == phrase
+    from flip.writer import flaw_words
+    assert flaw_words([quote]) == phrase
 
 
 @pytest.mark.parametrize("quote, phrase", [  # the second red team (26 Sep): a fault's own condition stays

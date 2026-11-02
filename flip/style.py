@@ -501,8 +501,11 @@ def price_style(messages):
         found = next((p for p in OLD_PRICE.finditer(text) if not SAID_BACK.search(text[:p.start()])), None)
         if not found:
             continue
-        said, after = found.group(), text[found.end():found.end() + 2]
-        seen["before" if "£" in said else "word" if found.group(1) else "after" if re.match(r"\s?£", after) else "bare"] += 1
+        said, after = found.group(), text[found.end():]
+        # "quid" or "pounds" after the amount, however the price was found ("take 185 quid" is found by its "take":
+        # 14 Oct hunt, a writer who always says quid was learned as writing a bare number)
+        worded = found.group(1) or re.match(r"\s?(?:quid|pounds)\b", after, re.IGNORECASE)
+        seen["before" if "£" in said else "word" if worded else "after" if re.match(r"\s?£", after) else "bare"] += 1
     if not seen:
         return None
     style, n = seen.most_common(1)[0]
@@ -582,6 +585,13 @@ def is_lowercase(text):
     cash?") says nothing either way (case_places)."""
     places = case_places(text)
     return bool(places) and all(c.islower() for c in places)
+
+
+def is_uppercase(text):
+    """Whether a message is written all in capitals: "HI MATE WOULD YOU TAKE £295? CAN COLLECT TODAY". One with
+    fewer than 6 letters says nothing either way."""
+    letters = [c for c in text if c.isalpha()]
+    return len(letters) >= 6 and all(c.isupper() for c in letters)
 
 
 def gives_flaw_in(statement):
@@ -816,6 +826,8 @@ def style_card(messages):
     cased = [t for t in texts if case_places(t)]  # "£170 cash?" says nothing about how you write
     if len(cased) >= HABIT and sum(map(is_lowercase, cased)) / len(cased) >= LOWERCASE:
         card["lowercase"] = True
+    elif len(cased) >= HABIT and sum(map(is_uppercase, cased)) / len(cased) >= LOWERCASE:
+        card["uppercase"] = True  # ...or all in capitals, as some write (14 Oct hunt: "HI MATE, wOULD YOU TAKE £295?")
     card["phrases"] = phrasebook(mine)
     # ...and for where you buy: the messages you wrote on Facebook and Gumtree, and on eBay and Vinted
     card["by_market"] = {group: phrasebook(there) for group, pattern, _ in MARKET_GROUPS
@@ -1125,6 +1137,8 @@ def describe(card, words=None):
               "Uses emojis" if card["emoji"] else "No emojis"]
     if card.get("lowercase"):
         lines.append("Writes all in lower case")
+    elif card.get("uppercase"):
+        lines.append("Writes all in capitals")
     elif (card.get("removed") or {}).get("lowercase"):
         lines.append("Writes with capitals as usual, never all in lower case")  # you removed it: the AI is told
     if card["mentions"]:
@@ -1187,6 +1201,8 @@ def learned(card, removed=(), finder=""):
         add("emoji", "Emojis", phrases.get("emoji") or "yes")
     if card.get("lowercase"):
         add("lowercase", "Writes", "all in lower case")
+    if card.get("uppercase"):
+        add("uppercase", "Writes", "all in capitals")
     if card.get("likes"):
         add("likes", marked("Says you like the item", "likes"), card["likes"].replace("{item}", "[item]"))
     if card.get("signature"):
@@ -1231,7 +1247,8 @@ def removed_row(key):
         return (slots[slot], text.replace("[offer]", "…")) if slot in slots else None
     return {"greeting": ("Opens with", rest[:1].upper() + rest[1:]), "mention": ("Mentions", HABIT_NAMES.get(rest, rest)),
             "says-flaw": ("Says the flaw", "as the reason for a lower offer"), "emoji": ("Emojis", "yes"),
-            "lowercase": ("Writes", "all in lower case"), "ask": ("Asks every time", f"{rest}?"),
+            "lowercase": ("Writes", "all in lower case"), "uppercase": ("Writes", "all in capitals"),
+            "ask": ("Asks every time", f"{rest}?"),
             "praise": ("Says it's in good condition", "as the reason for paying more"),
             "likes": ("Says you like the item", "I like the [item]"), "signature": ("Signs off with", "your sign-off"),
             "price-style": ("Writes prices as", "your way"), "shortcut": (f'Writes "{rest}" short', "your way")}.get(kind)
@@ -1315,6 +1332,9 @@ def without(card, removed):
         elif kind == "lowercase":
             card.pop("lowercase", None)
             gone["lowercase"] = True
+        elif kind == "uppercase":
+            card.pop("uppercase", None)
+            gone["uppercase"] = True
         elif kind == "praise":
             card["praise"] = False
         elif kind == "likes":
@@ -1462,6 +1482,8 @@ def traits(card):
         rows.append(("Emojis", "yes"))
     if card.get("lowercase"):
         rows.append(("Writes", "all in lower case"))
+    if card.get("uppercase"):
+        rows.append(("Writes", "all in capitals"))
     rows.append(("Says the flaw", "yes" if "condition" in card["mentions"] else "no"))
     return rows
 

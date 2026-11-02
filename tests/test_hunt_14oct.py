@@ -290,3 +290,47 @@ def test_your_greeting_stays_whole_at_the_asking_price(greeting):
     card = card_of([f"{greeting}, would you take £{p}? Can collect tonight." for p in (185, 255, 100, 115)] +
                    [f"{greeting}, I'll pay £450. Can collect tonight.", f"{greeting}, I'll pay £190 if you hold it. Can collect tonight."])
     assert drafted(MINT, card, kind="asking").startswith(f"{greeting}, I can pay £350")
+
+
+# ── 11, 13: capitals and "quid" as you write them ──
+
+def test_all_capitals_stay_all_capitals():
+    card = card_of([f"HI MATE WOULD YOU TAKE £{p}? CAN COLLECT TODAY" for p in (185, 255, 100, 115)] +
+                   ["HI MATE I'LL PAY £450. CAN COLLECT TODAY", "HI MATE I'LL PAY £190 IF YOU HOLD IT. CAN COLLECT TODAY"])
+    assert card.get("uppercase")
+    for kind, flaws in (("lower", ["Small crack on the back glass"]), ("asking", ())):
+        message = drafted(LISTING, card, kind=kind, mention=bool(flaws), flaws=flaws)
+        assert message == message.upper() and "wOULD" not in message, message
+
+
+def test_quid_is_learned_after_any_offer_word():
+    from flip.style import price_style
+    assert price_style([{"my_message": "Hi, would you take 185 quid?"}] * 2) == "word"
+    card = card_of([f"Hi mate, would you take {p} quid? Can collect today." for p in (185, 255, 100, 115)] +
+                   ["Hi mate, I'll pay 450 quid. Can collect today.", "Hi mate, I'll pay 190 quid if you hold it. Can collect today."])
+    assert "350 quid" in drafted(MINT, card, kind="asking")
+
+
+# ── 4, 35, 36, 37, 38: code's own wording of the flaw ──
+
+@pytest.mark.parametrize("story, flaw", [("Screen cracked when I dropped it last week", "Screen cracked"),
+                                         ("Back glass smashed after I dropped it", "Back glass smashed"),
+                                         ("I dropped it and cracked the back", "cracked the back")])
+def test_the_sellers_story_is_cut_and_the_flaw_kept(story, flaw):
+    from flip.reader import trimmed
+    assert trimmed(story) == flaw
+
+
+@pytest.mark.parametrize("quote, said", [
+    ("Face ID unavailable after a screen repair", "that the Face ID is unavailable after a screen repair"),
+    ("Spares or repairs", "that it's sold as spares or repairs"),
+    ("Back cracked, face id not working", "that the back is cracked and that the face id is not working"),
+    ("Front camera blurry", "that the front camera is blurry"),
+    ("Speaker a bit quiet?", "that the speaker is a bit quiet"),
+    ("Home button sticky and mic quiet on calls", "that the home button is sticky and that the mic is quiet on calls"),
+    ("Small dent on the side…", "the small dent on the side"),
+    ("Screen got scratched", "the screen got scratched"),
+])
+def test_code_words_the_flaw_so_it_reads(quote, said):
+    from flip.writer import flaw_words
+    assert flaw_words([quote]) == said
