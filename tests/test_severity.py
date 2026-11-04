@@ -146,6 +146,27 @@ def test_a_judge_that_cant_answer_leaves_it_to_the_others():
     assert sev.judged(["Screen smashed"], "iPhone 11") == ("severe", "code")  # no key: code alone
     down = Judge("claude-haiku-5-5", RuntimeError("no network"))
     assert sev.judged(["Screen smashed"], "iPhone 11", check=down, decide=Judge("claude-sonnet-5-5")) == ("severe", "code")
-    haiku, sonnet = Judge("claude-haiku-5-5", {"severity": "minor"}), Judge("claude-sonnet-5-5", {"severity": "none"})
-    assert sev.judged(["Hairline crack across the screen"], "iPhone 14", check=haiku, decide=sonnet)[1] in \
-        ("Claude Haiku 5.5", "code and Claude Haiku 5.5")
+    haiku, sonnet = Judge("claude-haiku-5-5", {"severity": "minor"}), Judge("claude-sonnet-5-5", RuntimeError("down"))
+    assert sev.judged(["Hairline crack across the screen"], "iPhone 14", check=haiku, decide=sonnet)[0] == "minor"
+
+
+def test_a_judge_saying_it_isnt_physical_damage_gives_the_lightest_cut():
+    """4 Nov, the owner ("put it a minor, it is fine"): "Minor water mark on screen" was code's moderate whenever Haiku
+    said "none" (no damage word, so code's default), and minor when it said minor: GBP 173 or 209 for the same MacBook.
+    A judge's "none" is minor now, and like any other answer it's checked against code's."""
+    from flip import severity as sev
+    words = ["Minor water mark on screen with a couple scratches."]
+    sev._judged.clear()
+    haiku, sonnet = Judge("claude-haiku-5-5", {"severity": "none"}), Judge("claude-sonnet-5-5", {"severity": "none"})
+    assert sev.judged(words, "MacBook 2019 13 inch", check=haiku, decide=sonnet) == ("minor", "Claude Sonnet 5.5")
+    assert (haiku.asked, sonnet.asked) == (1, 1)  # code said moderate, so Sonnet decided
+    sev._judged.clear()
+    haiku, sonnet = Judge("claude-haiku-5-5", {"severity": "none"}), Judge("claude-sonnet-5-5", {"severity": "moderate"})
+    assert sev.judged(words, "MacBook 2019 13 inch", check=haiku, decide=sonnet) == ("moderate", "Claude Sonnet 5.5")
+    sev._judged.clear()
+    haiku, sonnet = Judge("claude-haiku-5-5", {"severity": "none"}), Judge("claude-sonnet-5-5")
+    assert sev.judged(["Small chip on the corner"], "iPhone 13", check=haiku, decide=sonnet) == \
+        ("minor", "code and Claude Haiku 5.5") and sonnet.asked == 0  # code says minor too: no Sonnet
+    sev._judged.clear()
+    assert sev.judged(words, "MacBook 2019 13 inch", check=Judge("claude-haiku-5-5", {"severity": "none"})) == \
+        ("minor", "Claude Haiku 5.5")  # no Sonnet to ask

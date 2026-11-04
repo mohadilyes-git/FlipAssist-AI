@@ -217,28 +217,39 @@ def listing_for_judge(flaws, title, description="", category=""):
 
 def judged(flaws, title, description="", category="", check=None, decide=None, log=None):
     """How bad the damage is, the hybrid way: (level, by). check: Claude Haiku 5.5 (a model with .ask), decide: Claude
-    Sonnet 5.5; None (no Anthropic key): code alone. A judge that fails or says "none" leaves the answer to the other
-    readers: code's when Haiku can't, Haiku's when Sonnet can't. log(reply): each paid call, for the cost meter."""
+    Sonnet 5.5; None (no Anthropic key): code alone. A judge that fails leaves the answer to the other readers: code's
+    when Haiku can't, Haiku's when Sonnet can't. A judge that says it isn't physical damage ("none": a water mark,
+    marks under the glass) says "minor", the lightest damage cut (4 Nov, the owner: "put it a minor, it is fine"): it
+    was code's "moderate" for want of a damage word, so the same listing went GBP 209 one time and 173 the next. The 13
+    Nov listings blind labellers called damaged but not physically were priced like minor damage (-21.5%, 12 listings;
+    minor -17.7%, wear about -7%), and on the sealed 300 it changes no answer. log(reply): each paid call, for the cost
+    meter."""
     code = severity(flaws, title) or "moderate"  # no word says how bad: moderate, the plain "cracked screen"
     if check is None:
         return code, "code"
     key = json.dumps([title, description, list(flaws), category, getattr(check, "name", "")])
     if key not in _judged:
         text = listing_for_judge(flaws, title, description, category)
-        first = _ask(check, text, log)
+        first = lightest(_ask(check, text, log))
         if first is None:
             _judged[key] = (code, "code")
         elif first == code:
             _judged[key] = (code, f"code and {NAMES.get(check.name, check.name)}")
         else:
-            second = _ask(decide, text, log) if decide is not None else None
+            second = lightest(_ask(decide, text, log)) if decide is not None else None
             _judged[key] = (second, NAMES.get(decide.name, decide.name)) if second else \
                 (first, NAMES.get(check.name, check.name))
     return _judged[key]
 
 
+def lightest(level):
+    """A judge's answer as a level: "none" (it isn't physical damage) is "minor", the lightest cut; None stays None."""
+    return "minor" if level == "none" else level
+
+
 def _ask(model, text, log=None):
-    """One judge's answer (minor, moderate or severe), or None when it can't answer or says it isn't damage."""
+    """One judge's answer: minor, moderate or severe, "none" when it says it isn't physical damage, or None when it
+    can't answer."""
     try:
         reply = model.ask(JUDGE, text, [], JUDGE_SCHEMA)
     except Exception:  # noqa: BLE001 - a judge that can't run leaves the answer to the others, never stops the price
@@ -246,4 +257,4 @@ def _ask(model, text, log=None):
     if log is not None:
         log(reply)
     level = (reply.answer or {}).get("severity") if isinstance(reply.answer, dict) else None
-    return level if level in ORDER else None
+    return level if level in (*ORDER, "none") else None
