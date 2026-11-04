@@ -1640,12 +1640,33 @@ def test_a_locked_ones_battery_isnt_cut_on_top():
      [("Screen cracked", ["damage"]), ("Face id not working", ["fault"]), ("Battery at 78%", ["battery"]),
       ("Small scratches on the frame", ["wear"])]),
     # one part that's two kinds stays whole, in both
-    ("Cracked screen with lines on the display", [("Cracked screen with lines on the display", ["damage", "fault"])]),
+    ("Smashed screen not working", [("Smashed screen not working", ["damage", "fault"])]),
+    # 4 Nov: "with" joins two flaws too (the owner's MacBook card showed one sentence on both rows)
+    ("Cracked screen with lines on the display", [("Cracked screen", ["damage"]), ("Lines on the display", ["fault"])]),
+    ("Battery health 76% with some scratches", [("Battery health 76%", ["battery"]), ("Some scratches", ["wear"])]),
+    # what isn't a flaw after "with" is left out; a word with no flaw before it goes with the flaw after it
+    ("Cracked back with original box", [("Cracked back", ["damage"])]),
+    ("Screen with a small crack", [("Screen with a small crack", ["damage"])]),
+    ("Works perfectly with a small crack on the back", [("Works perfectly with a small crack on the back", ["damage"])]),
+    # when its parts don't give the sentence's kinds (code reads no flaw in "Screen has a crack" alone), it stays whole
+    ("Screen has a crack with no effect on use", [("Screen has a crack with no effect on use", ["damage"])]),
+    ("Small crack on the back along with a dent on the corner",
+     [("Small crack on the back", ["damage"]), ("A dent on the corner", ["damage"])]),
 ])
 def test_a_flaw_sentence_is_split_into_the_flaws_code_finds_in_it(sentence, expected):
     text = "iPhone 13 128GB. " + sentence
     kinds = prices.kinds_of([sentence], text)
     assert prices.split_flaw(sentence, kinds, lambda words: prices.kinds_of([words], text)) == expected
+
+
+def test_the_owners_macbook_sentence_has_a_row_for_each_flaw():
+    # 4 Nov: flip-kinds sorted "Minor water mark on screen with a couple scratches" as damage and wear; code's rules
+    # read the water mark as wear, so flip-kinds is asked about each part, and each flaw gets its own words
+    said = {"Minor water mark on screen": ["damage"], "a couple scratches": ["wear"]}
+    text = "MacBook 2019 13 inch. Minor water mark on screen with a couple scratches."
+    parts = prices.split_flaw("Minor water mark on screen with a couple scratches.", ["damage", "wear"],
+                              lambda words: prices.kinds_of([words], text), lambda words: said.get(words, []))
+    assert parts == [("Minor water mark on screen", ["damage"]), ("A couple scratches", ["wear"])]
 
 
 def test_a_sentence_whose_parts_dont_give_all_its_kinds_stays_whole():

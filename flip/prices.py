@@ -1398,8 +1398,11 @@ def with_own_whole(found, table):
 # answer between two or more of its kinds, and only when they multiply to that answer (api_cuts).
 API_CUTS_UK = {"clean": 1.05, "damage": 0.91, "fault": 0.87, "network lock": 0.95, "not genuine": 0.99,
                "battery": 1.0, "wear": 1.0, "lock": 0.65, "parts": 0.76}
-# the words that join two flaws in one sentence: "cracked back and the battery is 75%", "scratches & a dent"
-JOINS = re.compile(r"\s+(?:and|&|but|plus|also|as\swell\sas)\s+(?!tear\b)", I)  # "wear and tear" is one
+# the words that join two flaws in one sentence: "cracked back and the battery is 75%", "scratches & a dent", and
+# "with" (4 Nov, the owner's MacBook card: "Minor water mark on screen with a couple scratches" showed the whole sentence
+# on both its rows); what has no flaw after "with" is left out ("Cracked back with original box": "Cracked back"),
+# and a word with no flaw before it goes with the flaw after it, as before ("Screen with a small crack" stays whole)
+JOINS = re.compile(r"\s+(?:and|&|but|plus|also|as\swell\sas|along\swith|together\swith|with)\s+(?!tear\b)", I)  # "wear and tear" is one
 
 
 def flaw_spans(quote):
@@ -1429,7 +1432,7 @@ def tidy(words):
     """A flaw's words as the screen gives them: no stray comma or joining word at either end, a capital to start (not
     for a word with its own capitals: "iCloud locked", "eSIM")."""
     words = words.strip(" \t\n.,;:!-–—&")
-    words = re.sub(r"^(?:(?:and|but|plus|also)\s+)+", "", words, flags=I)
+    words = re.sub(r"^(?:(?:and|but|plus|also|with)\s+)+", "", words, flags=I)  # ", with lines" -> "Lines"
     first = words.split(" ", 1)[0]
     return words if first[1:] != first[1:].lower() else words[:1].upper() + words[1:]
 
