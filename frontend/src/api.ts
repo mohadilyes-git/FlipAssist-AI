@@ -41,16 +41,26 @@ export type PriceEstimate = {
   /** the owner's battery cut for a battery under 80% (14 Oct): the lowest figure given (null: none given, "needs a
    * service") and the cut: 75-79% -0.1, 70-74% -0.15, under 70% -0.2, no figure -0.15 */
   battery?: { figure: number | null; cut: number } | null;
+  /** a Samsung's or a MacBook's own cuts (4 Nov), measured on its own UK listings: each kind's cut against a flawless
+   * one, from how many listings, whether it's rough (from: "the iPhone" when too few of them had it, "few listings") */
+  own_cuts?: Record<string, OwnCut> | null;
+  /** a locked or for-parts Samsung's or MacBook's own cut, when too few for-parts ones of its model have sold */
+  own_whole?: (OwnCut & { kind: string }) | null;
   /** each kind of flaw with its own cut, in the listing's order, with the flaws' own words (14 Oct); the flaws' words
    * that nothing was cut for */
   breakdown?: CutRow[]; not_cut?: string[];
 };
 
+/** A Samsung's or a MacBook's own measured cut for one kind of flaw (4 Nov) */
+export type OwnCut = { cut: number; n: number; rough: boolean; from?: string | null };
+
 /** One kind of flaw the price was cut for: its kinds (one, or the prices API's kinds cut together), the flaws' words
  * (title: they're the listing's title), the share off the price before it (-0.3; null: not cut), and whose cut:
  * "damage" (FlipAssist's, damage says how bad), "battery" (FlipAssist's, battery gives the figure), "api",
  * "api together", "parts price" (what for-parts ones sell for),
- * "lock" (the API's rough cut for a locked or for-parts one), "not on top" (not cut on top of that) or null */
+ * "lock" (the API's rough cut for a locked or for-parts one), "not on top" (not cut on top of that), "own" (a
+ * Samsung's or a MacBook's own measured cut, own_cuts says from how many), "own none" (wear beside its other flaw:
+ * counted in that cut), "own lock" (its own measured cut for a locked or for-parts one) or null */
 export type CutRow = { kinds: string[]; words: string[]; title?: boolean; cut: number | null; by: string | null };
 
 export type Reading = {

@@ -1,15 +1,13 @@
 {
- "made": "14 Oct 2026 (fix 1): from 1,965 damaged listings read blind by agents (part-cuts), kept as analyze.py keeps them; each cut is the median price against flawless ones of the same model and storage; a cell with under 10 listings borrows and is rough",
+ "made": "14 Oct 2026 (fix 1): from 1,965 damaged listings read blind by agents (part-cuts), kept as analyze.py keeps them; each cut is the median price against flawless ones of the same model and storage; a cell with under 10 listings borrows and is rough; 4 Nov 2026: samsung/uk and macbook/uk from their own UK listings (Vinted UK Samsungs, Vinted UK and Facebook UK MacBooks: 421 and 318 damaged ones, against flawless used ones of the same model, how bad by the app's judge: code and Claude Haiku 5.5, Claude Sonnet 5.5 when they disagree)",
  "min_n": 10,
- "kept": 1697,
+ "kept": 2404,
  "notes": [
-  "macbook/uk top: minor and moderate pooled (-0.127)",
   "macbook/us middle: minor and moderate pooled (-0.214)",
   "macbook/us top: minor and moderate pooled (-0.127)",
   "samsung/us bottom: moderate and severe pooled (-0.422)",
   "samsung/us middle: moderate and severe pooled (-0.444)",
-  "samsung/us top: moderate and severe pooled (-0.385)",
-  "samsung/uk: no UK listings; edges [134.36, 230.48] from the US Samsung's by the iPhone's UK/US edges"
+  "samsung/us top: moderate and severe pooled (-0.385)"
  ],
  "tables": {
   "iphone/ca": {
@@ -267,37 +265,37 @@
   "macbook/uk": {
    "currency": "GBP",
    "edges": [
-    225.0,
-    361.25
+    197.5,
+    342.5
    ],
    "ranges": {
     "bottom": [
-     90.0,
-     200.0
+     74.0,
+     195.0
     ],
     "middle": [
-     250.0,
-     360.0
+     200.0,
+     335.0
     ],
     "top": [
-     362.5,
-     1500.0
+     350.0,
+     1400.0
     ]
    },
    "rough_edges": false,
    "cuts": {
     "bottom": {
      "minor": {
-      "cut": -0.127,
-      "n": 56,
-      "rough": true,
-      "from": "the US"
+      "cut": -0.19,
+      "n": 78,
+      "rough": false,
+      "from": null
      },
      "moderate": {
-      "cut": -0.134,
-      "n": 15,
-      "rough": true,
-      "from": "the US"
+      "cut": -0.215,
+      "n": 22,
+      "rough": false,
+      "from": null
      },
      "severe": {
       "cut": -0.537,
@@ -308,16 +306,16 @@
     },
     "middle": {
      "minor": {
-      "cut": -0.133,
-      "n": 11,
+      "cut": -0.091,
+      "n": 83,
       "rough": false,
       "from": null
      },
      "moderate": {
-      "cut": -0.172,
-      "n": 20,
-      "rough": true,
-      "from": "the US"
+      "cut": -0.246,
+      "n": 16,
+      "rough": false,
+      "from": null
      },
      "severe": {
       "cut": -0.605,
@@ -328,16 +326,16 @@
     },
     "top": {
      "minor": {
-      "cut": -0.127,
-      "n": 59,
-      "rough": true,
-      "from": "the US; pooled with moderate to keep the order"
+      "cut": -0.149,
+      "n": 80,
+      "rough": false,
+      "from": null
      },
      "moderate": {
-      "cut": -0.127,
-      "n": 17,
-      "rough": true,
-      "from": "the US; pooled with minor to keep the order"
+      "cut": -0.157,
+      "n": 31,
+      "rough": false,
+      "from": null
      },
      "severe": {
       "cut": -0.605,
@@ -432,6 +430,90 @@
     }
    }
   },
+  "samsung/uk": {
+   "currency": "GBP",
+   "edges": [
+    77.33,
+    147.5
+   ],
+   "ranges": {
+    "bottom": [
+     12.25,
+     77.15
+    ],
+    "middle": [
+     77.5,
+     145.0
+    ],
+    "top": [
+     150.0,
+     950.0
+    ]
+   },
+   "rough_edges": false,
+   "cuts": {
+    "bottom": {
+     "minor": {
+      "cut": -0.333,
+      "n": 37,
+      "rough": false,
+      "from": null
+     },
+     "moderate": {
+      "cut": -0.366,
+      "n": 80,
+      "rough": false,
+      "from": null
+     },
+     "severe": {
+      "cut": -0.543,
+      "n": 19,
+      "rough": false,
+      "from": null
+     }
+    },
+    "middle": {
+     "minor": {
+      "cut": -0.273,
+      "n": 63,
+      "rough": false,
+      "from": null
+     },
+     "moderate": {
+      "cut": -0.35,
+      "n": 69,
+      "rough": false,
+      "from": null
+     },
+     "severe": {
+      "cut": -0.504,
+      "n": 27,
+      "rough": true,
+      "from": "pooled with the bottom tier"
+     }
+    },
+    "top": {
+     "minor": {
+      "cut": -0.18,
+      "n": 67,
+      "rough": false,
+      "from": null
+     },
+     "moderate": {
+      "cut": -0.375,
+      "n": 65,
+      "rough": false,
+      "from": null
+     },
+     "severe": {
+      "cut": -0.467,
+      "n": 13,
+      "rough": false,
+      "from": null
+     }
+    }
+   }
+  },
   "samsung/us": {
    "currency": "USD",
    "edges": [
@@ -512,77 +594,6 @@
       "n": 18,
       "rough": true,
       "from": "the iPhone (iphone/us), pooled with the middle tier; pooled with moderate to keep the order"
-     }
-    }
-   }
-  },
-  "samsung/uk": {
-   "currency": "GBP",
-   "edges": [
-    134.36,
-    230.48
-   ],
-   "ranges": null,
-   "rough_edges": true,
-   "cuts": {
-    "bottom": {
-     "minor": {
-      "cut": -0.22,
-      "n": 15,
-      "rough": true,
-      "from": "the US (pooled with the middle tier)"
-     },
-     "moderate": {
-      "cut": -0.422,
-      "n": 17,
-      "rough": true,
-      "from": "the US (pooled with the middle tier; pooled with severe to keep the order)"
-     },
-     "severe": {
-      "cut": -0.422,
-      "n": 23,
-      "rough": true,
-      "from": "the US (the iPhone (iphone/us), pooled with the middle tier; pooled with moderate to keep the order)"
-     }
-    },
-    "middle": {
-     "minor": {
-      "cut": -0.08,
-      "n": 19,
-      "rough": true,
-      "from": "the US (pooled with the top tier)"
-     },
-     "moderate": {
-      "cut": -0.444,
-      "n": 17,
-      "rough": true,
-      "from": "the US (pooled with the bottom tier; pooled with severe to keep the order)"
-     },
-     "severe": {
-      "cut": -0.444,
-      "n": 14,
-      "rough": true,
-      "from": "the US (the iPhone (iphone/us); pooled with moderate to keep the order)"
-     }
-    },
-    "top": {
-     "minor": {
-      "cut": -0.059,
-      "n": 11,
-      "rough": true,
-      "from": "the US"
-     },
-     "moderate": {
-      "cut": -0.385,
-      "n": 15,
-      "rough": true,
-      "from": "the US (pooled with the middle tier; pooled with severe to keep the order)"
-     },
-     "severe": {
-      "cut": -0.385,
-      "n": 18,
-      "rough": true,
-      "from": "the US (the iPhone (iphone/us), pooled with the middle tier; pooled with moderate to keep the order)"
      }
     }
    }

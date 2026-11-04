@@ -740,6 +740,11 @@ class PriceEstimate(BaseModel):
     # the owner's battery cut (14 Oct), for a battery under 80%: the lowest figure given (None: none given, "needs a
     # service") and the cut (75-79% -0.1, 70-74% -0.15, under 70% -0.2, no figure -0.15)
     battery: dict | None = None
+    # a Samsung's or a MacBook's own cuts (4 Nov), measured on its own UK listings: each kind's {"cut" against a
+    # flawless one, "n" listings, "rough", "from": "the iPhone" when too few}; own_whole, a locked or for-parts one's
+    # with too few for-parts sales ({"kind", ...the same})
+    own_cuts: dict | None = None
+    own_whole: dict | None = None
     # each kind of flaw with its own cut, in the listing's order, with the flaws' own words (flip.prices.cut_rows, 13
     # Nov: "Cracked back" damage -30%, "The balck dot in the front screen" a fault -17%); the flaws cut for nothing
     breakdown: list[CutRow] = []

@@ -78,13 +78,27 @@ def test_a_cheap_phone_loses_a_bigger_share_and_worse_damage_more():
 
 
 def test_a_borrowed_cell_says_where_from_and_is_rough():
-    # UK Samsung: none in the listings, every cell is the US Samsung's
-    found = damage_cut("samsung", "uk", 500, "minor")
+    # UK MacBooks (4 Nov: 318 damaged ones of their own): only 8 severe, so severe is the US one's in every tier
+    found = damage_cut("macbook", "uk", 500, "severe")
     assert found["rough"] is True and found["from"].startswith("the US")
-    assert table()["tables"]["samsung/uk"]["rough_edges"] is True
-    # UK MacBook: 32 listings, so a thin cell is the US one's
-    assert any(cell["rough"] and cell["from"].startswith("the US")
-               for row in table()["tables"]["macbook/uk"]["cuts"].values() for cell in row.values())
+    assert all(row["severe"]["rough"] and row["severe"]["from"].startswith("the US")
+               for row in table()["tables"]["macbook/uk"]["cuts"].values())
+
+
+def test_uk_samsungs_and_macbooks_have_their_own_damage_cells():
+    """4 Nov (the owner: "do them for sumsungs and macbook"): every UK Samsung cell was the US Samsung's, and most UK
+    MacBook ones the US's. Now they're measured on 421 damaged UK Samsungs and 318 UK MacBooks, how bad by the app's
+    judge; held out, the Samsung ones price UK listings closer (230 vs 174), the MacBook ones the same (135 vs 151)."""
+    samsung = table()["tables"]["samsung/uk"]
+    assert samsung["rough_edges"] is False
+    own = [cell for row in samsung["cuts"].values() for cell in row.values()]
+    assert sum(not cell["rough"] for cell in own) == 8 and not any((cell["from"] or "").startswith("the US") for cell in own)
+    assert damage_cut("samsung", "uk", 200, "moderate") == {"cut": -0.375, "tier": "top", "rough": False, "from": None,
+                                                            "n": 65}
+    macbook = table()["tables"]["macbook/uk"]["cuts"]
+    assert all(not macbook[tier][level]["rough"] for tier in macbook for level in ("minor", "moderate"))
+    # a cheap phone still loses a bigger share of its price to small damage
+    assert samsung["cuts"]["bottom"]["minor"]["cut"] < samsung["cuts"]["top"]["minor"]["cut"]
 
 
 def test_no_table_or_no_level_is_none():

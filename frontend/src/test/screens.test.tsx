@@ -815,9 +815,11 @@ describe("AI UK price estimate", () => {
     expect(step).toBe("flip-reader-5, FlipAssist's own model on this device, reads the title and description for flaws (if "
       + "its reading fails code's checks, Claude Sonnet 5.5 reads it instead, a paid call). flip-kinds-1, FlipAssist's own "
       + "flaw-sorting model on this device, "
-      + "sorts each flaw into a kind (code's rules do when it isn't installed), and the price is cut by amounts measured on phone listings: any flaw takes a small cut, faults cut the most, "
+      + "sorts each flaw into a kind (code's rules do when it isn't installed), and the price is cut by amounts measured on UK "
+      + "listings of the same kind of item (an iPhone's by the AlertFlip API's table, a Samsung's or a MacBook's by its own): "
+      + "any flaw takes a small cut, counted once, faults cut the most, "
       + "and different kinds' cuts multiply. Damage is cut by how bad it is (minor, moderate or severe) and how pricey the "
-      + "model is, as measured on 1,697 damaged iPhone, Samsung and MacBook listings. A worn battery is cut by how low its "
+      + "model is, as measured on 2,404 damaged iPhone, Samsung and MacBook listings. A worn battery is cut by how low its "
       + "health is, as it has to be replaced. A locked or for-parts one is priced at what for-parts ones of the same model "
       + "and size sell for, or at a rough guess when too few have sold, with its other flaws not cut on top.");
     expect(step).not.toMatch(/\d\s?%|per ?cent/);  // the prices API's cut table is its own and can change
@@ -878,6 +880,40 @@ describe("AI UK price estimate", () => {
     // "Small crack on the corner of the lid."
     expect(cautions({ ...mac, price: 370, kinds: ["damage"], cuts: ["damage"], parts_price: false })).toEqual(
       ["Rough for a MacBook: the flaw cuts were measured on phones"]);
+  });
+
+  it("gives a Samsung's and a MacBook's own cuts in words, and calls none of them measured on phones (4 Nov)", () => {
+    // the owner: "MacBook cuts are rough: the flaw percentages were measured on phones. yh do them for sumsungs and
+    // macbook": each kind is measured on the category's own UK listings now (data/kind_cuts.json)
+    const own = (cut: number, n: number, from: string | null = null) => ({ cut, n, rough: from != null, from });
+    const samsung: PriceEstimate = { ...PRICED, kind: "samsung", model: "galaxy s21", kinds: ["fault", "network lock",
+      "wear"], cuts: ["fault", "network lock", "wear"], own_cuts: { fault: own(-0.333, 168),
+      "network lock": own(-0.16, 139), wear: own(-0.125, 598) } };
+    const row = (r: Partial<CutRow>): CutRow => ({ kinds: ["fault"], words: ["x"], cut: -0.333, by: "own", ...r });
+    expect(cutWords(row({}), samsung)).toBe("Fault: −33%. UK sellers ask about 33% less for a Samsung with a fault "
+      + "than a flawless one (168 Samsung listings)");
+    // beside a worse flaw, only its part on top of the cut any flaw takes
+    expect(cutWords(row({ kinds: ["network lock"], cut: -0.04 }), samsung)).toBe("Network locked: −4% more. UK "
+      + "sellers ask about 16% less for a network-locked Samsung than a flawless one (139 Samsung listings); the part "
+      + "any flaw takes is counted once, above");
+    expect(cutWords(row({ kinds: ["wear"], cut: null, by: "own none" }), samsung))
+      .toBe("Wear: no more off, as the cut any flaw takes is counted once, in the cut above");
+    // too few MacBooks with parts that aren't genuine: the iPhone's, and rough
+    const mac: PriceEstimate = { ...PRICED, kind: "macbook", model: "macbook air 13 m1", kinds: ["not genuine", "wear"],
+      cuts: ["not genuine", "wear"], own_cuts: { "not genuine": own(-0.108, 100, "the iPhone"), wear: own(-0.048, 532) } };
+    expect(cutWords(row({ kinds: ["not genuine"], cut: -0.108 }), mac)).toBe("Parts that aren't genuine: −11%. UK "
+      + "sellers ask about 11% less for an iPhone with parts that aren't genuine than a flawless one (100 iPhone "
+      + "listings: too few MacBooks had it, so it's rough)");
+    expect(cautions(mac).some((c) => c.includes("measured on phones"))).toBe(false);
+    expect(cautions(mac)).toContain("Rough for a MacBook: the not genuine cut is the iPhone's, as too few MacBooks had it");
+    expect(cautions({ ...mac, kinds: ["wear"], cuts: ["wear"], own_cuts: { wear: own(-0.048, 532) } })).toEqual([]);
+    // locked, too few for-parts sales: its own measured cut, rough as 25 is few
+    const locked: PriceEstimate = { ...samsung, kinds: ["lock"], cuts: ["lock"], own_cuts: null, rough: true,
+      own_whole: { kind: "lock", ...own(-0.516, 25, "few listings") } };
+    expect(cutWords(row({ kinds: ["lock"], cut: -0.516, by: "own lock" }), locked)).toBe("Locked: −52%. UK sellers "
+      + "ask about 52% less for a locked Samsung than a flawless one (25 Samsung listings, rough: few listings); too few "
+      + "for-parts sales of this model to go on");
+    expect(cautions({ ...locked, kind: "macbook" }).some((c) => c.includes("measured on phones"))).toBe(false);
   });
 });
 

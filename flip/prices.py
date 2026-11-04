@@ -37,6 +37,8 @@ import os
 import re
 import urllib.error
 import urllib.request
+from functools import lru_cache
+from pathlib import Path
 
 from flip.severity import damage_cut, severity
 from flip.checks import NEGATED_THINGS, NOT_A_FLAW, PROBLEM, denied_by, slipped
@@ -1179,13 +1181,18 @@ def estimate(title, flaws=(), country="uk", opener=None, description=None, sorte
     # fix 1 (14 Oct): damage is cut by how bad it is and the model's price tier, from FlipAssist's own measured table
     # (flip.severity), in place of the prices API's one damage cut: the API is asked without "damage", so every
     # other cut stays the API's. Not for a locked or for-parts one, which the API prices as that alone
-    own_damage = "damage" in kinds and not (PARTS_WORDS.search(title) or {"lock", "parts"} & set(kinds))
+    whole = bool(PARTS_WORDS.search(title) or {"lock", "parts"} & set(kinds))  # priced as locked or for parts alone
+    own_damage = "damage" in kinds and not whole
     # the owner's battery rule (14 Oct): a battery under 80% is cut by how low it is (battery_cut), in place of the
     # prices API's one small battery cut, so the API is asked without "battery" too; not for a locked or for-parts one
-    own_battery = "battery" in kinds and not (PARTS_WORDS.search(title) or {"lock", "parts"} & set(kinds))
+    own_battery = "battery" in kinds and not whole
+    # a Samsung's or a MacBook's own cuts (4 Nov): the API is asked for the clean price, and they come off it
+    table = kind_table(kind, country)
+    own_kinds = [k for k in kinds if k in OWN_KINDS] if table and not whole else []
     body = {"action": "price", "country": country, "title": title, "strict": True,
-            "kinds": [k for k in kinds if not (own_damage and k == "damage") and not (own_battery and k == "battery")]}
-    if PARTS_WORDS.search(title) or {"lock", "parts"} & set(kinds):
+            "kinds": [k for k in kinds if not (own_damage and k == "damage") and not (own_battery and k == "battery")
+                      and k not in own_kinds]}
+    if whole:
         body["bucket"] = "good"
     in_title = sizes_in(title, kind)
     in_description = sizes_in(description or "", kind)
@@ -1196,15 +1203,17 @@ def estimate(title, flaws=(), country="uk", opener=None, description=None, sorte
     remembered = json.dumps([url, body], sort_keys=True)
 
     def priced(found):
-        """The API's answer with FlipAssist's battery and damage cuts, and each flaw's own cut for the screen
-        (cut_rows)."""
-        done = with_damage(with_battery({**found, "sorted_by": by}, own_battery, flaws, description, title), own_damage,
+        """The API's answer with a Samsung's or a MacBook's own cuts, FlipAssist's battery and damage cuts, and each
+        flaw's own cut for the screen (cut_rows)."""
+        start = {**found, "sorted_by": by}
+        start = with_own_whole(start, table) if whole else with_own_kinds(start, own_kinds, table, own_damage)
+        done = with_damage(with_battery(start, own_battery, flaws, description, title), own_damage,
                            kinds, flaws, title, judge, description)
-        if own_battery and done.get("price") is not None:
+        if (own_battery or own_kinds) and done.get("price") is not None:
             done = {**done, "price": round(done["price"])}
         rows = cut_rows(done, found.get("price"), flaw_items(each, titled, text, title, description, sorter),
                         found.get("api_factor"))
-        return {**{k: v for k, v in done.items() if k != "api_factor"}, **rows}
+        return {**{k: v for k, v in done.items() if k not in ("api_factor", "own_parts")}, **rows}
 
     if remembered in _seen:
         return priced(_seen[remembered])
@@ -1308,6 +1317,74 @@ def with_battery(found, own, flaws, description=None, title=None):
     cut = battery_cut(flaws, description, title)
     return {**found, "price": found["price"] * (1 + cut["cut"]),
             "cuts": [*(c for c in found.get("cuts", []) if c != "battery"), "battery"], "battery": cut}
+
+
+# ── a Samsung's or a MacBook's own cuts (4 Nov) ─────────────────────────────────────────────────────────────────────
+# The owner, 4 Nov ("MacBook cuts are rough: the flaw percentages were measured on phones. yh do them for sumsungs and
+# macbook"): every kind but damage and battery was cut by the prices API's UK table, measured on iPhones. A Samsung or a
+# MacBook now has its own, measured on 3,375 UK Samsung and 3,044 UK MacBook listings against the flawless used ones of
+# the same model, as the damage table is (data/kind_cuts.json): the API is asked for the clean price, and these come off
+# it. Held out, a Samsung's own cuts priced its listings closer than the phones' did (wear and faults, p < 0.01); a
+# MacBook's wear is the phones' -5% anyway, and its fault cut (-25%, the phones' -17%) is neither closer nor further.
+KIND_CUTS_FILE = Path(__file__).resolve().parent.parent / "data" / "kind_cuts.json"
+OWN_KINDS = ("fault", "network lock", "not genuine", "wear")  # the prices API's kinds a category's own table replaces
+
+
+@lru_cache(maxsize=1)
+def kind_tables():
+    return json.loads(KIND_CUTS_FILE.read_text())["tables"]
+
+
+def kind_table(category, market="uk"):
+    """A category's own cuts, {"kinds": {kind: {"cut", "n", "rough", "from", ...}}}, or None: an iPhone (the prices API's
+    table), or a market it has none for."""
+    return kind_tables().get(f"{category}/{market}") if category else None
+
+
+def own_parts(kinds, table, damaged=False):
+    """What each of a Samsung's or a MacBook's kinds takes off by its own table (4 Nov), the way the prices API takes
+    its table: the cut any flaw takes (wear's) counted once. {kind: the share off the price before it, or None for
+    nothing more}: the worst kind its whole cut, every other kind its part on top (its cut over wear's, never a rise),
+    wear nothing more beside another kind. damaged: FlipAssist's damage cut comes off too, and it has the any-flaw cut
+    in it (measured against flawless ones), so every kind is just its part on top."""
+    cuts = table["kinds"]
+    wear = 1 + cuts["wear"]["cut"]
+    serious = [k for k in kinds if k != "wear"]
+    holder = None if damaged or not serious else min(serious, key=lambda k: cuts[k]["cut"])
+    each = {}
+    for k in serious:
+        share = 1 + cuts[k]["cut"]
+        each[k] = share - 1 if k == holder else min(share / wear, 1.0) - 1
+    if "wear" in kinds:
+        each["wear"] = None if damaged or serious else wear - 1
+    return each
+
+
+def with_own_kinds(found, kinds, table, damaged=False):
+    """The estimate with a Samsung's or a MacBook's own cuts (own_parts) off the prices API's clean price, unrounded (the
+    battery and damage cuts come off it next): "own_cuts" gives each kind's measured cut ({"cut", "n", "rough", "from"}),
+    "own_parts" what each took. No kinds, no table or no price: as it is."""
+    if not kinds or not table or found.get("price") is None:
+        return found
+    each = own_parts(kinds, table, damaged)
+    factor = 1.0
+    for share in each.values():
+        factor *= 1 + (share or 0)
+    measured = {k: {f: table["kinds"][k].get(f) for f in ("cut", "n", "rough", "from")} for k in kinds}
+    return {**found, "price": found["price"] * factor, "cuts": [*found.get("cuts", []), *kinds],
+            "own_cuts": measured, "own_parts": each}
+
+
+def with_own_whole(found, table):
+    """A locked or for-parts Samsung or MacBook with too few for-parts sales of its model to go on: the prices API's
+    rough cut is replaced by the category's own measured one (4 Nov), off the clean middle price; "own_whole" says
+    which, {"kind", "cut", "n", "rough", "from"}. Priced at what for-parts ones sell for, or no table: as it is."""
+    used = [k for k in ("lock", "parts") if k in (found.get("cuts") or [])]
+    cell = table["kinds"].get(used[0]) if table and used else None
+    if not cell or found.get("parts_price") or not found.get("middle"):
+        return found
+    return {**found, "price": round(found["middle"] * (1 + cell["cut"])), "rough": bool(cell["rough"]),
+            "own_whole": {"kind": used[0], **{f: cell.get(f) for f in ("cut", "n", "rough", "from")}}}
 
 
 # ── each flaw with its own cut, for the screen (14 Oct) ──────────────────────────────────────────────────────────────
@@ -1482,8 +1559,10 @@ def cut_rows(done, api_price, items, api_factor=None):
     none" (one of its kinds that adds nothing on top of the one before: wear after a fault), "api together" (two or
     more of its kinds its table can't split: one cut for all; api_factor: the API's own factor, unrounded),
     "parts price" (priced at what for-parts ones sell for), "lock" (the API's rough cut for a locked or for-parts one
-    with no for-parts sales), "not on top" (a locked or for-parts one's other flaws, not cut on top), None (a kind
-    nothing was cut for). not_cut: the words of flaws with no kind ("Charger missing")."""
+    with no for-parts sales), "not on top" (a locked or for-parts one's other flaws, not cut on top), "own" (a Samsung's
+    or a MacBook's own measured cut, 4 Nov: done["own_cuts"] says from how many listings), "own none" (wear beside its
+    other flaw: counted in that cut), "own lock" (its own measured cut for a locked or for-parts one with no for-parts
+    sales), None (a kind nothing was cut for). not_cut: the words of flaws with no kind ("Charger missing")."""
     not_cut = [words for words, kinds, _ in items if not kinds]
     middle, price = done.get("middle"), done.get("price")
     if not middle or price is None:
@@ -1501,13 +1580,16 @@ def cut_rows(done, api_price, items, api_factor=None):
     whole = next((k for k in ("lock", "parts") if k in order), None)
     if done.get("parts_price") or whole:  # priced as for parts: one cut, first, and nothing on top of it
         first = whole or (order[0] if order else None)
-        by = "parts price" if done.get("parts_price") else "lock"
-        whole_cut = price / middle - 1 if done.get("parts_price") or not api_factor else api_factor - 1
+        own_whole = done.get("own_whole")  # a Samsung's or a MacBook's own cut for it (4 Nov)
+        by = "parts price" if done.get("parts_price") else "own lock" if own_whole else "lock"
+        whole_cut = own_whole["cut"] if own_whole and not done.get("parts_price") else \
+            price / middle - 1 if done.get("parts_price") or not api_factor else api_factor - 1
         return {"breakdown": [{**row(k), "cut": whole_cut, "by": by} for k in order if k == first]
                 + [{**row(k), "cut": None, "by": "not on top"} for k in order if k != first], "not_cut": not_cut}
     damage, battery = done.get("damage"), done.get("battery")
+    mine = done.get("own_parts") or {}  # a Samsung's or a MacBook's own cuts (4 Nov), each kind's part
     from_api = [k for k in order if k in (done.get("cuts") or []) and not (damage and k == "damage")
-                and not (battery and k == "battery")]
+                and not (battery and k == "battery") and k not in mine]
     # the API's own factor, unrounded: its prices are rounded up to £5, which on a cheap phone hides a cut or doubles it
     factor = api_factor or (api_price or price) / middle
     own = api_cuts(from_api, factor) if from_api else {}
@@ -1517,6 +1599,8 @@ def cut_rows(done, api_price, items, api_factor=None):
             rows.append({**row(k), "cut": damage["cut"], "by": "damage"})
         elif battery and k == "battery":
             rows.append({**row(k), "cut": battery["cut"], "by": "battery"})
+        elif k in mine:
+            rows.append({**row(k), "cut": mine[k], "by": "own" if mine[k] is not None else "own none"})
         elif k in from_api and own is not None:
             rows.append({**row(k), "cut": own[k], "by": "api" if own[k] is not None else "api none"})
         elif k in from_api:
@@ -1528,12 +1612,16 @@ def cut_rows(done, api_price, items, api_factor=None):
     # the biggest cut first (14 Oct, the owner): each cut comes off what the one before left, so the main flaw shows its
     # whole amount (a cracked back is -£73 of £310 with or without a worn battery) and a smaller one what it takes after
     # it; the price is the same in any order. An API kind that adds nothing on top goes right after the API's cut it's
-    # counted in, and a kind not cut for at all goes last
-    nothing_on_top = [r for r in rows if r["by"] == "api none"]
+    # counted in, wear beside a Samsung's or a MacBook's other flaw right after the cut that has the any-flaw part in
+    # it (its worst kind's, or the damage's), and a kind not cut for at all goes last
+    nothing_on_top = [r for r in rows if r["by"] in ("api none", "own none")]
+    goes_after = {"api none": ("api",), "own none": ("own", "damage")}
     ordered = []
     for row in sorted((r for r in rows if r["cut"] is not None), key=lambda r: r["cut"]):
         ordered.append(row)
-        if row["by"] == "api" and nothing_on_top:
-            ordered, nothing_on_top = ordered + nothing_on_top, []
-    rows = ordered + nothing_on_top + [r for r in rows if r["cut"] is None and r["by"] != "api none"]
+        here = [r for r in nothing_on_top if row["by"] in goes_after[r["by"]]]
+        if here:
+            ordered += here
+            nothing_on_top = [r for r in nothing_on_top if r not in here]
+    rows = ordered + nothing_on_top + [r for r in rows if r["cut"] is None and r["by"] not in ("api none", "own none")]
     return {"breakdown": rows, "not_cut": not_cut}

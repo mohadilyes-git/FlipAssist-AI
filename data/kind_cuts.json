@@ -1,0 +1,131 @@
+{
+ "made": "4 Nov 2026: each kind's cut measured on the category's own UK listings (Vinted UK Samsungs 5,400; Vinted UK and Facebook UK MacBooks 3,900; new ones left out, as the prices API prices from used sales), against the flawless used ones of the same model (+ storage; MacBooks: Air or Pro, chip or year, size), the kind alone (wear beside it allowed), prices that don't fit the majority left out (Tukey, 1.5 x IQR on the log ratio); the median, with its bootstrap 95% range. Under 10 listings: the iPhone's, measured the same way (rough); under 30: rough. Taken the way the prices API takes its table: the any-flaw cut (wear's) once, each other kind's part on top of it",
+ "min_n": 10,
+ "rough_under": 30,
+ "tables": {
+  "samsung/uk": {
+   "currency": "GBP",
+   "listings": 3375,
+   "kinds": {
+    "wear": {
+     "cut": -0.125,
+     "low": -0.138,
+     "high": -0.097,
+     "n": 598,
+     "rough": false,
+     "from": null
+    },
+    "fault": {
+     "cut": -0.333,
+     "low": -0.376,
+     "high": -0.3,
+     "n": 168,
+     "rough": false,
+     "from": null
+    },
+    "network lock": {
+     "cut": -0.16,
+     "low": -0.195,
+     "high": -0.098,
+     "n": 139,
+     "rough": false,
+     "from": null
+    },
+    "not genuine": {
+     "cut": -0.188,
+     "low": -0.233,
+     "high": -0.062,
+     "n": 43,
+     "rough": false,
+     "from": null
+    },
+    "lock": {
+     "cut": -0.516,
+     "low": -0.714,
+     "high": -0.333,
+     "n": 25,
+     "rough": true,
+     "from": "few listings"
+    },
+    "parts": {
+     "cut": -0.536,
+     "low": -0.591,
+     "high": -0.48,
+     "n": 62,
+     "rough": false,
+     "from": null
+    }
+   },
+   "not_used": {
+    "battery": {
+     "cut": -0.2,
+     "n": 29,
+     "why": "a battery under 80% is cut by the owner's rule (flip.prices.battery_cut)"
+    }
+   }
+  },
+  "macbook/uk": {
+   "currency": "GBP",
+   "listings": 3044,
+   "kinds": {
+    "wear": {
+     "cut": -0.048,
+     "low": -0.08,
+     "high": -0.014,
+     "n": 532,
+     "rough": false,
+     "from": null
+    },
+    "fault": {
+     "cut": -0.251,
+     "low": -0.301,
+     "high": -0.204,
+     "n": 212,
+     "rough": false,
+     "from": null
+    },
+    "network lock": {
+     "cut": -0.119,
+     "low": -0.167,
+     "high": -0.067,
+     "n": 109,
+     "rough": true,
+     "from": "the iPhone",
+     "own_n": 0
+    },
+    "not genuine": {
+     "cut": -0.108,
+     "low": -0.125,
+     "high": -0.088,
+     "n": 100,
+     "rough": true,
+     "from": "the iPhone",
+     "own_n": 8
+    },
+    "lock": {
+     "cut": -0.267,
+     "low": -0.429,
+     "high": -0.24,
+     "n": 15,
+     "rough": true,
+     "from": "few listings"
+    },
+    "parts": {
+     "cut": -0.468,
+     "low": -0.586,
+     "high": -0.417,
+     "n": 43,
+     "rough": false,
+     "from": null
+    }
+   },
+   "not_used": {
+    "battery": {
+     "cut": -0.118,
+     "n": 235,
+     "why": "a battery under 80% is cut by the owner's rule (flip.prices.battery_cut)"
+    }
+   }
+  }
+ }
+}

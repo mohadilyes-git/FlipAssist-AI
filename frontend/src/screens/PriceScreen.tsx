@@ -3,7 +3,7 @@
 // AlertFlip app's prices API prices it: the middle price of clean ones of the same model and size (sales Claude Haiku
 // 5.5 sorted), cut for the kinds of flaw found, or what for-parts ones sell for when it's locked or for parts.
 import { useState } from "react";
-import { api, type CutRow, type PriceEstimate } from "../api";
+import { api, type CutRow, type OwnCut, type PriceEstimate } from "../api";
 import { modelName, readBy } from "../format";
 import { Head, PoundIcon, Warn } from "../ui";
 
@@ -99,9 +99,10 @@ export function PriceScreen() {
                 for flaws (if its reading fails code's checks, Claude Sonnet 5.5 reads it instead, a paid
                 call). <strong>flip-kinds-1</strong>, FlipAssist's own flaw-sorting model on this device, sorts each flaw
                 into a kind (code's rules do when it isn't installed),
-                and the price is cut by amounts measured on phone listings: any flaw takes a small cut, faults cut
-                the most, and different kinds' cuts multiply. Damage is cut by how bad it is (minor, moderate or
-                severe) and how pricey the model is, as measured on 1,697 damaged iPhone, Samsung and MacBook listings. A
+                and the price is cut by amounts measured on UK listings of the same kind of item (an iPhone's by the
+                AlertFlip API's table, a Samsung's or a MacBook's by its own): any flaw takes a small cut, counted once,
+                faults cut the most, and different kinds' cuts multiply. Damage is cut by how bad it is (minor, moderate
+                or severe) and how pricey the model is, as measured on 2,404 damaged iPhone, Samsung and MacBook listings. A
                 worn battery is cut by how low its health is, as it has to be replaced. A locked or for-parts one is priced at what
                 for-parts ones of the same model and size sell for, or at a rough guess when too few have sold, with its
                 other flaws not cut on top.</li>
@@ -157,11 +158,19 @@ export function cautions(e: PriceEstimate, title?: string): string[] {
     const hard = (e.kinds ?? []).filter((k) => HARD_TO_PRICE.includes(k));
     if (hard.length) said.push(`Rough: ${hard.join(" and ")} ${hard.length > 1 ? "are" : "is"} hard to price`);
   }
-  // only when a flaw cut the prices API measured on phones was used: the damage cut is measured on MacBooks too
-  // (the battery cut is the owner's rule, 14 Oct, not one measured on phones)
-  if (mac && (e.cuts ?? []).filter((c) => !(e.damage && c === "damage") && !(e.battery && c === "battery")).length
-    && !e.parts_price) {
+  // only when a flaw cut the prices API measured on phones was used: a MacBook's own cuts (4 Nov) and its damage cut
+  // are measured on MacBooks (the battery cut is the owner's rule, 14 Oct, not one measured on phones)
+  const own = e.own_cuts ?? {};
+  if (mac && (e.cuts ?? []).filter((c) => !(e.damage && c === "damage") && !(e.battery && c === "battery")
+    && !(c in own)).length && !e.parts_price && !e.own_whole) {
     said.push("Rough for a MacBook: the flaw cuts were measured on phones");
+  }
+  // a kind too few of a Samsung's or a MacBook's own listings had: the iPhone's cut, measured the same way
+  const borrowed = Object.entries(own).filter(([, c]) => c.from === "the iPhone").map(([k]) => k);
+  const noun = NOUNS[e.kind ?? ""] ?? "item";
+  if (borrowed.length) {
+    said.push(`Rough for a ${noun}: the ${borrowed.join(" and ")} cut${borrowed.length > 1 ? "s are" : " is"} the `
+      + `iPhone's, as too few ${noun}s had ${borrowed.length > 1 ? "them" : "it"}`);
   }
   return said;
 }
@@ -239,6 +248,13 @@ export function cutWords(row: CutRow, e: PriceEstimate): string {
       + "FlipAssist's battery cut: 10% off at 75–79%, 15% at 70–74% or with no figure, 20% under 70%";
   }
   if (row.by === "api none") return `${names}: no more off, as it's counted in the cut above (the AlertFlip API's way)`;
+  // a Samsung's or a MacBook's own cuts (4 Nov), measured on its own UK listings against flawless ones
+  if (row.by === "own none") return `${names}: no more off, as the cut any flaw takes is counted once, in the cut above`;
+  const own = row.kinds.length === 1 ? e.own_cuts?.[row.kinds[0]] : undefined;
+  if (row.by === "own" && row.cut != null && own) return ownWords(row, own, e);
+  if (row.by === "own lock" && row.cut != null && e.own_whole) {
+    return `${ownWords(row, e.own_whole, e)}; too few for-parts sales of this model to go on`;
+  }
   if (row.cut == null) {
     if (row.by !== "not on top") return `${names}: not cut for`;
     // with no for-parts sales to go on, the price is the API's rough cut for a locked or for-parts one (14 Oct review)
@@ -258,6 +274,29 @@ export function cutWords(row: CutRow, e: PriceEstimate): string {
   }
   return `${names}: ${percent(row.cut)}. ${less} ${KIND_WORDS[row.kinds[0]]?.one ?? "one like it"} (the AlertFlip `
     + `API's cut${phones})`;
+}
+
+/** "a Samsung with a fault", "a network-locked MacBook", "an iPhone with parts that aren't genuine" */
+function ownOne(kind: string, noun: string): string {
+  const a = /^[aeiou]/i.test(noun) ? "an" : "a";
+  return ({ wear: `${a} ${noun} with wear`, fault: `${a} ${noun} with a fault`, "network lock": `a network-locked ${noun}`,
+    "not genuine": `${a} ${noun} with parts that aren't genuine`, lock: `a locked ${noun}`,
+    parts: `${a} ${noun} for parts` } as Record<string, string>)[kind] ?? `${a} ${noun} like it`;
+}
+
+/** A Samsung's or a MacBook's own cut in words (4 Nov): "Fault: −33%. UK sellers ask about 33% less for a Samsung with
+ * a fault than a flawless one (168 Samsung listings)"; a kind beside a worse one is only its part on top ("Network
+ * locked: −4% more ..."), and a kind too few of them had is the iPhone's, rough. */
+function ownWords(row: CutRow, own: OwnCut, e: PriceEstimate): string {
+  const kind = row.kinds[0];
+  const noun = NOUNS[e.kind ?? ""] ?? "item";
+  const iphones = own.from === "the iPhone";
+  const onTop = row.cut != null && Math.abs(row.cut - own.cut) > 0.0005;  // its part on top of the any-flaw cut
+  const from = iphones ? `${own.n} iPhone listings: too few ${noun}s had it, so it's rough`
+    : `${own.n} ${noun} listings${own.rough ? ", rough: few listings" : ""}`;
+  return `${and(row.kinds.map(kindName))}: ${percent(row.cut ?? 0)}${onTop ? " more" : ""}. UK sellers ask about `
+    + `${Math.round(-own.cut * 100)}% less for ${ownOne(kind, iphones ? "iPhone" : noun)} than a flawless one (${from})`
+    + (onTop ? "; the part any flaw takes is counted once, above" : "");
 }
 
 /** What each row takes off in pounds, taken in turn from the clean middle price to the price: [72, 29] for −30% then
