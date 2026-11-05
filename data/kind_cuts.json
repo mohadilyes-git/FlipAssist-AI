@@ -1,8 +1,69 @@
 {
- "made": "4 Nov 2026: each kind's cut measured on the category's own UK listings (Vinted UK Samsungs 5,400; Vinted UK and Facebook UK MacBooks 3,900; new ones left out, as the prices API prices from used sales), against the flawless used ones of the same model (+ storage; MacBooks: Air or Pro, chip or year, size), the kind alone (wear beside it allowed), prices that don't fit the majority left out (Tukey, 1.5 x IQR on the log ratio); the median, with its bootstrap 95% range. Under 10 listings: the iPhone's, measured the same way (rough); under 30: rough. Taken the way the prices API takes its table: the any-flaw cut (wear's) once, each other kind's part on top of it",
+ "made": "4 Nov 2026: each kind's cut measured on the category's own UK listings (Vinted UK iPhones 8,800; Vinted UK Samsungs 5,400; Vinted UK and Facebook UK MacBooks 3,900; new ones left out, as the prices API prices from used sales), against the flawless used ones of the same model (+ storage; MacBooks: Air or Pro, chip or year, size), the kind alone (wear beside it allowed), prices that don't fit the majority left out (Tukey, 1.5 x IQR on the log ratio); the median, with its bootstrap 95% range. Under 10 listings: the iPhone's, measured the same way (rough); under 30: rough. Taken the way the prices API takes its table: the any-flaw cut (wear's) once, each other kind's part on top of it",
  "min_n": 10,
  "rough_under": 30,
  "tables": {
+  "iphone/uk": {
+   "currency": "GBP",
+   "listings": 7548,
+   "kinds": {
+    "wear": {
+     "cut": -0.071,
+     "low": -0.085,
+     "high": -0.058,
+     "n": 895,
+     "rough": false,
+     "from": null
+    },
+    "fault": {
+     "cut": -0.259,
+     "low": -0.3,
+     "high": -0.25,
+     "n": 204,
+     "rough": false,
+     "from": null
+    },
+    "network lock": {
+     "cut": -0.119,
+     "low": -0.167,
+     "high": -0.067,
+     "n": 109,
+     "rough": false,
+     "from": null
+    },
+    "not genuine": {
+     "cut": -0.108,
+     "low": -0.125,
+     "high": -0.088,
+     "n": 100,
+     "rough": false,
+     "from": null
+    },
+    "lock": {
+     "cut": -0.5,
+     "low": -0.571,
+     "high": -0.463,
+     "n": 71,
+     "rough": false,
+     "from": null
+    },
+    "parts": {
+     "cut": -0.582,
+     "low": -0.6,
+     "high": -0.528,
+     "n": 106,
+     "rough": false,
+     "from": null
+    }
+   },
+   "not_used": {
+    "battery": {
+     "cut": -0.111,
+     "n": 2037,
+     "why": "a battery under 80% is cut by the owner's rule (flip.prices.battery_cut)"
+    }
+   }
+  },
   "samsung/uk": {
    "currency": "GBP",
    "listings": 3375,

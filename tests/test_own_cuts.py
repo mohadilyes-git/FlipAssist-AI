@@ -80,8 +80,13 @@ def made_by_rows(found):
 
 
 def test_the_tables_are_measured_and_say_how_many_listings():
-    samsung, macbook = prices.kind_table("samsung"), prices.kind_table("macbook")
-    assert prices.kind_table("iphone") is None  # an iPhone keeps the prices API's table
+    samsung, macbook, iphone = prices.kind_table("samsung"), prices.kind_table("macbook"), prices.kind_table("iphone")
+    # iPhones too since 4 Nov evening (the owner: "yh please go"), measured the same way on 7,548 UK iPhone listings
+    assert {k: (c["cut"], c["n"]) for k, c in iphone["kinds"].items()} == {
+        "wear": (-0.071, 895), "fault": (-0.259, 204), "network lock": (-0.119, 109), "not genuine": (-0.108, 100),
+        "lock": (-0.5, 71), "parts": (-0.582, 106)}
+    assert not any(c["rough"] for c in iphone["kinds"].values())
+    assert prices.kind_table("iphone", "us") is None  # a market with none: the prices API's table
     assert {k: (c["cut"], c["n"]) for k, c in samsung["kinds"].items()} == {
         "wear": (-0.125, 598), "fault": (-0.333, 168), "network lock": (-0.16, 139), "not genuine": (-0.188, 43),
         "lock": (-0.516, 25), "parts": (-0.536, 62)}
@@ -170,7 +175,18 @@ def test_a_locked_samsung_with_too_few_for_parts_sales_takes_its_own_measured_cu
     assert found["price"] == 70 and "own_whole" not in found and rows(found)[0][2] == "parts price"
 
 
-def test_an_iphone_is_cut_by_the_prices_apis_table_as_before():
+def test_an_iphone_is_cut_by_its_own_measure_too():
+    opener, sent = api()
+    words = "Face ID doesn't work"
+    found = prices.estimate("iPhone 13 128GB", [words], opener=opener, description=words,
+                            sorter=Sorter({words: ["fault"]}))
+    # 4 Nov evening: UK sellers ask 25.9% less for an iPhone with a fault (204 listings), not the API table's 17.1%
+    assert sent == [[]] and found["price"] == 178 and found["own_cuts"]["fault"]["n"] == 204
+    assert rows(found) == [([words], ["fault"], "own", -0.259)]
+
+
+def test_a_category_with_no_own_table_is_cut_by_the_prices_apis_table(monkeypatch):
+    monkeypatch.setattr(prices, "kind_table", lambda category, market="uk": None)
     opener, sent = api()
     words = "Face ID doesn't work"
     found = prices.estimate("iPhone 13 128GB", [words], opener=opener, description=words,

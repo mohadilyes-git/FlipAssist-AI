@@ -816,7 +816,9 @@ def test_the_price_tab_asks_for_the_kinds_and_the_size_the_listing_gives(client,
     prices._seen.clear()
     found = client.post("/prices/estimate", json={"title": "iPhone 13 128GB", "flaws": ["Everything works except face id"],
                                                   "description": "Everything works except face id. Collection Leeds."})
-    assert (asked[-1]["kinds"], found.json()["kinds"]) == (["fault"], ["fault"])
+    # 4 Nov: an iPhone's fault is FlipAssist's own measured cut, so the API is asked for the clean price
+    assert (asked[-1]["kinds"], found.json()["kinds"]) == ([], ["fault"])
+    assert found.json()["own_cuts"]["fault"]["n"] == 204
     client.post("/prices/estimate", json={"title": "iPhone 12 Pro repairs", "description": "Collection only.", "flaws": []})
     assert (asked[-1]["kinds"], asked[-1]["bucket"]) == (["parts"], "good")
     found = client.post("/prices/estimate", json={"title": "iPhone 13 Blue", "description": "128 gig, battery 90%",

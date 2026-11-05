@@ -99,8 +99,8 @@ export function PriceScreen() {
                 for flaws (if its reading fails code's checks, Claude Sonnet 5.5 reads it instead, a paid
                 call). <strong>flip-kinds-1</strong>, FlipAssist's own flaw-sorting model on this device, sorts each flaw
                 into a kind (code's rules do when it isn't installed),
-                and the price is cut by amounts measured on UK listings of the same kind of item (an iPhone's by the
-                AlertFlip API's table, a Samsung's or a MacBook's by its own): any flaw takes a small cut, counted once,
+                and the price is cut by amounts measured on UK listings of the same kind of item (iPhones on iPhones,
+                Samsungs on Samsungs, MacBooks on MacBooks): any flaw takes a small cut, counted once,
                 faults cut the most, and different kinds' cuts multiply. Damage is cut by how bad it is (minor, moderate
                 or severe) and how pricey the model is, as measured on 2,404 damaged iPhone, Samsung and MacBook listings. A
                 worn battery is cut by how low its health is, as it has to be replaced. A locked or for-parts one is priced at what

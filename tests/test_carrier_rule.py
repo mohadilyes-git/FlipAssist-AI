@@ -124,7 +124,8 @@ def test_the_title_is_sorted_by_the_same_rule(title, description, locked):
 
 
 def test_a_network_lock_reaches_the_prices_api_from_the_title(monkeypatch):
-    """The title's carrier goes into what's sent: the cut happens (a pretend API, no real call)."""
+    """The title's carrier is cut for (a pretend API, no real call): since 4 Nov an iPhone's network lock is FlipAssist's
+    own measured cut, so it's in the estimate's kinds and own cuts, and the API is asked for the clean price."""
     from tests.test_prices import ANSWER, Response
     monkeypatch.setenv("PRICES_URL", "https://example.test/functions/v1/prices")
     monkeypatch.setenv("PRICES_KEY", "k" * 64)
@@ -135,9 +136,11 @@ def test_a_network_lock_reaches_the_prices_api_from_the_title(monkeypatch):
         sent.append(json.loads(request.data))
         return Response(json.dumps(ANSWER).encode())
 
-    prices.estimate("iPhone 13 128GB AT&T", [], opener=opener, description="Great phone.")
-    prices.estimate("iPhone 13 128GB AT&T Unlocked", [], opener=opener, description="Great phone.")
-    assert "network lock" in sent[0]["kinds"] and "network lock" not in sent[1]["kinds"]
+    locked = prices.estimate("iPhone 13 128GB AT&T", [], opener=opener, description="Great phone.")
+    unlocked = prices.estimate("iPhone 13 128GB AT&T Unlocked", [], opener=opener, description="Great phone.")
+    assert "network lock" in locked["kinds"] and "network lock" in locked["own_cuts"]
+    assert "network lock" not in unlocked["kinds"] and not unlocked.get("own_cuts")
+    assert "network lock" not in sent[0]["kinds"] + sent[1]["kinds"]
 
 
 @pytest.mark.parametrize("description, locked", [

@@ -1571,8 +1571,10 @@ def test_each_flaw_of_a_sentence_has_its_own_row_with_its_cut():
     sentence = "cracked back and the balck dot in the front screen"  # the owner's screenshot
     sorter = Sorter({sentence: ["damage", "fault"], "the balck dot in the front screen": ["fault"]})
     found = prices.estimate("iphone 14", [sentence], opener=cutting(), description=sentence, sorter=sorter)
+    # an iPhone's fault is its own measured cut (4 Nov: -25.9%); beside damage, only its part on top of the any-flaw
+    # cut (-7.1%), which the damage cut, measured against flawless ones, already has in it
     assert rows(found) == [(["Cracked back"], ["damage"], "damage", -0.304),
-                           (["The balck dot in the front screen"], ["fault"], "api", -0.171)]
+                           (["The balck dot in the front screen"], ["fault"], "own", -0.202)]
     assert abs(made_by_rows(found) - found["price"]) < 1  # the rows make the price
     # flip-kinds is asked about the sentence, then only the part code can't read ("balck"), never "cracked back"
     assert sorter.asked == [sentence, "the balck dot in the front screen"]
@@ -1741,7 +1743,28 @@ def test_the_rows_always_make_the_price(sentence):
 
 
 # ── 14 Oct review of the per-flaw rows and the battery cut ──────────────────────────────────────────────────────────
+# Since 4 Nov every UK iPhone, Samsung and MacBook kind is FlipAssist's own measured cut (test_own_cuts.py); the prices
+# API's table is what's left for a market with no own table, so these take the own tables away (no_own_table)
 
+@pytest.fixture
+def no_own_table(monkeypatch):
+    monkeypatch.setattr(prices, "kind_table", lambda category, market="uk": None)
+
+
+def test_an_iphones_two_kinds_take_the_any_flaw_cut_once():
+    sentence = "Face ID not working and locked to Vodafone"
+    found = prices.estimate("iPhone 14 128GB", [sentence], opener=cutting(), description=sentence)
+    # the fault its whole -25.9%; the network lock -11.9% is -5.2% on top of the any-flaw cut (-7.1%) the fault has in it
+    assert rows(found) == [(["Face ID not working"], ["fault"], "own", -0.259),
+                           (["Locked to Vodafone"], ["network lock"], "own", -0.052)]
+    assert found["price"] == 169 and abs(made_by_rows(found) - found["price"]) < 1
+    wear = prices.estimate("iPhone 14 128GB", ["Face ID not working and scratches on the back"], opener=cutting(),
+                           description="Face ID not working and scratches on the back")
+    assert rows(wear) == [(["Face ID not working"], ["fault"], "own", -0.259),
+                          (["Scratches on the back"], ["wear"], "own none", None)]
+
+
+@pytest.mark.usefixtures("no_own_table")
 def test_two_api_kinds_each_have_their_own_row_from_the_real_apis_answer():
     sentence = "Face ID not working and locked to Vodafone"
     found = prices.estimate("iPhone 14 128GB", [sentence], opener=cutting(), description=sentence)
@@ -1750,6 +1773,7 @@ def test_two_api_kinds_each_have_their_own_row_from_the_real_apis_answer():
     assert abs(made_by_rows(found) - found["price"]) < 1
 
 
+@pytest.mark.usefixtures("no_own_table")
 def test_wear_after_a_fault_adds_nothing_on_top_as_the_api_takes_it():
     sentence = "Face ID not working and scratches on the back"
     found = prices.estimate("iPhone 14 128GB", [sentence], opener=cutting(), description=sentence)
@@ -1757,6 +1781,7 @@ def test_wear_after_a_fault_adds_nothing_on_top_as_the_api_takes_it():
                            (["Scratches on the back"], ["wear"], "api none", None)]
 
 
+@pytest.mark.usefixtures("no_own_table")
 def test_an_api_rows_cut_is_its_own_factor_not_its_rounded_prices():
     # the API rounds its prices up to £5: a cheap phone's 4.8% wear cut can vanish (£50 and £50) or double
     def opener(request, timeout):
@@ -1839,4 +1864,4 @@ def test_the_biggest_cut_comes_first_so_the_main_flaw_keeps_its_whole_amount():
     assert [r["kinds"] for r in found["breakdown"]] == [["damage"], ["battery"]]
     wear_after_fault = prices.estimate("iPhone 14 128GB", ["Scratches on the back and Face ID not working"],
                                        opener=cutting(), description="Scratches on the back and Face ID not working")
-    assert [(r["kinds"], r["by"]) for r in wear_after_fault["breakdown"]] == [(["fault"], "api"), (["wear"], "api none")]
+    assert [(r["kinds"], r["by"]) for r in wear_after_fault["breakdown"]] == [(["fault"], "own"), (["wear"], "own none")]

@@ -1319,13 +1319,16 @@ def with_battery(found, own, flaws, description=None, title=None):
             "cuts": [*(c for c in found.get("cuts", []) if c != "battery"), "battery"], "battery": cut}
 
 
-# ── a Samsung's or a MacBook's own cuts (4 Nov) ─────────────────────────────────────────────────────────────────────
+# ── each category's own cuts: Samsung and MacBook, then iPhones (4 Nov) ────────────────────────────────────────────
 # The owner, 4 Nov ("MacBook cuts are rough: the flaw percentages were measured on phones. yh do them for sumsungs and
 # macbook"): every kind but damage and battery was cut by the prices API's UK table, measured on iPhones. A Samsung or a
 # MacBook now has its own, measured on 3,375 UK Samsung and 3,044 UK MacBook listings against the flawless used ones of
 # the same model, as the damage table is (data/kind_cuts.json): the API is asked for the clean price, and these come off
 # it. Held out, a Samsung's own cuts priced its listings closer than the phones' did (wear and faults, p < 0.01); a
 # MacBook's wear is the phones' -5% anyway, and its fault cut (-25%, the phones' -17%) is neither closer nor further.
+# iPhones too since 4 Nov evening (the owner: "yh please go"): measured the same way on 7,548 UK iPhone listings, the
+# API's table (same condition grade compared, which hides part of a cut) was too small: a fault -26%, not -17%; held
+# out, the own cuts priced iPhones a little closer (704 listings closer, 601 further).
 KIND_CUTS_FILE = Path(__file__).resolve().parent.parent / "data" / "kind_cuts.json"
 OWN_KINDS = ("fault", "network lock", "not genuine", "wear")  # the prices API's kinds a category's own table replaces
 
@@ -1336,8 +1339,8 @@ def kind_tables():
 
 
 def kind_table(category, market="uk"):
-    """A category's own cuts, {"kinds": {kind: {"cut", "n", "rough", "from", ...}}}, or None: an iPhone (the prices API's
-    table), or a market it has none for."""
+    """A category's own cuts, {"kinds": {kind: {"cut", "n", "rough", "from", ...}}}, or None for a market it has none
+    for (the prices API's table, then)."""
     return kind_tables().get(f"{category}/{market}") if category else None
 
 

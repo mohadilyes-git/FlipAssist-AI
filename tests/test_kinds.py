@@ -103,7 +103,7 @@ def test_a_flaw_the_model_cant_answer_is_sorted_by_code():
     found = prices.estimate("iPhone 13 128GB Blue", ["Small crack on the back", "Face ID not working"], opener=opener,
                             description="Small crack on the back. Face ID not working.", sorter=kinds.Sorter(model))
     assert found["kinds"] == ["fault", "damage"]  # the model's, then code's for the one it couldn't answer
-    assert sent[0]["kinds"] == ["fault"]  # damage is FlipAssist's own cut since fix 1
+    assert sent[0]["kinds"] == []  # damage is FlipAssist's own cut since fix 1, an iPhone's fault since 4 Nov
     assert found["sorted_by"] == "flip-kinds-1 and code"
     assert len(model.asked) == 2  # a bad answer isn't the model gone: the next flaw is still asked
 
@@ -115,7 +115,7 @@ def test_a_model_that_isnt_running_is_asked_once_then_code_sorts_the_rest():
     opener, sent = asking()
     found = prices.estimate("iPhone 13 128GB Blue", ["Small crack on the back", "Face ID not working"], opener=opener,
                             description="Small crack on the back. Face ID not working.", sorter=kinds.Sorter(model))
-    assert found["kinds"] == ["damage", "fault"] and sent[0]["kinds"] == ["fault"] and found["sorted_by"] == "code"
+    assert found["kinds"] == ["damage", "fault"] and sent[0]["kinds"] == [] and found["sorted_by"] == "code"
     assert len(model.asked) == 1  # not a minute's wait for each flaw
 
 
