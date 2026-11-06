@@ -5,7 +5,7 @@
 // Only Rewrite has an AI write: Gemma 3 4B rewords it (14 Oct). Nothing is sent
 // from here: you copy it into the marketplace, and approving it teaches your style.
 import { useEffect, useMemo, useState } from "react";
-import { api, type FlawsSaid, type Kind, type Listing, type MessageDraft } from "../api";
+import { api, type FlawsSaid, type Kind, type Listing, type MessageDraft, type ReasonCheck } from "../api";
 import { cost, readBy, reasonLine, seconds, writerName } from "../format";
 import { gapOf, lowerPrice, money, morePrice, sliderRange, toPence } from "../prices";
 import { CheckIcon, ChevronIcon, Chip, Head, PriceSlider, SparkleIcon, Steps, Warn, WarningIcon } from "../ui";
@@ -26,16 +26,34 @@ const MY_STYLE_KEY = "flipassist.myStyle"; // "off" when you turned My style off
 const MARKETPLACE = "facebook";
 /** what happened when you approved: copied or not, and whether it joined your style */
 type Approval = { copied: boolean; edited: boolean; saved: boolean };
+/** the draft on screen, and keptBy: the model that checked a reason Claude Haiku 5.5 flagged and kept it (4 Nov).
+ * The screen's own, never sent: the API's reason.by stays the model that worded it, as it's credited */
+type OnScreen = MessageDraft & { keptBy?: string };
 
-export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
+/** Who kept a flagged reason, from the check's answer (4 Nov). Its reason says "flagged, kept" with the model that
+ * worded it as by, whoever kept it, so Claude Sonnet 5.5's own step tells: Sonnet kept it when its step answered and
+ * no fix of Sonnet's was left out of the message (problems say why one wasn't put in). With no Sonnet step (none set
+ * up) or a failed one (it couldn't answer), nobody did, and the line stays "kept as written" */
+function keeper(done: ReasonCheck): string | undefined {
+  if (done.reason.checked !== "flagged, kept" || done.problems.length) return undefined;
+  return done.attempts.find((a) => a.job === "reason" && a.model.startsWith("claude-sonnet")
+    && !a.problems.length)?.model;
+}
+
+/** onCheckPrice(title, description): the listing goes to AI UK price estimate, which opens and checks it (4 Nov) */
+export function MessageScreen({ onApproved, onCheckPrice }: {
+  onApproved?: () => void;
+  onCheckPrice?: (title: string, description: string) => void;
+}) {
   const [title, setTitle] = useState("");
   const [asking, setAsking] = useState("");
   const [description, setDescription] = useState("");
   const [kind, setKind] = useState<Kind>("lower");
   const [moved, setMoved] = useState<Partial<Record<Kind, number>>>({});
   // each card's own choice (14 Oct): at Offer lower you pick Yes or No yourself, and the counts come once you click
-  // Yes; at Pay asking and Offer more saying you don't mind it is optional, so it starts at No
-  const [mentions, setMentions] = useState<Record<Kind, Mention | null>>({ lower: null, asking: "no", more: "no" });
+  // Yes; at Pay asking and Offer more saying you don't mind the flaw starts at Yes (4 Nov, the owner: "it become on
+  // the yes always at the start unless they change it"), and how many flaws to say is still yours to pick
+  const [mentions, setMentions] = useState<Record<Kind, Mention | null>>({ lower: null, asking: "yes", more: "yes" });
   const [counts, setCounts] = useState<Record<Kind, FlawsSaid | null>>({ lower: null, asking: null, more: null });
   const mention = mentions[kind];
   const flaws = counts[kind]; // how many: none picked until you pick (14 Oct)
@@ -43,7 +61,7 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
   const setFlaws = (said: FlawsSaid) => setCounts((now) => ({ ...now, [kind]: said }));
   const [pickFlaws, setPickFlaws] = useState(false); // you wrote without picking how many: the row turns red
   const [pickMention, setPickMention] = useState(false); // you wrote without picking Yes or No: that row turns red
-  const [draft, setDraft] = useState<MessageDraft | null>(null);
+  const [draft, setDraft] = useState<OnScreen | null>(null);
   const [draftedFor, setDraftedFor] = useState(""); // the title and description the draft on screen was made from
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -135,7 +153,11 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
         setError("No new wording passed the checks, so your message is unchanged");
         return;
       }
-      setDraft(found);
+      // Rewrite gives back the reason on screen word for word, so who kept it is still said (4 Nov); a reason worded
+      // again comes back "pending", and its own check says
+      const same = overrides.rewrite_of && found.reason?.checked === "flagged, kept"
+        && found.reason.clause === draft?.reason?.clause;
+      setDraft({ ...found, keptBy: same ? draft?.keptBy : undefined });
       setDraftedFor(thisListing);
       setText(found.message ?? "");
       if (found.reason?.checked === "pending" && found.message) void checkReason(found, listing);
@@ -149,7 +171,7 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
   // the draft is on screen already: Haiku checks its reason now, and a fix (Sonnet's) replaces the message only
   // while it's still the one drafted, never over your own edits
   async function checkReason(found: MessageDraft, listing: Listing) {
-    const update = (change: (d: MessageDraft) => MessageDraft) =>
+    const update = (change: (d: OnScreen) => OnScreen) =>
       setDraft((now) => (now && now.draft_id === found.draft_id ? change(now) : now));
     try {
       const done = await api.checkReason({
@@ -160,7 +182,8 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
         clause: found.reason!.clause, message: found.message!,
         kind: found.kind, offer_pence: found.offer_pence, by: found.reason!.by, // credited to the model that worded it
       });
-      update((d) => ({ ...d, message: done.message, reason: done.reason, attempts: [...d.attempts, ...done.attempts],
+      update((d) => ({ ...d, message: done.message, reason: done.reason, keptBy: keeper(done),
+        attempts: [...d.attempts, ...done.attempts],
         cost_pence: d.cost_pence + done.cost_pence,
         warnings: [...d.warnings, ...done.problems.filter((p) => !d.warnings.includes(p))] })); // why a fix didn't go in
       if (done.changed) setText((now) => (now === found.message ? done.message : now));
@@ -278,8 +301,18 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
           </div>
 
           {shown ? (
-            <Drafted draft={shown} text={text} setText={setText} busy={busy} approval={approval}
-              onRewrite={() => void write({ rewrite_of: text })} onApprove={() => void approve()} />
+            <>
+              <Drafted draft={shown} text={text} setText={setText} busy={busy} approval={approval}
+                onRewrite={() => void write({ rewrite_of: text })} onApprove={() => void approve()} />
+              {/* 4 Nov, the owner: "add a button after it drafts a msg send the listing to ai uk price estimate": the
+                  title and description go to that tab, which opens and checks them */}
+              {onCheckPrice && (
+                <button type="button" className="second" disabled={!title.trim()}
+                  onClick={() => onCheckPrice(title, description)}>
+                  Check the UK price
+                </button>
+              )}
+            </>
           ) : (
             <>
               <p className="note">Code sets the price and checks every draft before you see it.</p>
@@ -300,7 +333,7 @@ export function MessageScreen({ onApproved }: { onApproved?: () => void }) {
 const worded = (draft: MessageDraft) => draft.reason_from ?? draft.reading.quotes ?? draft.reading.flaws;
 
 type DraftedProps = {
-  draft: MessageDraft;
+  draft: OnScreen;
   text: string;
   setText: (text: string) => void;
   busy: boolean;
@@ -334,7 +367,7 @@ function Drafted({ draft, text, setText, busy, approval, onRewrite, onApprove }:
         <p className="sub">
           {draft.written_by ? writerName(draft.written_by) : "No draft passed"} · {seconds(steps)} · {cost(draft.cost_pence)} · {readBy(reading.read_by)}
         </p>
-        {draft.reason && <p className="sub">{reasonLine(draft.reason)}</p>}
+        {draft.reason && <p className="sub">{reasonLine(draft.reason, draft.keptBy)}</p>}
         {steps.length > 0 && (
           <button type="button" className="link" aria-expanded={why} onClick={() => setWhy(!why)}>
             Why · {steps.length} {steps.length === 1 ? "step" : "steps"}

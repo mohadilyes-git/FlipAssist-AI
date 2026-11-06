@@ -1789,6 +1789,10 @@ textarea.input {
 .how-it-works { margin: 4px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
 .how-it-works li { list-style: decimal; font-size: 13.5px; line-height: 1.45; color: var(--tx2); }
 .how-it-works strong { font-weight: 650; }
+/* a small line under a step, and a step's own list of rules (4 Nov) */
+.how-it-works .how-sub { display: block; margin-top: 2px; font-size: 12.5px; }
+.how-it-works .how-cuts { margin: 4px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.how-it-works .how-cuts li { list-style: disc; font-size: 13px; }
 
 /* Home (fix 2, 14 Oct) */
 /* each of Ollama's models on its own line, under Ollama's */

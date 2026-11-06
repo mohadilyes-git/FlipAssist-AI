@@ -164,36 +164,41 @@ describe("AI message", () => {
     expect([body.mention, body.flaws_said]).toEqual([false, null]);
   });
 
-  it("lets you say you don't mind the flaw when paying asking or more, and starts at No there", async () => {
+  it("lets you say you don't mind the flaw when paying asking or more, and starts at Yes there (4 Nov)", async () => {
     const fetch = serve({ "POST /api/messages/draft": [[200, { ...DRAFT, kind: "asking" }], [200, { ...DRAFT, kind: "more" }],
       [200, { ...DRAFT, kind: "asking" }], [200, { ...DRAFT, kind: "more" }]] });
     const user = userEvent.setup();
     render(<MessageScreen />);
     await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
     await user.type(screen.getByLabelText("Asking price"), "£220");
-    for (const card of ["Pay asking", "Offer more"]) {
-      await user.click(screen.getByRole("radio", { name: new RegExp(card) }));
-      expect(screen.getByText("Say you don't mind the flaw")).toBeTruthy();
-      expect(screen.getByRole("button", { name: "No" }).getAttribute("aria-pressed")).toBe("true"); // your choice
-      expect(screen.queryByRole("group", { name: "How many flaws to say" })).toBeNull();
-      await user.click(screen.getByRole("button", { name: "Write my message" }));
-      await screen.findByDisplayValue(DRAFT.message!);
-    }
-    const [asking, more] = [sent(fetch, "POST /api/messages/draft", 0), sent(fetch, "POST /api/messages/draft", 1)];
-    expect([asking.kind, asking.mention, asking.flaws_said]).toEqual(["asking", false, null]);
-    expect([more.kind, more.mention, more.flaws_said]).toEqual(["more", null, null]); // your style: good condition
-    // Yes: pick how many, and they're said as flaws you don't mind
+    const writeOrRewrite = () => screen.queryByRole("button", { name: "Write my message" })
+      ?? screen.getByRole("button", { name: "Rewrite" });
+    // the owner, 4 Nov: "it become on the yes always at the start unless they change it"; how many is still yours
     for (const [card, n] of [["Pay asking", 2], ["Offer more", 3]] as const) {
       await user.click(screen.getByRole("radio", { name: new RegExp(card) }));
-      await user.click(screen.getByRole("button", { name: "Yes" }));
+      expect(screen.getByText("Say you don't mind the flaw")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Yes" }).getAttribute("aria-pressed")).toBe("true");
+      expect(screen.getByRole("group", { name: "How many flaws to say" })).toBeTruthy();
+      await user.click(writeOrRewrite());
+      expect(screen.getByText("Pick how many flaws to say")).toBeTruthy(); // nothing written until you pick how many
       await user.click(screen.getByRole("button", { name: `${n} flaws only` }));
-      await user.click(screen.getByRole("button", { name: /Write my message|Rewrite/ }).textContent === "Rewrite"
-        ? screen.getByRole("button", { name: "Rewrite" }) : screen.getByRole("button", { name: "Write my message" }));
+      await user.click(writeOrRewrite());
+      await screen.findByDisplayValue(DRAFT.message!);
     }
-    await vi.waitFor(() => expect(fetch.mock.calls.filter(([url]) => url === "/api/messages/draft").length).toBe(4));
-    const [askingYes, moreYes] = [sent(fetch, "POST /api/messages/draft", 2), sent(fetch, "POST /api/messages/draft", 3)];
+    const [askingYes, moreYes] = [sent(fetch, "POST /api/messages/draft", 0), sent(fetch, "POST /api/messages/draft", 1)];
     expect([askingYes.kind, askingYes.mention, askingYes.flaws_said]).toEqual(["asking", true, 2]);
     expect([moreYes.kind, moreYes.mention, moreYes.flaws_said]).toEqual(["more", true, 3]);
+    // No, when you change it: no flaw said (at Offer more your style decides whether to say it's in good condition)
+    for (const card of ["Pay asking", "Offer more"]) {
+      await user.click(screen.getByRole("radio", { name: new RegExp(card) }));
+      await user.click(screen.getByRole("button", { name: "No" }));
+      expect(screen.queryByRole("group", { name: "How many flaws to say" })).toBeNull();
+      await user.click(writeOrRewrite());
+    }
+    await vi.waitFor(() => expect(fetch.mock.calls.filter(([url]) => url === "/api/messages/draft").length).toBe(4));
+    const [asking, more] = [sent(fetch, "POST /api/messages/draft", 2), sent(fetch, "POST /api/messages/draft", 3)];
+    expect([asking.kind, asking.mention, asking.flaws_said]).toEqual(["asking", false, null]);
+    expect([more.kind, more.mention, more.flaws_said]).toEqual(["more", null, null]);
     await user.click(screen.getByRole("radio", { name: /Offer lower/ }));
     expect(screen.getByText("Say the flaw")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Yes" }).getAttribute("aria-pressed")).toBe("false"); // each card its own:
@@ -310,6 +315,51 @@ describe("AI message", () => {
     release();
     expect(await screen.findByText("Reason flagged by Claude Haiku 5.5, fixed by Claude Sonnet 5.5")).toBeTruthy();
     expect(screen.getByDisplayValue(`${DRAFT.message} Thanks`)).toBeTruthy();  // yours stays
+  });
+
+  // a reason Claude Haiku 5.5 flags goes to Claude Sonnet 5.5, and "flagged, kept" comes back however it was kept
+  // (4 Nov): the check's steps and problems say whether Sonnet read it and kept it
+  const flaggedReason = { clause: "there's a dot on the screen", by: "flip-wording-4b", checked: "flagged, kept" };
+  const haikuStep: Attempt = { model: "claude-haiku-5-5", problems: [], seconds: 1, cost_pence: 0.008, job: "reason" };
+  const sonnetStep: Attempt = { model: "claude-sonnet-5-5", problems: [], seconds: 1.4, cost_pence: 0.152, job: "reason" };
+  const toCheck: MessageDraft = { ...DRAFT, reason: { ...flaggedReason, checked: "pending" } };
+
+  it("says Claude Sonnet 5.5 kept the reason when it checked one Claude Haiku 5.5 flagged and kept it, and still after Rewrite (4 Nov)", async () => {
+    const fetch = serve({ "POST /api/messages/draft": [[200, toCheck],
+      [200, { ...toCheck, draft_id: 8, message: "reworded", reason: flaggedReason }]],  // Rewrite keeps the reason on screen
+      "POST /api/messages/check-reason": [200, { reason: flaggedReason, message: toCheck.message, changed: false,
+        problems: [], attempts: [haikuStep, sonnetStep], cost_pence: 0.16 }] });
+    const user = userEvent.setup();
+    render(<MessageScreen />);
+    await draft(user);
+    const keptBySonnet = "Reason by flip-wording-4b · flagged by Claude Haiku 5.5, kept by Claude Sonnet 5.5";
+    expect(await screen.findByText(keptBySonnet)).toBeTruthy();
+    expect(screen.queryByText(/kept as written/)).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Rewrite" }));
+    expect(await screen.findByDisplayValue("reworded")).toBeTruthy();
+    expect(screen.getByText(keptBySonnet)).toBeTruthy();  // the same reason, kept by the same model
+    // the API gets its own reason back, with nothing of the screen's in it, and it isn't checked or paid for again
+    expect(sent(fetch, "POST /api/messages/draft", 1).reason).toEqual({ ...flaggedReason, quotes: DRAFT.reading.flaws });
+    expect(fetch.mock.calls.filter(([url]) => url === "/api/messages/check-reason")).toHaveLength(1);
+  });
+
+  it("still says kept as written when Claude Sonnet 5.5 couldn't answer, isn't set up, or its fix couldn't go in", async () => {
+    const leftOut = "the message words the reason its own way, so Claude Sonnet 5.5's fix wasn't put in";
+    for (const { attempts, problems } of [
+      { attempts: [haikuStep, { ...sonnetStep, problems: ["the fix couldn't run (APITimeoutError)"] }], problems: [] },  // no answer
+      { attempts: [haikuStep], problems: [] },  // no Sonnet to ask
+      { attempts: [haikuStep, sonnetStep], problems: [leftOut] },  // Sonnet fixed it, but the message kept flip-wording's
+    ]) {
+      serve({ "POST /api/messages/draft": [200, toCheck],
+        "POST /api/messages/check-reason": [200, { reason: flaggedReason, message: toCheck.message, changed: false,
+          problems, attempts, cost_pence: 0.16 }] });
+      const user = userEvent.setup();
+      render(<MessageScreen />);
+      await draft(user);
+      expect(await screen.findByText("Reason by flip-wording-4b · flagged by Claude Haiku 5.5, kept as written")).toBeTruthy();
+      problems.forEach((p) => expect(screen.getByText(p)).toBeTruthy());  // and why Sonnet's fix isn't in it
+      cleanup();
+    }
   });
 
   it("says so plainly when no draft passed the checks", async () => {
@@ -521,9 +571,10 @@ describe("AI UK price estimate", () => {
     const flaws = screen.getByLabelText("Flaws it found");
     expect(within(flaws).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["cracked back", "battery 81%"]);
     expect(flaws.textContent).toContain("Read by flip-reader-5 (on this device) · counted as damage");
-    const how = within(screen.getByLabelText("How it works")).getAllByRole("listitem").map((li) => li.textContent);
-    expect(how.map((step) => step.split(/[,:.]| keeps| organises| reads/)[0])).toEqual(
-      ["AlertFlip API", "Claude Haiku 5", "The middle price of clean ones", "flip-reader-5"]);
+    const how = [...screen.getByLabelText("How it works").querySelectorAll(":scope > ol > li")].map((li) => li.textContent!);
+    expect(how.map((step) => step.split(/[,:.]| keeps/)[0])).toEqual(["AlertFlip API",
+      "The middle price of clean ones of the same model and size is sent here", "flip-reader-5", "flip-kinds-1",
+      "The price is cut for each kind"]);
     expect(screen.queryAllByRole("paragraph").filter((p) => p.className === "warn-row")).toHaveLength(0);
     expect(document.body.textContent).not.toMatch(/ebay/i);
     expect(sent(fetch, "POST /api/prices/estimate")).toEqual(
@@ -809,20 +860,26 @@ describe("AI UK price estimate", () => {
     expect(sortedBy(undefined)).toBe("");
   });
 
-  it("says how flaws cut the price as the prices API does it, with no amounts that could go stale", () => {
+  it("says how flaws cut the price a step at a time, with no counts or amounts that could go stale (4 Nov)", () => {
+    // the owner, 4 Nov: the sales sorting a small line under the API; the reader, the sorter and the cuts a step each;
+    // no "2,404 damaged"; clean and readable
     render(<PriceScreen />);
-    const step = within(screen.getByLabelText("How it works")).getAllByRole("listitem")[3].textContent;
-    expect(step).toBe("flip-reader-5, FlipAssist's own model on this device, reads the title and description for flaws (if "
-      + "its reading fails code's checks, Claude Sonnet 5.5 reads it instead, a paid call). flip-kinds-1, FlipAssist's own "
-      + "flaw-sorting model on this device, "
-      + "sorts each flaw into a kind (code's rules do when it isn't installed), and the price is cut by amounts measured on UK "
-      + "listings of the same kind of item (iPhones on iPhones, Samsungs on Samsungs, MacBooks on MacBooks): "
-      + "any flaw takes a small cut, counted once, faults cut the most, "
-      + "and different kinds' cuts multiply. Damage is cut by how bad it is (minor, moderate or severe) and how pricey the "
-      + "model is, as measured on 2,404 damaged iPhone, Samsung and MacBook listings. A worn battery is cut by how low its "
-      + "health is, as it has to be replaced. A locked or for-parts one is priced at what for-parts ones of the same model "
-      + "and size sell for, or at a rough guess when too few have sold, with its other flaws not cut on top.");
-    expect(step).not.toMatch(/\d\s?%|per ?cent/);  // the prices API's cut table is its own and can change
+    const card = screen.getByLabelText("How it works");
+    const steps = [...card.querySelectorAll(":scope > ol > li")];
+    expect(steps).toHaveLength(5);
+    expect(steps[0].querySelector(".how-sub")?.textContent).toBe("Claude Haiku 5.5 sorts each sale: its model, storage, a "
+      + "MacBook's RAM, its condition and its flaws.");
+    expect(steps[2].textContent).toBe("flip-reader-5, FlipAssist's own model on this device, reads the title and description "
+      + "for flaws. If its reading fails code's checks, Claude Sonnet 5.5 reads it instead (a paid call).");
+    expect(steps[3].textContent).toBe("flip-kinds-1, FlipAssist's own model on this device, sorts each flaw into a kind: "
+      + "damage, a fault, a worn battery, wear and so on. Code's rules sort them when it isn't installed.");
+    expect([...steps[4].querySelectorAll("li")].map((li) => li.textContent)).toEqual([
+      "Any flaw takes a small cut, counted once. Each other flaw adds its own cut on top, and faults cut the most.",
+      "Damage is cut by how bad it is (minor, moderate or severe) and how pricey the model is.",
+      "A worn battery is cut by how low its health is, as it has to be replaced.",
+      "A locked or for-parts one is priced at what for-parts ones of the same model and size sell for, or at a rough "
+        + "guess when too few have sold. Its other flaws aren't cut on top."]);
+    expect(card.textContent).not.toMatch(/\d\s?%|per ?cent|\d,\d{3}/);  // the cut tables are measured and can change
   });
 
   it("says a search by words left out a size only the description gives", async () => {
@@ -1121,6 +1178,44 @@ async function answerAll(user: ReturnType<typeof userEvent.setup>, first: string
 describe("the app", () => {
   const usual = { "GET /api/health": [200, HEALTH] as Answer, "GET /api/style": [200, STYLE] as Answer,
     "GET /api/stats": [200, STATS] as Answer };
+
+  it("says what the phrasebook is in plain words (4 Nov)", async () => {
+    localStorage.setItem(SETUP_DONE, "1");
+    window.location.hash = "#style";
+    serve({ ...usual, "GET /api/style/messages": [200, []] });
+    render(<App />);
+    const book = await screen.findByRole("region", { name: "Phrasebook" });
+    expect(within(book).getByText("Sentences you've used in at least two messages. Some go in every message, others in "
+      + "only one kind of offer.")).toBeTruthy();
+  });
+
+  it("sends a drafted listing to AI UK price estimate, which opens and checks it straight away (4 Nov)", async () => {
+    // the owner: "add a button after it drafts a msg send the listing to ai uk price estimate and then it sends the title
+    // and description and it opens the window with check uk price there please and start checking"
+    localStorage.setItem(SETUP_DONE, "1");
+    window.location.hash = "#message";
+    const estimate: PriceEstimate = { price: 150, middle: 175, low: 160, high: 190, currency: "GBP", sales: 51,
+      model: "iphone 13", storage_gb: 128, asked_storage_gb: 128, kind: "iphone", kinds: [], cuts: [], rough: false,
+      exact: true, flaws: [], breakdown: [], not_cut: [] };
+    const fetch = serve({ ...usual, "POST /api/messages/draft": [200, DRAFT], "POST /api/prices/estimate": [200, estimate] });
+    const user = userEvent.setup();
+    render(<App />);
+    const message = screen.getAllByRole("textbox", { name: "Listing title" })[0];
+    expect(screen.queryByRole("button", { name: "Check the UK price" })).toBeNull(); // only once there's a draft
+    await user.type(message, "iPhone 13 128GB Blue");
+    await user.type(screen.getAllByRole("textbox", { name: "The seller's description" })[0], "Small crack on the back.");
+    await user.type(screen.getByLabelText("Asking price"), "£220");
+    await user.click(screen.getByRole("button", { name: "No" }));
+    await user.click(screen.getByRole("button", { name: "Write my message" }));
+    await screen.findByDisplayValue(DRAFT.message!);
+    await user.click(screen.getByRole("button", { name: "Check the UK price" }));
+    expect(window.location.hash).toBe("#price");
+    await waitFor(() => expect(sent(fetch, "POST /api/prices/estimate")).toEqual(
+      { title: "iPhone 13 128GB Blue", description: "Small crack on the back." }));
+    const price = screen.getByRole("region", { name: "The item" });
+    expect(within(price).getByDisplayValue("iPhone 13 128GB Blue")).toBeTruthy();
+    expect(within(price).getByDisplayValue("Small crack on the back.")).toBeTruthy();
+  });
 
   it("asks you to set up your style on first launch: 6 listings, Do the setup or Skip for now, nothing else", async () => {
     serve({ ...usual, "GET /api/style": [200, NO_STYLE] });
@@ -1532,5 +1627,15 @@ describe("Home's numbers add up (14 Oct)", () => {
     const passed = work.getAllByText(/^\d+ of \d+ passed$/).map((p) => Number(p.textContent!.split(" ")[0]));
     expect(passed.reduce((a, b) => a + b, 0)).toBe(51);
     expect(work.getByText("Claude Sonnet 5.5 · writing the message as a backup")).toBeTruthy();
+  });
+
+  it("has no ready share in the blue card (4 Nov, the owner: \"remove the ready thing in the blue card\")", async () => {
+    serve({ "GET /api/stats": [200, { ...STATS, drafts: 12, ready: 9 }] });
+    render(<HomeScreen go={vi.fn()} count={0} running={HEALTH} reload={vi.fn(async () => undefined)} />);
+    const hero = within(screen.getByRole("region", { name: "Done by the models" }));
+    expect(await hero.findByText("12")).toBeTruthy();
+    expect(hero.getByText("drafts")).toBeTruthy();
+    expect(hero.queryByText("ready")).toBeNull();
+    expect(hero.queryByText("75%")).toBeNull();
   });
 });

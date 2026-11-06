@@ -2,7 +2,7 @@
 // its own tab). The seller's description is read for its flaws as a draft's is (flip-reader-5 on this device), then the
 // AlertFlip app's prices API prices it: the middle price of clean ones of the same model and size (sales Claude Haiku
 // 5.5 sorted), cut for the kinds of flaw found, or what for-parts ones sell for when it's locked or for parts.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, type CutRow, type OwnCut, type PriceEstimate } from "../api";
 import { modelName, readBy } from "../format";
 import { Head, PoundIcon, Warn } from "../ui";
@@ -36,7 +36,10 @@ export function itemName(model: string) {
     : /^[a-z]{1,2}$|^\dg$/.test(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1))).join(" ");
 }
 
-export function PriceScreen() {
+/** A listing sent here from AI message's Check the UK price (4 Nov): a new one each time it's sent */
+export type SentListing = { title: string; description: string };
+
+export function PriceScreen({ sent = null }: { sent?: SentListing | null }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [found, setFound] = useState<{ listing: string; estimate: PriceEstimate } | null>(null);
@@ -46,18 +49,27 @@ export function PriceScreen() {
   // an estimate belongs to the listing it was checked for: change the title or the description and it goes
   const shown = found && found.listing === listing ? found.estimate : null;
 
-  async function check() {
-    const asked = listing;
+  async function check(forTitle = title, forDescription = description) {
+    const asked = JSON.stringify([forTitle, forDescription]);
     setBusy(true);
     setError("");
     try {
-      setFound({ listing: asked, estimate: await api.estimatePrice({ title, description }) });
+      setFound({ listing: asked, estimate: await api.estimatePrice({ title: forTitle, description: forDescription }) });
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setBusy(false);
     }
   }
+
+  // a listing sent from AI message (4 Nov, the owner: "it sends the title and description and it opens the window with
+  // check uk price there please and start checking"): filled in here and checked straight away
+  useEffect(() => {
+    if (!sent) return;
+    setTitle(sent.title);
+    setDescription(sent.description);
+    void check(sent.title, sent.description);
+  }, [sent]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -88,24 +100,29 @@ export function PriceScreen() {
           {shown && <Estimated estimate={shown} title={title} />}
           <section className="card" aria-label="How it works">
             <p className="caps">How it works</p>
+            {/* 4 Nov, the owner: the sales sorting is a small line under the API; the reader, the sorter and how the
+                price is cut are a step each; no counts or amounts (the cut tables are measured and can change) */}
             <ol className="how-it-works">
-              <li><strong>AlertFlip API</strong> keeps recent UK sales of iPhones, Samsung phones and MacBooks.</li>
-              <li><strong>Claude Haiku 5.5</strong> organises that sales data: each sale's model, storage, a MacBook's RAM,
-                condition and flaws.</li>
-              <li>The middle price of clean ones, same model and size, is <strong>sent here</strong>. The cheapest
+              <li><strong>AlertFlip API</strong> keeps recent UK sales of iPhones, Samsung phones and MacBooks.
+                <span className="how-sub">Claude Haiku 5.5 sorts each sale: its model, storage, a MacBook's RAM, its
+                  condition and its flaws.</span></li>
+              <li>The middle price of clean ones of the same model and size is <strong>sent here</strong>. The cheapest
                 quarter is left out, as those often hide flaws.</li>
-              {/* no amounts here: the prices API's cut table is its own and can change */}
               <li><strong>flip-reader-5</strong>, FlipAssist's own model on this device, reads the title and description
-                for flaws (if its reading fails code's checks, Claude Sonnet 5.5 reads it instead, a paid
-                call). <strong>flip-kinds-1</strong>, FlipAssist's own flaw-sorting model on this device, sorts each flaw
-                into a kind (code's rules do when it isn't installed),
-                and the price is cut by amounts measured on UK listings of the same kind of item (iPhones on iPhones,
-                Samsungs on Samsungs, MacBooks on MacBooks): any flaw takes a small cut, counted once,
-                faults cut the most, and different kinds' cuts multiply. Damage is cut by how bad it is (minor, moderate
-                or severe) and how pricey the model is, as measured on 2,404 damaged iPhone, Samsung and MacBook listings. A
-                worn battery is cut by how low its health is, as it has to be replaced. A locked or for-parts one is priced at what
-                for-parts ones of the same model and size sell for, or at a rough guess when too few have sold, with its
-                other flaws not cut on top.</li>
+                for flaws. If its reading fails code's checks, Claude Sonnet 5.5 reads it instead (a paid call).</li>
+              <li><strong>flip-kinds-1</strong>, FlipAssist's own model on this device, sorts each flaw into a kind:
+                damage, a fault, a worn battery, wear and so on. Code's rules sort them when it isn't installed.</li>
+              <li><strong>The price is cut</strong> for each kind, by amounts measured on UK listings of the same item:
+                iPhones on iPhones, Samsungs on Samsungs, MacBooks on MacBooks.
+                <ul className="how-cuts">
+                  <li>Any flaw takes a small cut, counted once. Each other flaw adds its own cut on top, and faults cut
+                    the most.</li>
+                  <li>Damage is cut by how bad it is (minor, moderate or severe) and how pricey the model is.</li>
+                  <li>A worn battery is cut by how low its health is, as it has to be replaced.</li>
+                  <li>A locked or for-parts one is priced at what for-parts ones of the same model and size sell for, or
+                    at a rough guess when too few have sold. Its other flaws aren't cut on top.</li>
+                </ul>
+              </li>
             </ol>
           </section>
         </div>

@@ -14,13 +14,18 @@ const WRITERS: Record<string, string> = {
   code: "Code only",
 };  // each model by its real name (4 Oct), the same everywhere; one not here shows as it's called ("flip-reader-4")
 
-/** Who worded the offer's reason and who checked it: "Reason by flip-wording · checked by Claude Haiku". */
-export function reasonLine(reason: { by: string; checked: string }): string {
+/** Who worded the offer's reason and who checked it: "Reason by flip-wording · checked by Claude Haiku". keptBy: the
+ * model that checked a flagged reason and kept it (Claude Sonnet 5.5), when the screen knows one did. */
+export function reasonLine(reason: { by: string; checked: string }, keptBy?: string): string {
   const checker = modelName("claude-haiku-5-5");
   if (reason.checked === "fixed") return `Reason flagged by ${checker}, fixed by ${modelName(reason.by)}`;
   const by = `Reason by ${modelName(reason.by)}`;
   if (reason.checked === "ok") return `${by} · checked by ${checker}`;
-  if (reason.checked === "flagged, kept") return `${by} · flagged by ${checker}, kept as written`;
+  // who kept it (4 Nov): "kept as written" read as if nobody checked it again, when Claude Sonnet 5.5 had read it and
+  // kept it; still "as written" when Sonnet didn't answer, isn't set up, or its fix couldn't go into the message
+  if (reason.checked === "flagged, kept") {
+    return `${by} · flagged by ${checker}, kept ${keptBy ? `by ${modelName(keptBy)}` : "as written"}`;
+  }
   if (reason.checked === "pending") return `${by} · ${checker} checking…`;
   return `${by} · not checked`;
 }

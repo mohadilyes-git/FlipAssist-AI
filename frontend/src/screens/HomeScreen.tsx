@@ -80,7 +80,7 @@ export function HomeScreen({ go, count, running, reload }: Props) {
           <div className="hero-stats">
             <div><strong>{stats ? cost(stats.cost_per_100_drafts_pence) : "–"}</strong><span>per 100 drafts</span></div>
             <div><strong>{stats?.drafts ?? "–"}</strong><span>drafts</span></div>
-            <div><strong>{stats ? percent(stats.ready, stats.drafts) : "–"}</strong><span>ready</span></div>
+            {/* no "ready" share here (4 Nov, the owner: "remove the ready thing in the blue card") */}
             <div>
               <strong>{stats?.approved ? percent(stats.edited_before_sending, stats.approved) : "–"}</strong>
               <span>{stats?.approved ? `edited, of ${stats.approved} sent` : "edited · none sent yet"}</span>

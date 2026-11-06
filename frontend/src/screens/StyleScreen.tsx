@@ -105,7 +105,9 @@ export function StyleScreen({ style, reload, setUp }: Props) {
           <section className="card roomy" aria-label="Phrasebook">
             <span className="card-words">
               <span className="caps">Phrasebook</span>
-              <span className="sub">Sentences you've written in 2 or more messages, for every offer or just one kind</span>
+              {/* reworded 4 Nov (the owner: "make it better writing") */}
+              <span className="sub">Sentences you've used in at least two messages. Some go in every message, others in only
+                one kind of offer.</span>
             </span>
             {sentences.length ? sentences.map((row) => (
               <LearnedRow key={row.key} row={row} onRemove={(r) => void removeRow(r)} kind="phrase" />
