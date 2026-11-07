@@ -1175,6 +1175,13 @@ async function answerAll(user: ReturnType<typeof userEvent.setup>, first: string
   }
 }
 
+/** First launch (4 Nov): the welcome, Get started, then AI message, where Set up my style opens the setup */
+async function openSetup(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: "Get started" }));
+  await user.click(await screen.findByRole("button", { name: "Set up my style" }));
+  await user.click(screen.getByRole("button", { name: "Do the setup" }));
+}
+
 describe("the app", () => {
   const usual = { "GET /api/health": [200, HEALTH] as Answer, "GET /api/style": [200, STYLE] as Answer,
     "GET /api/stats": [200, STATS] as Answer };
@@ -1217,20 +1224,32 @@ describe("the app", () => {
     expect(within(price).getByDisplayValue("Small crack on the back.")).toBeTruthy();
   });
 
-  it("asks you to set up your style on first launch: 6 listings, Do the setup or Skip for now, nothing else", async () => {
+  it("opens on a welcome at first launch, then AI message: the setup is never forced (4 Nov, the owner)", async () => {
     serve({ ...usual, "GET /api/style": [200, NO_STYLE] });
     const user = userEvent.setup();
     render(<App />);
+    expect(screen.getByRole("heading", { name: "Welcome to FlipAssist" })).toBeTruthy();
+    expect(screen.queryByRole("navigation")).toBeNull(); // no sidebar on the welcome
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["Get started"]);
+    expect(screen.queryByText(/skip/i)).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Get started" }));
+    expect(screen.getByRole("navigation")).toBeTruthy();
+    expect(window.location.hash).toBe("#message");
+    expect(localStorage.getItem(SETUP_DONE)).toBe("1");
+    // no My style yet: its On and Off greyed out, with Set up my style beside them
+    const row = screen.getByRole("group", { name: "My style" });
+    const setUp = await within(row).findByRole("button", { name: "Set up my style" });
+    expect(row.className).toContain("greyed");
+    expect(["On", "Off"].map((c) => within(row).getByRole("button", { name: c }).hasAttribute("disabled")))
+      .toEqual([true, true]);
+    await user.click(setUp);
     expect(screen.getByRole("heading", { name: "Set up my style" })).toBeTruthy();
-    expect(screen.queryByRole("navigation")).toBeNull(); // no sidebar until it's done
     expect(screen.getByText(/reply to 6 quick listings/)).toBeTruthy(); // 14 Oct: it said 8 when there were 6
     expect(screen.queryByText(/\b8\b/)).toBeNull();
-    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["Skip for now", "Do the setup"]);
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["Go back", "Do the setup"]);
     expect(screen.queryByText(/paste/i)).toBeNull(); // no pasting: Add more is gone
-    await user.click(screen.getByRole("button", { name: "Skip for now" }));
-    expect(screen.getByRole("navigation")).toBeTruthy();
-    expect(window.location.hash).toBe("#home");
-    expect(localStorage.getItem(SETUP_DONE)).toBe("1");
+    await user.click(screen.getByRole("button", { name: "Go back" }));
+    expect(window.location.hash).toBe("#message"); // back where you were
   });
 
   it("lists what it learned at the end of setup, and Remove deletes what you don't want", async () => {
@@ -1238,7 +1257,7 @@ describe("the app", () => {
       "PUT /api/style/setup": [200, []], "POST /api/style/learned": [200, NO_CASH] });
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole("button", { name: "Do the setup" }));
+    await openSetup(user);
     await answerAll(user, "Hi mate, would you take £185 cash? Cheers");
     expect(await screen.findByText("This is what it'll put in your messages. Remove anything you don't want.")).toBeTruthy();
     const list = within(screen.getByLabelText("What it learned"));
@@ -1248,8 +1267,8 @@ describe("the app", () => {
     expect(sent(fetch, "POST /api/style/learned")).toEqual({ key: "mention:cash", used: false });
     await waitFor(() => expect(list.queryByText("paying cash")).toBeNull()); // gone, not greyed out (14 Oct)
     expect(screen.queryByRole("button", { name: /again/ })).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Start" }));
-    expect(window.location.hash).toBe("#home");
+    await user.click(screen.getByRole("button", { name: "Done" }));
+    expect(window.location.hash).toBe("#message"); // back to AI message, where it was opened
   });
 
   it("removes a thing your style learned from Your style for good: no Use again", async () => {
@@ -1317,7 +1336,7 @@ describe("the app", () => {
     serve({ ...usual, "GET /api/style": [200, NO_STYLE] });
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole("button", { name: "Do the setup" }));
+    await openSetup(user);
     expect(screen.queryByRole("button", { name: "Skip" })).toBeNull();
     expect(screen.getByRole("button", { name: "Next" }).hasAttribute("disabled")).toBe(true);
     await user.type(screen.getByLabelText("Your message to this seller"), "   ");
@@ -1332,7 +1351,7 @@ describe("the app", () => {
       "PUT /api/style/setup": [200, []] });
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole("button", { name: "Do the setup" }));
+    await openSetup(user);
     expect(screen.getByText("1 of 6")).toBeTruthy();
     expect(screen.getByText("Offer lower · £185")).toBeTruthy();
     await user.type(screen.getByLabelText("Your message to this seller"), "Hi mate, £185 given the crack?");

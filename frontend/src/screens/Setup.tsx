@@ -155,7 +155,7 @@ export function Setup({ step, go, style, onLearned, onLeave, again }: Props) {
             </div>
           )}
           <p className="sub">Every message you approve teaches it a bit more.</p>
-          <button type="button" className="main full" onClick={onLeave}>{again ? "Done" : "Start"}</button>
+          <button type="button" className="main full" onClick={onLeave}>Done</button>
         </div>
       </div>
     );
@@ -165,7 +165,7 @@ export function Setup({ step, go, style, onLearned, onLeave, again }: Props) {
     <div className="centre">
       <div className="welcome">
         <Logo big />
-        <p className="caps">{again ? "My style · about 3 minutes" : "First launch · about 3 minutes"}</p>
+        <p className="caps">My style · about 3 minutes</p>
         <h1 className="big-title">Set up my style</h1>
         <p className="lead">
           Teach FlipAssist how you message sellers: reply to {LISTINGS.length} quick listings.
@@ -180,10 +180,29 @@ export function Setup({ step, go, style, onLearned, onLeave, again }: Props) {
           ))}
         </ol>
         <div className="choose">
-          <button type="button" className="second" onClick={onLeave}>{again ? "Go back" : "Skip for now"}</button>
+          {/* opened from AI message or My style (4 Nov: never forced at first launch), so back is where you were */}
+          <button type="button" className="second" onClick={onLeave}>Go back</button>
           <button type="button" className="main" onClick={toCards}>Do the setup</button>
         </div>
         <p className="footnote">Nothing gets trained. It learns from your own messages.</p>
+      </div>
+    </div>
+  );
+}
+
+/** First launch (4 Nov, the owner: "for the first launch skip all of this just put a welcome screen that it opens on the
+ * app"): a welcome, then the app on AI message. My style is set up from there (Set up my style) or from My style. */
+export function Welcome({ onStart }: { onStart: () => void }) {
+  return (
+    <div className="centre">
+      <div className="welcome">
+        <Logo big />
+        <p className="caps">First launch</p>
+        <h1 className="big-title">Welcome to FlipAssist</h1>
+        <p className="lead">Write offers to sellers in your own words, check what an iPhone, a Samsung phone or a MacBook
+          is worth in the UK, and list an iPhone on eBay.</p>
+        <button type="button" className="main full" onClick={onStart}>Get started</button>
+        <p className="footnote">Set up My style any time, from AI message or My style.</p>
       </div>
     </div>
   );

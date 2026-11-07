@@ -8,7 +8,7 @@ import { HomeScreen } from "./screens/HomeScreen";
 import { ListingScreen } from "./screens/ListingScreen";
 import { MessageScreen } from "./screens/MessageScreen";
 import { PriceScreen, type SentListing } from "./screens/PriceScreen";
-import { Setup, type SetupStep } from "./screens/Setup";
+import { Setup, type SetupStep, Welcome } from "./screens/Setup";
 import { StyleScreen } from "./screens/StyleScreen";
 import { GaugeIcon, Logo, MoonIcon, PenIcon, PoundIcon, SparkleIcon, SunIcon, TagIcon } from "./ui";
 
@@ -83,9 +83,11 @@ function useTheme(): [Theme, () => void] {
 
 export function App() {
   const [tab, setTab] = useState<Tab>(fromHash);
-  const [setup, setSetup] = useState<SetupStep | null>(() => (stored(SETUP_DONE) ? null : "welcome"));
-  // the setup was opened from Your style (Do setup, Redo setup): leaving it goes back there, not to Home
-  const [again, setAgain] = useState(false);
+  // first launch (4 Nov, the owner): a welcome screen, then the app on AI message; the setup is never forced, it's
+  // opened from AI message (Set up my style) or My style (Do setup), and leaving it goes back to that tab
+  const [first, setFirst] = useState(() => !stored(SETUP_DONE));
+  const [setup, setSetup] = useState<SetupStep | null>(null);
+  const [from, setFrom] = useState<Tab>("style");
   const [theme, toggleTheme] = useTheme();
   const [style, setStyle] = useState<Style | null>(null);
   const [running, setRunning] = useState<Running>(null);
@@ -115,7 +117,7 @@ export function App() {
       // the API already knows your style (set up in another browser, or learned from a CSV): no need to ask again
       if (found.count && !stored(SETUP_DONE)) {
         store(SETUP_DONE, "1");
-        setSetup((now) => (now === "welcome" ? null : now));
+        setFirst(false);
       }
     }, () => undefined);
     const follow = () => setTab(fromHash());
@@ -130,16 +132,23 @@ export function App() {
     window.location.hash = next;
     setTab(next);
   }, []);
-  // leaving the setup, done or not: back to Your style when it was opened from there, else on to Home (first launch,
-  // skipped or done: Your style's Do setup is there for later)
+  // leaving the setup, done or not: back to the tab it was opened from (AI message or My style)
   const leave = () => {
     store(SETUP_DONE, "1");
     setSetup(null);
-    setAgain(false);
-    go(again ? "style" : "home");
+    go(from);
+  };
+  const start = () => {
+    store(SETUP_DONE, "1");
+    setFirst(false);
+    go("message");
+  };
+  const setUpFrom = (tab: Tab) => {
+    setFrom(tab);
+    setSetup("welcome");
   };
 
-  const name = setup ? "Set up my style" : TABS.find((t) => t.tab === tab)!.label;
+  const name = first ? "Welcome" : setup ? "Set up my style" : TABS.find((t) => t.tab === tab)!.label;
   useEffect(() => {
     document.title = `FlipAssist · ${name}`;
   }, [name]);
@@ -154,7 +163,7 @@ export function App() {
           <StatusPill running={running} />
         </header>
         <div className="window-body">
-          {!setup && (
+          {!setup && !first && (
             <aside className="sidebar">
               <a className="logo" href="#home" onClick={(e) => {
                 e.preventDefault();
@@ -194,13 +203,16 @@ export function App() {
           )}
           <main className="content">
             <div className="column">
-              {setup ? (
-                <Setup step={setup} go={setSetup} style={style} onLearned={loadStyle} onLeave={leave} again={again} />
+              {first ? (
+                <Welcome onStart={start} />
+              ) : setup ? (
+                <Setup step={setup} go={setSetup} style={style} onLearned={loadStyle} onLeave={leave} again={count > 0} />
               ) : (
                 <>
                   {/* the screens you type into stay put while you look elsewhere; the others load fresh */}
                   <div className="screen" hidden={tab !== "message"}>
-                    <MessageScreen onApproved={loadStyle} onCheckPrice={(title, description) => {
+                    <MessageScreen onApproved={loadStyle} hasStyle={style ? count > 0 : true}
+                      onSetUp={() => setUpFrom("message")} onCheckPrice={(title, description) => {
                       setSentToPrice({ title, description });
                       go("price");
                     }} />
@@ -212,10 +224,7 @@ export function App() {
                   </div>
                   {tab === "home" && <HomeScreen go={go} count={count} running={running} reload={loadRunning} />}
                   {tab === "style" && (
-                    <StyleScreen style={style} reload={loadStyle} setUp={() => {
-                      setAgain(true);
-                      setSetup("welcome");
-                    }} />
+                    <StyleScreen style={style} reload={loadStyle} setUp={() => setUpFrom("style")} />
                   )}
                 </>
               )}

@@ -31,9 +31,11 @@ export function Logo({ big }: { big?: boolean }) {
   );
 }
 
-export function Chip({ on, label, onClick, hint }: { on: boolean; label: string; onClick: () => void; hint?: string }) {
+export function Chip({ on, label, onClick, hint, disabled = false }: {
+  on: boolean; label: string; onClick: () => void; hint?: string; disabled?: boolean;
+}) {
   return (
-    <button type="button" className="chip" aria-pressed={on} onClick={onClick} title={hint}>
+    <button type="button" className="chip" aria-pressed={on} onClick={onClick} title={hint} disabled={disabled}>
       {label}
     </button>
   );

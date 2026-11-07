@@ -41,9 +41,13 @@ function keeper(done: ReasonCheck): string | undefined {
 }
 
 /** onCheckPrice(title, description): the listing goes to AI UK price estimate, which opens and checks it (4 Nov) */
-export function MessageScreen({ onApproved, onCheckPrice }: {
+/** hasStyle: My style has learned something (4 Nov: until then its On/Off is greyed out, with Set up my style beside it,
+ * onSetUp opening the setup) */
+export function MessageScreen({ onApproved, onCheckPrice, hasStyle = true, onSetUp }: {
   onApproved?: () => void;
   onCheckPrice?: (title: string, description: string) => void;
+  hasStyle?: boolean;
+  onSetUp?: () => void;
 }) {
   const [title, setTitle] = useState("");
   const [asking, setAsking] = useState("");
@@ -141,7 +145,7 @@ export function MessageScreen({ onApproved, onCheckPrice }: {
         writer: overrides.rewrite_of ? "ai" : "template",
         rewrite_of: overrides.rewrite_of ?? null,
         check_later: true,
-        style: myStyle,
+        style: myStyle && hasStyle,
         // Rewrite keeps the reason the message on screen gives (it may be Sonnet's fix), but only for the same
         // listing: a listing you've changed since gets its reason worded again (3 Oct: a new listing was given the
         // last one's "there's a scratch on the screen")
@@ -269,10 +273,15 @@ export function MessageScreen({ onApproved, onCheckPrice }: {
           {kind === "lower" && draft?.reading.no_offers && <Warn>The seller says no offers</Warn>}
 
           <div className="how-written">
-            <div className="chips say-flaw" role="group" aria-label="My style">
+            {/* 4 Nov, the owner: "when there's no my style just please grey it out and put set up my style when
+                clicked it takes to the setting up" */}
+            <div className={hasStyle ? "chips say-flaw" : "chips say-flaw greyed"} role="group" aria-label="My style">
               <span className="label">My style</span>
-              <Chip on={myStyle} label="On" onClick={() => pickStyle(true)} />
-              <Chip on={!myStyle} label="Off" onClick={() => pickStyle(false)} />
+              <Chip on={myStyle && hasStyle} label="On" onClick={() => pickStyle(true)} disabled={!hasStyle} />
+              <Chip on={!myStyle || !hasStyle} label="Off" onClick={() => pickStyle(false)} disabled={!hasStyle} />
+              {!hasStyle && onSetUp && (
+                <button type="button" className="second set-up" onClick={onSetUp}>Set up my style</button>
+              )}
             </div>
             <div className={pickMention && mention === null ? "chips say-flaw flaw-counts missing" : "chips say-flaw"}
               role="group" aria-label="Say the flaw">
