@@ -162,3 +162,70 @@ def test_a_hedge_is_no_unlock(description, locked):
 def test_a_promise_of_any_network_is_no_unlock(title, description):
     assert "network lock" in title_kinds(title, description)
     assert "network lock" not in title_kinds(title, "Unlocked for any Sim card worldwide.")
+
+
+# ── 4 Nov: the description's carrier lines (the owner: "do 3") ───────────────────────────────────────────────────────
+# A carrier line the reader doesn't quote ("Carrier: AT&T", "Network: Vodafone") had no network-lock cut: code's carrier
+# rule now reads every sentence of the description too (carrier_line). Checked on 14,276 UK listings: it fires on 76,
+# and every wrong one found there is below.
+
+@pytest.mark.parametrize("description, line", [
+    ("Carrier: AT&T. Great condition, always in a case.", "Carrier: AT&T."),
+    ("Great phone.\nNetwork: Vodafone\nBattery 88%", "Network: Vodafone"),
+    ("Small scratch. Locked to EE.", "Locked to EE."),
+    ("Was on Vodafone.", "Was on Vodafone."),
+    ("I have had this phone on an EE contract but recently got upgrade.",
+     "I have had this phone on an EE contract but recently got upgrade."),
+    ("Doesn't work on O2 or Vodafone.", "Doesn't work on O2 or Vodafone."),  # locked to another
+    ("I'm pretty sure it's unlocked. Network: EE.", "Network: EE."),  # a hedge isn't "unlocked" (buyer-safe)
+    ("This is the early US AT&T version.", "This is the early US AT&T version."),
+    # not the phone's network
+    ("Network: Unlocked. Great phone.", None),
+    ("On EE. Fully unlocked to all networks.", None),
+    ("Works on EE, O2 and Vodafone. Great phone.", None),  # works on several: not locked to one
+    ("Phone was used on both ee and o2", None),
+    ("Tested with Three and Vodafone sims, works fine.", None),
+    ("Untested on Vodafone. Great phone.", None),
+    ("Selling as I'm switching to Vodafone. Great phone.", None),
+    ("Previously EE locked, now unlocked.", None),
+    ("Battery is at 89% BUT I can get it replaced at Vodafone if needed.", None),  # a shop, not its network
+    ("EE will replace with official parts within a few hours for £70.", None),
+    ("Screen replaced by EE last month.", None),
+    ("Cannot find the box but will be delivered in a Vodafone box I have.", None),
+    ("Camera Quality: the main sensor helps reduce blur, notes this EE page.", None),
+    ("Specs: https://www.o2.co.uk/help/phones-sims-and-devices/samsung/galaxy-a21s", None),
+    ("Availability: Available in the UK from retailers like Argos and via networks like EE.", None),
+    ("Performance: offers ray tracing for ultra-smooth gameplay.", None),  # "ultra-smooth" isn't Ultra Mobile
+    ("o2 sim not included.", None),
+    ("Comes with a free sim. Great phone.", None),
+])
+def test_the_descriptions_carrier_line_is_read_by_the_owners_rule(description, line):
+    assert prices.carrier_line(description, [], "iPhone 13 128GB. " + description) == line
+
+
+def test_a_macbooks_description_never_gives_a_network_lock():
+    words = "Connected to my Three network wifi fine. Was on EE broadband."
+    assert prices.carrier_line(words, [], "MacBook Air M1 2020. " + words) is None
+
+
+def test_a_line_the_reader_quoted_isnt_read_twice():
+    assert prices.carrier_line("Locked to EE. Great phone.", ["Locked to EE"], "iPhone 13. Locked to EE. Great phone.") is None
+
+
+def test_the_descriptions_carrier_line_cuts_the_price_and_has_its_own_row(monkeypatch):
+    """End to end with a pretend prices API: the line gets the network-lock cut (an iPhone's own, -11.9%) and its row."""
+    from tests.test_prices import ANSWER, Response
+    monkeypatch.setenv("PRICES_URL", "https://example.test/functions/v1/prices")
+    monkeypatch.setenv("PRICES_KEY", "k" * 64)
+    prices._seen.clear()
+
+    def opener(request, timeout):
+        return Response(json.dumps({**ANSWER, "middle": 200, "price": 200, "factor": 1.0, "used": ["no flaw"]}).encode())
+
+    description = "Great condition, always in a case.\nNetwork: Vodafone\nBattery 91%"
+    found = prices.estimate("iPhone 13 128GB", [], opener=opener, description=description)
+    assert found["kinds"] == ["network lock"] and found["price"] == 176  # £200 less 11.9%
+    assert [(r["words"], r["kinds"], r["by"]) for r in found["breakdown"]] == [(["Network: Vodafone"], ["network lock"], "own")]
+    prices._seen.clear()
+    unlocked = prices.estimate("iPhone 13 128GB", [], opener=opener, description=description + "\nUnlocked to all networks")
+    assert unlocked["kinds"] == [] and unlocked["price"] == 200

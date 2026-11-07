@@ -241,7 +241,7 @@ NAMED_NETWORK = re.compile(rf"""\b{CARRIERS}\b
   | \b(?:carrier|network|provider|operator|fournisseur|operador|compa[ñn][ií]a)\s*(?:[:=–-]|is(?:\son)?)\s*(?:the\s)?
     {PLAIN}\b
   | \b(?:on|with|from|for|via|chez|avec|con|de|para|sur)\s{PLAIN}\b
-    (?=\s*$|\s*(?![/.:-]\s?\d)[^\w\s]|\s(?:network|mobile|uk|sims?|contract|plan|service|carrier|phone|only|or|and|so|
+    (?=\s*$|\s*(?![/.:-]\s?\d)(?!-\w)[^\w\s]|\s(?:network|mobile|uk|sims?|contract|plan|service|carrier|phone|only|or|and|so|
     but|since|until|before|for|now)\b)                     # (not a date: "on 02/03/2025")
   | \bon\s3\snetwork\b | \b(?:02|o2)\ssim\b""", X)
 TITLE_NETWORK = re.compile(rf"(?:^|[\s(/-]){TITLE_PLAIN}\s*\)?\s*$|\(\s?(?:three|3)\s?\)", I)  # titles only
@@ -258,7 +258,18 @@ NOT_ITS_NETWORK = re.compile(rf"""
     (?:over\s)?(?:my\s(?:number|line|contract|plan|sim)\s)?(?:(?:networks?|carriers?|providers?)\s)?(?:over\s)?to\s
     (?:the\s)?{CARRIER_LIST}
   | \b(?:not|isn'?t|isnt|never\sbeen)\s(?:an?\s)?{ANY_CARRIER}\s(?:phone|model|device|branded|version|handset)
-  | \bplay(?:ing|ed|s)?\s(?:\w+\s)?cricket\b | \bcricket\s(?:bat|ball|match|game|pitch|club|team|season|world)""", X)
+  | \bplay(?:ing|ed|s)?\s(?:\w+\s)?cricket\b | \bcricket\s(?:bat|ball|match|game|pitch|club|team|season|world)
+  # 4 Nov (the description's carrier lines, checked on 14,276 UK listings): a network as a shop or a repairer ("I can
+  # get it replaced at Vodafone", "EE will replace with official parts", "repaired by EE"), or its box, page or SIM
+  # ("delivered in a Vodafone box", "notes this EE page", "o2 sim not included")
+  | \b(?:replaced|repaired|fixed|serviced|swapped|done|sorted|bought|got)\s(?:\w+\s){{0,3}}?(?:at|by|in)\s(?:an?\s|the\s)?
+    {ANY_CARRIER}\s(?:store|shop|branch)\b
+  | \b(?:replace[ds]?|repair(?:ed|s)?|fix(?:ed|es)?|service[ds]?|swap(?:ped|s)?)\s(?:\w+\s){{0,3}}?(?:at|by)\s(?:an?\s|the\s)?
+    {ANY_CARRIER}\b
+  | \b{ANY_CARRIER}\s(?:will|can|could|would|should|did|have|has)\s(?:\w+\s)?(?:replace|repair|fix|swap|sort|service)\w*
+  | \b{ANY_CARRIER}\s(?:box|boxes|packaging|bag|page|website|web\s?page|site|link|listing|store|shop|leaflet|manual)\b
+  | \b{ANY_CARRIER}\ssim(?:\scard)?\s(?:is\s|was\s)?(?:not\sincluded|not\sinc|isn'?t\sincluded|removed|taken\sout)
+  | \b(?:networks?|carriers?|providers?|retailers?|shops?|stores?)\s(?:like|such\sas|including|e\.g\.?)\s{CARRIER_LIST}""", X)
 # the listing saying the phone works on any network: "Unlocked", "factory unlock", "SIM-free", "S/F", "open line",
 # "works on all 3 major carriers", "not network locked", "Network locked: No", "No SIM restrictions", "liberado"...
 UNLOCK_WORDS = re.compile(rf"""\bun-?locked\b | \bunlkd\b | \bfactory[\s-]?unlock(?:ed)?\b | \bsim[\s-]?free\b | \bs/f\b
@@ -378,11 +389,49 @@ STILL_LOCKED = re.compile(r"\bstill\s(?:is|locked|on|tied|stuck|with|network\slo
 PAST_TENSE = re.compile(r"\b(?:was|were|used\sto\sbe|previously|originally|formerly|once|had\sbeen)\b|\bex[\s-]", I)
 
 
+# ...nor networks it's said to work on, two or more of them ("works on EE, O2 and Vodafone", "tested with Three and
+# Vodafone sims"): a phone that works on several isn't locked to one (4 Nov). Not after a "not" ("doesn't work on O2
+# or Vodafone" is a lock to another)
+SEVERAL_NETWORKS = re.compile(rf"""(?<!n't\s)(?<!nt\s)(?<!not\s)(?<!never\s)\b(?:works?|working|worked|tested|used|
+    compatible|fine)\b(?:\s[\w']+){{0,2}}?\s(?:on|with)\s(?:both\s|either\s)?(?:the\s|an?\s)?{ANY_CARRIER}(?:\s(?:sims?|networks?))?
+    (?:\s?(?:,|/|&|\bor\b|\band\b)\s?(?:the\s|an?\s)?{ANY_CARRIER}(?:\s(?:sims?|networks?))?)+""", X)
+
+
+WEB_ADDRESS = re.compile(r"\bhttps?://\S+|\bwww\.\S+|\b[\w-]+\.(?:co\.uk|com|net|org)(?:/\S*)?", I)
+
+
 def network_named(said, title=False):
     """Whether these words name a carrier or network for the phone (NAMED_NETWORK; in a title also TITLE_NETWORK),
-    leaving out NOT_ITS_NETWORK."""
-    said = NOT_ITS_NETWORK.sub(" ", re.sub(r"[’‘ʼ]", "'", said or ""))
+    leaving out NOT_ITS_NETWORK and SEVERAL_NETWORKS."""
+    said = WEB_ADDRESS.sub(" ", re.sub(r"[’‘ʼ]", "'", said or ""))  # "https://www.o2.co.uk/...": a page, not its network
+    said = SEVERAL_NETWORKS.sub(" ", NOT_ITS_NETWORK.sub(" ", said))
     return bool(NAMED_NETWORK.search(said) or (title and TITLE_NETWORK.search(said)))
+
+
+# the description's sentences, for a carrier line: at a line break, a ";" "|" or "•", or a sentence's end before a space
+DESCRIPTION_SENTENCES = re.compile(r"(?<=[.!?])\s+|[\n;|•]+")
+MIGHT_BE_LOCKED = re.compile(r"lock|sim|network|carrier|provider|operator", I)
+
+
+def carrier_line(description, flaws, text):
+    """The owner's carrier rule for the whole description (4 Nov, the owner: "do 3"): the first sentence of it the
+    reader didn't quote that gives a network lock by code's own rules (kinds_of, as for a flaw sentence: "Carrier:
+    AT&T", "Network: Vodafone", "Locked to EE"), as the seller wrote it, or None. The rule reads the whole listing for
+    "unlocked" as ever, and a MacBook has no network."""
+    if not description:
+        return None
+    plain = lambda words: " ".join(re.sub(r"[^\w&%' ]+", " ", words.lower()).split())  # noqa: E731
+    quoted = [plain(f) for f in flaws if plain(f)]
+    for sentence in DESCRIPTION_SENTENCES.split(description):
+        said = sentence.strip(" \t-–—•*")
+        line = plain(said)
+        if not line or any(q in line or line in q for q in quoted):
+            continue  # the reader quoted it (or a part of it): its kinds are the quote's
+        if not (network_named(said) or MIGHT_BE_LOCKED.search(said)):
+            continue  # most sentences: no carrier and no lock word, so the rules aren't asked
+        if "network lock" in kinds_of([said], text):
+            return said
+    return None
 
 
 def lock_said(flaw, around):
@@ -1177,6 +1226,13 @@ def estimate(title, flaws=(), country="uk", opener=None, description=None, sorte
     kinds, by = kinds_and_by(each)
     # the title's own, read as what's sold: "Faulty iPhone 12 for parts", "iPhone 12 Pro repairs", "iPhone 12 dead"
     titled = [k for k in kinds_of([title], text, title=True) if k not in kinds]
+    # a carrier line the reader didn't quote ("Carrier: AT&T"): code's carrier rule reads the whole description too, and
+    # the line is a flaw of its own on the screen (4 Nov)
+    if "network lock" not in kinds + titled:
+        line = carrier_line(description, flaws, text)
+        if line:
+            each.append((line, ["network lock"], "code"))
+            kinds, by = kinds_and_by(each)
     kinds += titled
     # fix 1 (14 Oct): damage is cut by how bad it is and the model's price tier, from FlipAssist's own measured table
     # (flip.severity), in place of the prices API's one damage cut: the API is asked without "damage", so every
