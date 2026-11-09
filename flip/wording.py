@@ -32,8 +32,8 @@ from flip.costs import cost_pence
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 # the prompt flip-wording was trained with, word for word: it must get exactly this
-SYSTEM = (DATA / "wording_system.txt").read_text()
-RULES = (DATA / "wording_rules.md").read_text()
+SYSTEM = (DATA / "wording_system.txt").read_text(encoding="utf-8")
+RULES = (DATA / "wording_rules.md").read_text(encoding="utf-8")
 CHECKER = ("You check the reason a UK buyer's offer message gives for offering less on a second-hand item: the clause "
            "after \"I'm offering that because\", written by a small model from the seller's flaw words. These are the "
            "rules a reason must follow (written for the people who label reasons; they're yours too):\n\n" + RULES)

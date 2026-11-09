@@ -216,6 +216,11 @@ dd {
   visibility: hidden;
 }
 
+/* on Windows (9 Nov) minimise, maximise and close are in the system's own title bar above the app: no room to keep */
+:root[data-platform="windows"] .lights {
+  display: none;
+}
+
 .window-title {
   font-size: 13px;
   font-weight: 800;

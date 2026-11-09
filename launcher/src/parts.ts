@@ -118,3 +118,75 @@ const TYPES: Record<string, string> = {
 export function typeOf(file: string): string {
   return TYPES[path.extname(file).toLowerCase()] ?? "application/octet-stream";
 }
+
+// Windows as well as the Mac (9 Nov 2026, the owner: "make it compatible for windows as well"). Each answer below
+// depends only on what it's given, so the tests on a Mac check the Windows answers too.
+type Env = Record<string, string | undefined>;
+
+/** Where Ollama is looked for when it isn't running. Opened from the Dock or the Start menu, the app gets a bare
+ * PATH, so it looks where Ollama installs: Homebrew or Ollama.app on a Mac, the user's own Programs folder (or
+ * Program Files) on Windows. */
+export function ollamaPlaces(platform: string, env: Env = {}): string[] {
+  if (platform === "darwin") {
+    return ["/opt/homebrew/bin/ollama", "/usr/local/bin/ollama", "/Applications/Ollama.app/Contents/Resources/ollama"];
+  }
+  if (platform === "win32") {
+    const win = path.win32;
+    return [env.LOCALAPPDATA && win.join(env.LOCALAPPDATA, "Programs", "Ollama", "ollama.exe"),
+      env.ProgramFiles && win.join(env.ProgramFiles, "Ollama", "ollama.exe")].filter((at): at is string => !!at);
+  }
+  return ["/usr/local/bin/ollama", "/usr/bin/ollama"];
+}
+
+/** How FlipAssist's API is started from the repo's own Python (.venv). On Windows it's the .venv's python.exe running
+ * uvicorn itself, not the uvicorn.exe stub in front of it, so stopping it stops the server; and it reads text files
+ * as UTF-8 ("£", emoji) as a Mac does, not in Windows' older code page. */
+export function apiCommand(repo: string, platform: string): { command: string; args: string[]; env: Env } {
+  const serve = ["flip.api:app", "--host", "127.0.0.1", "--port", "8000"];
+  if (platform === "win32") {
+    return { command: path.win32.join(repo, ".venv", "Scripts", "python.exe"), args: ["-m", "uvicorn", ...serve],
+      env: { PYTHONUTF8: "1" } };
+  }
+  return { command: path.posix.join(repo, ".venv", "bin", "uvicorn"), args: serve, env: {} };
+}
+
+/** Where what Ollama and the API print goes: ~/Library/Logs/FlipAssist on a Mac, %LOCALAPPDATA%\FlipAssist\logs on
+ * Windows. */
+export function logsFolder(platform: string, home: string, env: Env = {}): string {
+  if (platform === "win32") {
+    return path.win32.join(env.LOCALAPPDATA || path.win32.join(home, "AppData", "Local"), "FlipAssist", "logs");
+  }
+  if (platform === "darwin") return path.posix.join(home, "Library", "Logs", "FlipAssist");
+  return path.posix.join(home, ".local", "state", "FlipAssist", "logs");
+}
+
+/** The window's frame. On a Mac: the app's own top bar, with the Mac's traffic lights over it. On Windows: the
+ * system's own title bar (minimise, maximise, close; a hidden one would leave no way to close the window), with the
+ * menu bar out of sight until Alt is pressed. */
+export function windowLook(platform: string): {
+  titleBarStyle?: "hiddenInset"; trafficLightPosition?: { x: number; y: number }; autoHideMenuBar?: boolean;
+} {
+  return platform === "darwin" ? { titleBarStyle: "hiddenInset", trafficLightPosition: { x: 16, y: 15 } }
+    : { autoHideMenuBar: true };
+}
+
+/** A Windows .ico of the icon at each size, every one stored as a PNG (which Windows reads since Vista): a 6-byte
+ * header, a 16-byte entry per size (256 is written as 0), then the PNGs. */
+export function icoFrom(images: { size: number; png: Buffer }[]): Buffer {
+  const head = Buffer.alloc(6 + 16 * images.length);
+  head.writeUInt16LE(0, 0); // reserved
+  head.writeUInt16LE(1, 2); // 1: an icon
+  head.writeUInt16LE(images.length, 4);
+  let at = head.length;
+  images.forEach(({ size, png }, n) => {
+    const entry = 6 + 16 * n;
+    head.writeUInt8(size >= 256 ? 0 : size, entry); // width
+    head.writeUInt8(size >= 256 ? 0 : size, entry + 1); // height
+    head.writeUInt16LE(1, entry + 4); // colour planes (bytes 2-3: no palette, reserved)
+    head.writeUInt16LE(32, entry + 6); // bits per pixel
+    head.writeUInt32LE(png.length, entry + 8);
+    head.writeUInt32LE(at, entry + 12);
+    at += png.length;
+  });
+  return Buffer.concat([head, ...images.map((image) => image.png)]);
+}

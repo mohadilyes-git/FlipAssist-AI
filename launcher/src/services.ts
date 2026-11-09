@@ -1,18 +1,17 @@
 // What the launcher starts when it isn't running already: Ollama (which runs
 // Gemma) and FlipAssist's API. It stops only what it started, so a server you
 // started yourself keeps running after FlipAssist quits. What each one prints
-// goes to ~/Library/Logs/FlipAssist.
+// goes to ~/Library/Logs/FlipAssist on a Mac, %LOCALAPPDATA%\FlipAssist\logs on
+// Windows (parts.logsFolder).
 import { type ChildProcess, spawn } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { GEMMA, modelsToWarm, readyWords } from "./parts";
+import { apiCommand, GEMMA, logsFolder, modelsToWarm, ollamaPlaces, readyWords } from "./parts";
 
 export const OLLAMA = "http://127.0.0.1:11434";
 export const API = "http://127.0.0.1:8000";
-export const LOGS = path.join(os.homedir(), "Library", "Logs", "FlipAssist");
-// opened from the Dock, a Mac app gets a bare PATH, so Ollama is looked for where it installs
-const OLLAMA_AT = ["/opt/homebrew/bin/ollama", "/usr/local/bin/ollama", "/Applications/Ollama.app/Contents/Resources/ollama"];
+export const LOGS = logsFolder(process.platform, os.homedir(), process.env);
 // No prompt cache: it kept up to 8 GB of older prompts' work in memory (half this Mac's) to save a few
 // seconds on going back to an older listing, and helped freeze the Mac on 2 Sep. The last prompt's work
 // is still kept, so drafting the same listing again stays quick, and answers don't change.
@@ -60,7 +59,7 @@ export class Services {
   async gemma(): Promise<Gemma> {
     const up = async () => (await ask(`${OLLAMA}/api/tags`)) !== null;
     if (!(await up())) {
-      const ollama = OLLAMA_AT.find((at) => existsSync(at));
+      const ollama = ollamaPlaces(process.platform, process.env).find((at) => existsSync(at));
       if (!ollama) return "no ollama";
       const started = this.start("ollama", ollama, ["serve"], OLLAMA_ENV);
       if (!(await until(up, 30, started))) return "failed";
@@ -97,9 +96,9 @@ export class Services {
   async api(): Promise<boolean> {
     const up = async () => isFlipAssist(await ask(`${API}/health`));
     if (await up()) return true;
-    const uvicorn = path.join(this.repo, ".venv", "bin", "uvicorn");
-    if (!existsSync(uvicorn)) return false;
-    const started = this.start("api", uvicorn, ["flip.api:app", "--host", "127.0.0.1", "--port", "8000"], {}, this.repo);
+    const { command, args, env } = apiCommand(this.repo, process.platform); // uvicorn, as this computer runs it
+    if (!existsSync(command)) return false;
+    const started = this.start("api", command, args, env, this.repo);
     return until(up, 90, started);
   }
 
@@ -107,12 +106,12 @@ export class Services {
   async stop() {
     await Promise.all(this.started.map((started) => new Promise<void>((done) => {
       if (started.gone) return done();
-      const force = setTimeout(() => started.child.kill("SIGKILL"), 5000);
+      const force = setTimeout(() => end(started, true), 5000);
       started.child.once("exit", () => {
         clearTimeout(force);
         done();
       });
-      started.child.kill("SIGTERM");
+      end(started, false);
     })));
     this.started = [];
   }
@@ -120,7 +119,8 @@ export class Services {
   private start(name: string, command: string, args: string[], env: NodeJS.ProcessEnv = {}, cwd?: string): Started {
     mkdirSync(LOGS, { recursive: true });
     const log = openSync(path.join(LOGS, `${name}.log`), "a");
-    const child = spawn(command, args, { cwd, env: { ...process.env, ...env }, stdio: ["ignore", log, log] });
+    // windowsHide: on Windows, no console window pops up for Ollama or the API
+    const child = spawn(command, args, { cwd, env: { ...process.env, ...env }, stdio: ["ignore", log, log], windowsHide: true });
     closeSync(log); // the process has its own copy
     const started: Started = { name, child, gone: false };
     child.once("exit", () => (started.gone = true));
@@ -128,4 +128,15 @@ export class Services {
     this.started.push(started);
     return started;
   }
+}
+
+/** Stop a process started here: on a Mac it's asked to (SIGTERM), then made to (SIGKILL). Windows has no asking, and
+ * a process's helpers (Ollama's model runners) don't stop with it there, so taskkill ends the whole tree at once
+ * (and again if it's still there after 5 seconds). */
+function end(started: Started, force: boolean) {
+  if (process.platform === "win32") {
+    if (started.child.pid) spawn("taskkill", ["/pid", String(started.child.pid), "/t", "/f"], { stdio: "ignore", windowsHide: true });
+    return;
+  }
+  started.child.kill(force ? "SIGKILL" : "SIGTERM");
 }

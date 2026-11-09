@@ -270,6 +270,35 @@ cd launcher && npm test && npm run selftest    # the launcher's own tests, then 
 
 The self-test opens the window, checks every kind of call (files, JSON, photo uploads, refused paths, copying, saved settings) without drafting or saving anything, and quits.
 
+### On Windows (9 Nov 2026: built and tested on a Mac, not yet run on a Windows PC)
+
+The same app runs on Windows: the same splash screen, icon and screens, the same API and models. What differs is only
+where things live, all in `launcher/src/parts.ts` and tested on the Mac for both:
+
+- **The window** has Windows' own title bar (minimise, maximise, close), so the app draws no traffic lights; the menu
+  bar stays out of sight until Alt is pressed.
+- **Ollama** is looked for in the user's Programs folder (or Program Files), and **the API** starts from
+  `.venv\Scripts\python.exe -m uvicorn`, in UTF-8 mode. Quitting ends each one's whole process tree (taskkill), so
+  Ollama's model runners don't stay behind.
+- **Logs** go to `%LOCALAPPDATA%\FlipAssist\logs`.
+- **Photos** are converted by Pillow, and HEIC by pillow-heif (`flip/photos.py`), where a Mac uses its built-in sips.
+  `requirements.txt` installs both on Windows only. Every text file is read and written as UTF-8 (`tests/test_utf8.py`).
+
+To set it up:
+
+1. On the PC, install Python 3.11 (tick "Add python.exe to PATH"), Node.js 22 or newer, and Ollama, and open Ollama
+   once.
+2. Copy the repo to the PC, and your `.env` from the Mac into it (it holds your keys).
+3. On the Mac, copy FlipAssist's own models out of Ollama to a USB drive (about 10 GB):
+   `launcher/export-models.sh /Volumes/USB/FlipAssist-models`.
+4. On the PC, in PowerShell in the repo folder:
+   `powershell -ExecutionPolicy Bypass -File launcher\windows-setup.ps1 -Models D:\FlipAssist-models`.
+   It sets up the Python environment, downloads Gemma 3 4B, adds the four models, and builds FlipAssist into your
+   Programs folder, with a Start menu and a desktop shortcut. After a change, `launcher\build.ps1` builds it again.
+
+How fast it drafts depends on the PC: a Mac runs the models on its own graphics, and a PC does that with a recent
+graphics card. Without one they run on the processor, and a draft takes longer.
+
 ## Planned
 
 - **The AlertFlip side:** a Supabase function that calls the API from the phone app.
@@ -349,7 +378,7 @@ Include a few items the catalogue doesn't have: the right answer for those is "n
 
 - `flip/`: the code (`flip/api.py` is the API)
 - `frontend/`: the app (`npm test` runs its tests)
-- `launcher/`: FlipAssist as a Mac app (`build.sh` builds it)
+- `launcher/`: FlipAssist as a Mac or Windows app (`build.sh` builds it on a Mac, `build.ps1` on Windows)
 - `data/`: the catalogue, eBay's item conditions and the questions a message may ask (facts, not code)
 - `tests/`: a test for every rule
 - `testset/`: the example format for the test set

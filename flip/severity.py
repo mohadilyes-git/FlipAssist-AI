@@ -168,7 +168,7 @@ def severity(flaws, title=""):
 
 @lru_cache(maxsize=1)
 def table():
-    return json.loads(CUTS_FILE.read_text())
+    return json.loads(CUTS_FILE.read_text(encoding="utf-8"))
 
 
 def tier(category, market, clean_price):

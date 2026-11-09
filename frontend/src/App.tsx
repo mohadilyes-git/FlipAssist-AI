@@ -44,10 +44,14 @@ const store = (key: string, value: string) => {
   }
 };
 
-/** In FlipAssist's own Mac window (launcher/), the window is the app: no desk around
- * it, the Mac's traffic lights in place of drawn ones, and its top bar to drag it by. */
+/** In FlipAssist's own window (launcher/), the window is the app: no desk around it and its top bar to drag it by.
+ * On a Mac the Mac's traffic lights sit where the drawn ones were; on Windows (9 Nov) the system's own title bar is
+ * above it, so none are drawn (data-platform "windows"). */
 export function markShell(page: Window = window) {
-  if ("flipassistShell" in page) document.documentElement.dataset.shell = "window";
+  if (!("flipassistShell" in page)) return;
+  document.documentElement.dataset.shell = "window";
+  const shell = (page as Window & { flipassistShell?: { window?: unknown } }).flipassistShell;
+  document.documentElement.dataset.platform = shell?.window === "windows" ? "windows" : "mac";
 }
 
 const fromHash = (): Tab => {

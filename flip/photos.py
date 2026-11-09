@@ -1,14 +1,17 @@
 """Photos for the AI. Every photo goes in as a JPEG no bigger than the model
 needs: Gemma works at 896px and Claude charges by size, so bigger only costs
-more. iPhone photos are HEIC, which neither model reads, so on a Mac they're
-converted with the built-in sips tool.
+more. iPhone photos are HEIC, which neither model reads, so they're converted:
+on a Mac with its built-in sips tool, on Windows (9 Nov) with Pillow, which
+reads HEIC with pillow-heif (requirements.txt installs both on Windows only).
 
-Only photos reach sips: a file is a JPEG, PNG, HEIC or WebP by how its bytes
-start, whatever it's called, and anything else (a PDF, a TIFF...) is refused,
-as is one over MAX_PIXELS (with what to do: send a smaller copy), or one sips
-can't read in SECONDS. sips reads whatever it's given, decoding all of it first."""
+Only photos reach the converter: a file is a JPEG, PNG, HEIC or WebP by how its
+bytes start, whatever it's called, and anything else (a PDF, a TIFF...) is
+refused, as is one over MAX_PIXELS (with what to do: send a smaller copy), or
+one sips can't read in SECONDS. sips reads whatever it's given, decoding all of
+it first; Pillow reads the size from the file's header before decoding any of it."""
 
 import base64
+import io
 import re
 import shutil
 import subprocess
@@ -69,7 +72,10 @@ def photo_jpeg(path, max_side=MAX_SIDE, max_pixels=MAX_PIXELS):
     if kind is None:
         raise NotAPhoto(path, "send photos as JPEG, PNG, HEIC or WebP")
     if not shutil.which("sips"):
-        # not a Mac: no converter, so only JPEGs can go in as they are
+        image = pillow()
+        if image is not None:  # Windows (9 Nov): Pillow does what sips does on a Mac
+            return pillow_jpeg(path, kind, image, max_side, max_pixels)
+        # no converter at all, so only JPEGs can go in as they are
         if kind == ".jpg":
             return path.read_bytes()
         raise NotAPhoto(path, "save this photo as a JPEG first")
@@ -78,14 +84,61 @@ def photo_jpeg(path, max_side=MAX_SIDE, max_pixels=MAX_PIXELS):
     if len(size) < 2:
         raise NotAPhoto(path, "can't be read as a photo")
     width, height = int(size["Width"]), int(size["Height"])
-    if width * height > max_pixels:
-        raise NotAPhoto(path, f"{width:,} x {height:,} pixels ({megapixels(width * height)} megapixels) is over the "
-                              f"{max_pixels // 1_000_000}-megapixel limit: save a smaller copy and send that")
+    check_size(path, width, height, max_pixels)
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "photo.jpg"
         resize = ["-Z", str(max_side)] if max(width, height) > max_side else []
         sips(path, "-s", "format", "jpeg", *resize, str(path), "--out", str(out))
         return out.read_bytes()
+
+
+def check_size(path, width, height, max_pixels=MAX_PIXELS):
+    """Refuse a photo with more pixels than max_pixels, saying what to do: send a smaller copy."""
+    if width * height > max_pixels:
+        raise NotAPhoto(path, f"{width:,} x {height:,} pixels ({megapixels(width * height)} megapixels) is over the "
+                              f"{max_pixels // 1_000_000}-megapixel limit: save a smaller copy and send that")
+
+
+def pillow():
+    """Pillow's Image, reading HEIC too when pillow-heif is installed; None when Pillow isn't (a Mac has sips)."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+    try:
+        from pillow_heif import register_heif_opener
+        register_heif_opener()
+    except ImportError:
+        pass  # HEIC can't be read: pillow_jpeg asks for a JPEG instead
+    return Image
+
+
+def pillow_jpeg(path, kind, image, max_side=MAX_SIDE, max_pixels=MAX_PIXELS):
+    """What sips does on a Mac, done with Pillow (image: its Image module): the photo the right way up, as JPEG bytes,
+    shrunk (never enlarged) to max_side pixels, with see-through parts (a PNG screenshot) on white. The size is read
+    from the header and checked before any of the photo is decoded."""
+    from PIL import ImageOps, UnidentifiedImageError
+    try:
+        with image.open(path) as photo:
+            check_size(path, *photo.size, max_pixels)
+            upright = ImageOps.exif_transpose(photo)
+            if upright.mode in ("RGBA", "LA", "PA") or (upright.mode == "P" and "transparency" in upright.info):
+                rgba = upright.convert("RGBA")
+                upright = image.new("RGB", rgba.size, "white")
+                upright.paste(rgba, mask=rgba.getchannel("A"))
+            else:
+                upright = upright.convert("RGB")
+    except NotAPhoto:
+        raise
+    except UnidentifiedImageError:
+        # a HEIC with no pillow-heif to read it, or bytes that only start like a photo
+        raise NotAPhoto(path, "save this photo as a JPEG first" if kind == ".heic" else "can't be read as a photo") from None
+    except (OSError, ValueError, image.DecompressionBombError):
+        raise NotAPhoto(path, "can't be read as a photo") from None
+    upright.thumbnail((max_side, max_side))  # never enlarges
+    out = io.BytesIO()
+    upright.save(out, "JPEG", quality=85)
+    return out.getvalue()
 
 
 def photo_base64(path, max_side=MAX_SIDE):

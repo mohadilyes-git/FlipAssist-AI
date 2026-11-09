@@ -1391,7 +1391,7 @@ OWN_KINDS = ("fault", "network lock", "not genuine", "wear")  # the prices API's
 
 @lru_cache(maxsize=1)
 def kind_tables():
-    return json.loads(KIND_CUTS_FILE.read_text())["tables"]
+    return json.loads(KIND_CUTS_FILE.read_text(encoding="utf-8"))["tables"]
 
 
 def kind_table(category, market="uk"):

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fileFor, keyFrom, modelsToWarm, readyWords, settingFrom, typeOf } from "./parts";
+import { apiCommand, fileFor, icoFrom, keyFrom, logsFolder, modelsToWarm, ollamaPlaces, readyWords, settingFrom, typeOf,
+  windowLook } from "./parts";
 
 test("the key is read the way the API reads .env", () => {
   assert.equal(keyFrom("ANTHROPIC_API_KEY=a\nFLIP_API_KEY=abc123\n"), "abc123");
@@ -64,4 +65,49 @@ test("the launch screen names what's ready and says a model that isn't installed
   // switched off in .env, or by what's set already, as the API reads them; plain Gemma 3 4B reading your style is one
   assert.equal(readyWords(all, "FLIP_KINDS_MODEL=", { FLIP_STYLE_AI: "gemma3:4b" }),
     "flip-reader-5, flip-wording-4b and Gemma 3 4B are ready");
+});
+
+// Windows as well as the Mac (9 Nov): every answer is checked for both, on this Mac
+test("Ollama is looked for where it installs: Homebrew or Ollama.app on a Mac, the user's Programs on Windows", () => {
+  assert.deepEqual(ollamaPlaces("darwin"), ["/opt/homebrew/bin/ollama", "/usr/local/bin/ollama",
+    "/Applications/Ollama.app/Contents/Resources/ollama"]); // as before 9 Nov
+  assert.deepEqual(ollamaPlaces("win32", { LOCALAPPDATA: "C:\\Users\\Sam\\AppData\\Local", ProgramFiles: "C:\\Program Files" }),
+    ["C:\\Users\\Sam\\AppData\\Local\\Programs\\Ollama\\ollama.exe", "C:\\Program Files\\Ollama\\ollama.exe"]);
+  assert.deepEqual(ollamaPlaces("win32", {}), []); // no folders known: Ollama counts as not installed, as on a Mac
+});
+
+test("the API starts from the repo's own Python: uvicorn on a Mac, python.exe -m uvicorn in UTF-8 on Windows", () => {
+  assert.deepEqual(apiCommand("/Users/sam/flip", "darwin"), { command: "/Users/sam/flip/.venv/bin/uvicorn",
+    args: ["flip.api:app", "--host", "127.0.0.1", "--port", "8000"], env: {} }); // as before 9 Nov
+  assert.deepEqual(apiCommand("C:\\Users\\Sam\\flip", "win32"), { command: "C:\\Users\\Sam\\flip\\.venv\\Scripts\\python.exe",
+    args: ["-m", "uvicorn", "flip.api:app", "--host", "127.0.0.1", "--port", "8000"], env: { PYTHONUTF8: "1" } });
+});
+
+test("logs go to ~/Library/Logs on a Mac and the user's local app data on Windows", () => {
+  assert.equal(logsFolder("darwin", "/Users/sam"), "/Users/sam/Library/Logs/FlipAssist"); // as before 9 Nov
+  assert.equal(logsFolder("win32", "C:\\Users\\Sam", { LOCALAPPDATA: "C:\\Users\\Sam\\AppData\\Local" }),
+    "C:\\Users\\Sam\\AppData\\Local\\FlipAssist\\logs");
+  assert.equal(logsFolder("win32", "C:\\Users\\Sam", {}), "C:\\Users\\Sam\\AppData\\Local\\FlipAssist\\logs");
+});
+
+test("the window: the Mac's traffic lights over the app's bar; Windows' own title bar, so it can always be closed", () => {
+  assert.deepEqual(windowLook("darwin"), { titleBarStyle: "hiddenInset", trafficLightPosition: { x: 16, y: 15 } });
+  const windows = windowLook("win32");
+  assert.equal(windows.titleBarStyle, undefined); // a hidden title bar on Windows has no close button
+  assert.equal(windows.autoHideMenuBar, true);
+});
+
+test("the Windows icon is a real .ico: its header, one entry per size (256 written as 0), then each PNG", () => {
+  const png = (n: number) => Buffer.from([0x89, 0x50, 0x4e, 0x47, n]);
+  const ico = icoFrom([{ size: 16, png: png(1) }, { size: 256, png: png(2) }]);
+  assert.equal(ico.readUInt16LE(0), 0);
+  assert.equal(ico.readUInt16LE(2), 1); // an icon, not a cursor
+  assert.equal(ico.readUInt16LE(4), 2);
+  assert.deepEqual([ico[6], ico[7], ico[22], ico[23]], [16, 16, 0, 0]);
+  assert.equal(ico.readUInt16LE(6 + 6), 32); // bits per pixel
+  const first = ico.readUInt32LE(6 + 12), second = ico.readUInt32LE(22 + 12);
+  assert.equal(first, 6 + 32);
+  assert.deepEqual([...ico.subarray(first, first + 5)], [...png(1)]);
+  assert.deepEqual([...ico.subarray(second, second + 5)], [...png(2)]);
+  assert.equal(ico.length, 6 + 32 + 10);
 });

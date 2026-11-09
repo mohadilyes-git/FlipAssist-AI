@@ -36,7 +36,7 @@ from flip.reader import installed
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 # the prompt flip-kinds-1 was trained with, word for word: it must get exactly this
-SYSTEM = (DATA / "kinds_system.txt").read_text().strip()
+SYSTEM = (DATA / "kinds_system.txt").read_text(encoding="utf-8").strip()
 KINDS = ["lock", "parts", "network lock", "not genuine", "damage", "fault", "battery", "wear"]  # the API's, in its order
 # the answer's shape, exactly as in the 6 Oct test (Ollama holds flip-kinds-1 to it while it writes)
 SCHEMA = {"type": "object", "properties": {"kinds": {"type": "array", "items": {"type": "string", "enum": KINDS}}},

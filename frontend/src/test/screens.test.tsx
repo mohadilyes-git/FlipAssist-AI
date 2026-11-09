@@ -1432,7 +1432,17 @@ describe("the app", () => {
     expect(document.documentElement.dataset.shell).toBeUndefined();
     markShell(Object.assign(Object.create(window), { flipassistShell: { window: "mac" } }));
     expect(document.documentElement.dataset.shell).toBe("window");
+    expect(document.documentElement.dataset.platform).toBe("mac");
     delete document.documentElement.dataset.shell;
+    delete document.documentElement.dataset.platform;
+  });
+
+  it("on Windows, fills its window under the system's title bar with no drawn traffic lights (9 Nov)", () => {
+    markShell(Object.assign(Object.create(window), { flipassistShell: { window: "windows" } }));
+    expect(document.documentElement.dataset.shell).toBe("window");
+    expect(document.documentElement.dataset.platform).toBe("windows");
+    delete document.documentElement.dataset.shell;
+    delete document.documentElement.dataset.platform;
   });
 
   it("says so when the API isn't running", async () => {

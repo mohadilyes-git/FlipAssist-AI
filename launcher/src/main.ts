@@ -1,4 +1,4 @@
-// FlipAssist as a Mac app. One double-click:
+// FlipAssist as a desktop app, on a Mac or (9 Nov) Windows. One double-click:
 // 1. opens its window on the launch screen: "Starting FlipAssist…";
 // 2. starts what isn't running yet: Gemma (through Ollama) and the API;
 // 3. shows the app, the repo's built front end (frontend/dist), at app://flipassist/.
@@ -11,10 +11,13 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { app, BrowserWindow, clipboard, nativeTheme, net, protocol, shell } from "electron";
-import { fileFor, keyFrom, typeOf } from "./parts";
+import { fileFor, keyFrom, typeOf, windowLook } from "./parts";
 import { API, type Gemma, LOGS, Services } from "./services";
 
 const HOME = "app://flipassist";
+const ICON = path.join(__dirname, "icon.png"); // build.sh and build.ps1 draw it (icon.js)
+// Windows groups the window under the app's own name and icon, not Electron's
+if (process.platform === "win32") app.setAppUserModelId("com.alertflip.flipassist");
 const { repo } = JSON.parse(readFileSync(path.join(__dirname, "config.json"), "utf8")) as { repo: string };
 const dist = path.join(repo, "frontend", "dist");
 const services = new Services(repo);
@@ -60,8 +63,8 @@ function open(): BrowserWindow {
     minHeight: 600,
     show: false,
     title: "FlipAssist",
-    titleBarStyle: "hiddenInset", // the Mac's own traffic lights, over the app's top bar
-    trafficLightPosition: { x: 16, y: 15 },
+    ...windowLook(process.platform), // a Mac: its traffic lights over the app's top bar; Windows: its own title bar
+    icon: process.platform !== "darwin" && existsSync(ICON) ? ICON : undefined, // a Mac takes the app's own
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#12161f" : "#eef1f6",
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, sandbox: true },
   });
@@ -95,7 +98,8 @@ async function launch() {
   const say = (state: Record<string, string>) =>
     window.webContents.executeJavaScript(`show(${JSON.stringify(state)})`).catch(() => undefined);
   if (!existsSync(path.join(dist, "index.html"))) {
-    return void say({ error: "The app isn't built yet: run launcher/build.sh" });
+    const build = process.platform === "win32" ? "launcher\\build.ps1" : "launcher/build.sh";
+    return void say({ error: `The app isn't built yet: run ${build}` });
   }
   try {
     key = keyFrom(readFileSync(path.join(repo, ".env"), "utf8"));
@@ -127,6 +131,7 @@ const CHECKS = `(async () => {
   const out = {};
   const json = async (r) => [r.status, await r.json().catch(() => null)];
   out.shell = document.documentElement.dataset.shell;
+  out.computer = window.flipassistShell && window.flipassistShell.window;
   out.lights = getComputedStyle(document.querySelector(".lights")).visibility;
   out.title = document.title;
   out.health = (await json(await fetch("/api/health")))[0];
@@ -162,7 +167,8 @@ async function selfTest(window: BrowserWindow) {
   }
   await clipboard.writeText(kept);
   if (process.env.FLIPASSIST_SHOT) writeFileSync(process.env.FLIPASSIST_SHOT, (await window.webContents.capturePage()).toPNG());
-  const ok = result.shell === "window" && result.lights === "hidden" && result.health === 200 && result.style === 200
+  const ok = result.shell === "window" && result.computer === (process.platform === "darwin" ? "mac" : "windows")
+    && result.lights === "hidden" && result.health === 200 && result.style === 200
     && JSON.stringify(result.upload) === JSON.stringify([422, "photo.jpg: send photos as JPEG, PNG, HEIC or WebP"])
     && Array.isArray(result.json) && result.json[0] === 422 && String(result.json[1]).includes("under £1")
     && JSON.stringify(result.escape) === "[404,404]" && result.storage === "1" && result.clipboard === true;
