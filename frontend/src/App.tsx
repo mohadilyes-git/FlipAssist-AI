@@ -45,8 +45,8 @@ const store = (key: string, value: string) => {
 };
 
 /** In FlipAssist's own window (launcher/), the window is the app: no desk around it and its top bar to drag it by.
- * On a Mac the Mac's traffic lights sit where the drawn ones were; on Windows (9 Nov) the system's own title bar is
- * above it, so none are drawn (data-platform "windows"). */
+ * The drawn traffic lights stay hidden in their place, so the bar keeps its layout: on a Mac its own lights sit
+ * there, on Windows (9 Nov) the system's title bar is above the app. data-platform says which computer it's on. */
 export function markShell(page: Window = window) {
   if (!("flipassistShell" in page)) return;
   document.documentElement.dataset.shell = "window";

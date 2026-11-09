@@ -16,17 +16,18 @@ function Step([string]$what, [scriptblock]$run) {
 
 if (Get-Process -Name FlipAssist -ErrorAction SilentlyContinue) { throw "FlipAssist is open: quit it, then run this again" }
 
-# the web app, into frontend\dist: the window shows it from there
+# the web app, into frontend\dist: the window shows it from there. npm ci when its tools aren't installed for Windows
+# (none yet, or a folder copied from a Mac, whose node_modules only run on a Mac)
 Push-Location (Join-Path $repo "frontend")
 try {
-  if (-not (Test-Path node_modules)) { Step "front end: npm ci" { npm ci } }
+  if (-not (Test-Path "node_modules\.bin\vite.cmd")) { Step "front end: npm ci" { npm ci } }
   Step "front end: build" { npm run build }
 } finally { Pop-Location }
 
 # the launcher, into build\, with where the repo is (the API and the app live there)
 Push-Location $here
 try {
-  if (-not (Test-Path node_modules)) { Step "launcher: npm ci" { npm ci } }
+  if (-not (Test-Path "node_modules\electron\dist\electron.exe")) { Step "launcher: npm ci" { npm ci } }
   Step "launcher: build" { npm run build }
   $config = (@{ repo = $repo } | ConvertTo-Json -Compress) + "`n"
   [IO.File]::WriteAllText((Join-Path $here "build\config.json"), $config, (New-Object Text.UTF8Encoding $false))
@@ -48,18 +49,16 @@ try {
 $programs = Join-Path $env:LOCALAPPDATA "Programs"
 $dest = Join-Path $programs "FlipAssist"
 New-Item -ItemType Directory -Force -Path $programs | Out-Null
-if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
+if (Test-Path $dest) {
+  try { Remove-Item -Recurse -Force $dest }
+  catch { throw "Something still has $dest open (an Ollama that FlipAssist started?): quit Ollama in the tray, or run taskkill /im ollama.exe /f, then run this again" }
+}
 Copy-Item -Recurse (Join-Path $here "out\FlipAssist-win32-x64") $dest
 
-# the shortcuts: one in the Start menu, one on the desktop
+# the shortcuts, in the Start menu and on the desktop, made by Electron with the window's own app ID (shortcut.js),
+# so a pinned FlipAssist lights up when it's open instead of showing a second taskbar button
 $exe = Join-Path $dest "FlipAssist.exe"
-$shell = New-Object -ComObject WScript.Shell
-foreach ($folder in @([Environment]::GetFolderPath("Programs"), [Environment]::GetFolderPath("Desktop"))) {
-  $link = $shell.CreateShortcut((Join-Path $folder "FlipAssist.lnk"))
-  $link.TargetPath = $exe
-  $link.WorkingDirectory = $dest
-  $link.IconLocation = "$exe,0"
-  $link.Description = "FlipAssist"
-  $link.Save()
-}
+$links = @([Environment]::GetFolderPath("Programs"), [Environment]::GetFolderPath("Desktop")) | ForEach-Object { Join-Path $_ "FlipAssist.lnk" }
+Push-Location $here
+try { Step "shortcuts" { npx electron build/shortcut.js $exe $env:USERPROFILE $links[0] $links[1] } } finally { Pop-Location }
 Write-Host "Built $exe : open FlipAssist from the Start menu or the desktop"

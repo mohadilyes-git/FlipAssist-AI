@@ -8,6 +8,12 @@ set -eu
 out=${1:?"say where to put them, e.g. launcher/export-models.sh /Volumes/USB/FlipAssist-models"}
 models="flip-reader-5 flip-wording-4b flip-kinds-1 flip-style-1b"
 mkdir -p "$out"
+# Windows can't read a Mac-formatted disk (APFS, Mac OS Extended): the USB drive has to be ExFAT
+fs=$(diskutil info "$(df "$out" | awk 'NR==2 {print $1}')" 2>/dev/null | awk -F': *' '/Type \(Bundle\)/ {print $2}')
+case "$fs" in
+  exfat | msdos) ;;
+  *) echo "Note: $out is on a ${fs:-unknown} disk, which Windows can't read: use a USB drive formatted ExFAT (Disk Utility > Erase > ExFAT)" >&2 ;;
+esac
 
 # each model's file in Ollama, and room for them all (plus 1 GB to spare) before anything is copied
 need_kb=0

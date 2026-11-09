@@ -119,6 +119,10 @@ export function typeOf(file: string): string {
   return TYPES[path.extname(file).toLowerCase()] ?? "application/octet-stream";
 }
 
+/** FlipAssist's app ID: the Mac bundle's (build.sh), and on Windows the window's and its shortcuts' (main.ts,
+ * shortcut.ts), which must be the same for a pinned FlipAssist to light up when it's open. */
+export const APP_ID = "com.alertflip.flipassist";
+
 // Windows as well as the Mac (9 Nov 2026, the owner: "make it compatible for windows as well"). Each answer below
 // depends only on what it's given, so the tests on a Mac check the Windows answers too.
 type Env = Record<string, string | undefined>;

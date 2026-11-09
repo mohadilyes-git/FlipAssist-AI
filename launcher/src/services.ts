@@ -61,7 +61,8 @@ export class Services {
     if (!(await up())) {
       const ollama = ollamaPlaces(process.platform, process.env).find((at) => existsSync(at));
       if (!ollama) return "no ollama";
-      const started = this.start("ollama", ollama, ["serve"], OLLAMA_ENV);
+      // on Windows from your home folder, not the app's: a folder something runs in can't be replaced by the next build
+      const started = this.start("ollama", ollama, ["serve"], OLLAMA_ENV, process.platform === "win32" ? os.homedir() : undefined);
       if (!(await until(up, 30, started))) return "failed";
     }
     const tags = (await ask(`${OLLAMA}/api/tags`)) as { models?: { name?: string }[] } | null;
@@ -135,7 +136,12 @@ export class Services {
  * (and again if it's still there after 5 seconds). */
 function end(started: Started, force: boolean) {
   if (process.platform === "win32") {
-    if (started.child.pid) spawn("taskkill", ["/pid", String(started.child.pid), "/t", "/f"], { stdio: "ignore", windowsHide: true });
+    if (!started.child.pid) return;
+    // by its full path (a bare name hangs on the PATH), and if it can't run, the process itself is ended, so quitting
+    // never waits forever
+    const taskkill = path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "taskkill.exe");
+    spawn(taskkill, ["/pid", String(started.child.pid), "/t", "/f"], { stdio: "ignore", windowsHide: true })
+      .once("error", () => started.child.kill());
     return;
   }
   started.child.kill(force ? "SIGKILL" : "SIGTERM");

@@ -3,6 +3,7 @@
 #   - Python 3.11 (python.org: tick "Add python.exe to PATH")
 #   - Node.js 22 or newer (nodejs.org)
 #   - Ollama for Windows (ollama.com), and open it once so it's running
+#   - the Microsoft Visual C++ Redistributable (x64), if the PC doesn't have it (aka.ms/vs/17/release/vc_redist.x64.exe)
 # and put the repo's .env in the repo folder: copy yours from the Mac (it holds your keys), or fill in .env.example
 # and save it as .env. FlipAssist's own models come from the Mac: there, launcher/export-models.sh copies them to a
 # folder; bring that folder to this PC and name it here. In PowerShell, from the repo folder:
@@ -12,7 +13,7 @@ param([string]$Models = "")
 $ErrorActionPreference = "Stop"
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repo = Split-Path -Parent $here
-$env:PYTHONUTF8 = "1" # Python reads and writes text as UTF-8 here, as on a Mac ("£", emoji)
+$env:PYTHONUTF8 = "1" # Python reads and writes text as UTF-8 here, as on a Mac (pound signs, emoji)
 
 function Step([string]$what, [scriptblock]$run) {
   Write-Host "- $what"
@@ -25,21 +26,36 @@ function Need([string]$program, [string]$from) {
   }
 }
 
+foreach ($synced in @($env:OneDrive, $env:OneDriveConsumer, $env:OneDriveCommercial)) {
+  if ($synced -and $repo.StartsWith($synced, [StringComparison]::OrdinalIgnoreCase)) {
+    Write-Warning "The repo is inside OneDrive ($synced): it would sync node_modules, .venv and the app (about 1 GB) and can break npm. Clone it somewhere OneDrive doesn't sync, such as C:\FlipAssist."
+  }
+}
+
 Need node "nodejs.org"
 Need npm "nodejs.org"
 Need ollama "ollama.com"
+# MiniLM (FlipAssist's search of your past messages) runs on onnxruntime, which needs Microsoft's C++ runtime
+$system = Join-Path $env:SystemRoot "System32"
+if (-not (Test-Path (Join-Path $system "msvcp140.dll")) -or -not (Test-Path (Join-Path $system "vcruntime140_1.dll"))) {
+  throw "Install the Microsoft Visual C++ Redistributable (x64) from https://aka.ms/vs/17/release/vc_redist.x64.exe (or: winget install -e --id Microsoft.VCRedist.2015+.x64), then run this again"
+}
 
-# Python 3.11: through the py launcher that python.org installs, or python itself on the PATH
+# Python 3.11: through the py launcher that python.org installs, or python itself on the PATH. Each is only asked
+# with Continue: Windows PowerShell 5.1 stops the whole script at a program's first error line when it's Stop, and
+# "py -3.11" says so when it's another Python that's installed
 $pyExe = $null
 $pyArgs = @()
+$ErrorActionPreference = "Continue"
 if (Get-Command py -ErrorAction SilentlyContinue) {
   & py -3.11 --version *> $null
   if ($LASTEXITCODE -eq 0) { $pyExe = "py"; $pyArgs = @("-3.11") }
 }
 if (-not $pyExe -and (Get-Command python -ErrorAction SilentlyContinue)) {
-  $version = & python -c "import sys; print('%d.%d' % sys.version_info[:2])"
-  if ($version -eq "3.11") { $pyExe = "python" }
+  $version = & python -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>$null
+  if ("$version" -eq "3.11") { $pyExe = "python" }
 }
+$ErrorActionPreference = "Stop"
 if (-not $pyExe) { throw "Python 3.11 isn't installed: get it from python.org (tick Add python.exe to PATH), then run this again" }
 
 # the .env: your keys, which stay on this PC
@@ -51,6 +67,7 @@ if (-not (Test-Path (Join-Path $repo ".env"))) {
 $venvPython = Join-Path $repo ".venv\Scripts\python.exe"
 if (-not (Test-Path $venvPython)) { Step "Python environment (.venv)" { & $pyExe @pyArgs -m venv (Join-Path $repo ".venv") } }
 Step "Python libraries (requirements.txt)" { & $venvPython -m pip install --disable-pip-version-check -r (Join-Path $repo "requirements.txt") }
+Step "onnxruntime loads (MiniLM's engine)" { & $venvPython -c "import onnxruntime" }
 
 # the AI models, in Ollama
 try { Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/tags" -TimeoutSec 5 | Out-Null }

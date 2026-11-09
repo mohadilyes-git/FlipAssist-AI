@@ -11,13 +11,13 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { app, BrowserWindow, clipboard, nativeTheme, net, protocol, shell } from "electron";
-import { fileFor, keyFrom, typeOf, windowLook } from "./parts";
+import { APP_ID, fileFor, keyFrom, typeOf, windowLook } from "./parts";
 import { API, type Gemma, LOGS, Services } from "./services";
 
 const HOME = "app://flipassist";
 const ICON = path.join(__dirname, "icon.png"); // build.sh and build.ps1 draw it (icon.js)
-// Windows groups the window under the app's own name and icon, not Electron's
-if (process.platform === "win32") app.setAppUserModelId("com.alertflip.flipassist");
+// Windows groups the window under the app's own name and icon, not Electron's; its shortcuts carry the same ID
+if (process.platform === "win32") app.setAppUserModelId(APP_ID);
 const { repo } = JSON.parse(readFileSync(path.join(__dirname, "config.json"), "utf8")) as { repo: string };
 const dist = path.join(repo, "frontend", "dist");
 const services = new Services(repo);
@@ -98,7 +98,8 @@ async function launch() {
   const say = (state: Record<string, string>) =>
     window.webContents.executeJavaScript(`show(${JSON.stringify(state)})`).catch(() => undefined);
   if (!existsSync(path.join(dist, "index.html"))) {
-    const build = process.platform === "win32" ? "launcher\\build.ps1" : "launcher/build.sh";
+    // Windows runs no scripts until told to, so the whole command
+    const build = process.platform === "win32" ? "powershell -ExecutionPolicy Bypass -File launcher\\build.ps1" : "launcher/build.sh";
     return void say({ error: `The app isn't built yet: run ${build}` });
   }
   try {

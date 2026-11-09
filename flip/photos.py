@@ -105,6 +105,9 @@ def pillow():
         from PIL import Image
     except ImportError:
         return None
+    # Pillow refuses a photo over about 179 megapixels as it opens it, before check_size can say what to do; check_size
+    # reads the size from the header and refuses anything over MAX_PIXELS before a single pixel is decoded
+    Image.MAX_IMAGE_PIXELS = None
     try:
         from pillow_heif import register_heif_opener
         register_heif_opener()
@@ -121,7 +124,11 @@ def pillow_jpeg(path, kind, image, max_side=MAX_SIDE, max_pixels=MAX_PIXELS):
     try:
         with image.open(path) as photo:
             check_size(path, *photo.size, max_pixels)
-            upright = ImageOps.exif_transpose(photo)
+            photo.load()
+            try:
+                upright = ImageOps.exif_transpose(photo)
+            except SyntaxError:  # an EXIF block that isn't one: the photo as it is, as sips keeps it
+                upright = photo.copy()
             if upright.mode in ("RGBA", "LA", "PA") or (upright.mode == "P" and "transparency" in upright.info):
                 rgba = upright.convert("RGBA")
                 upright = image.new("RGB", rgba.size, "white")
@@ -131,9 +138,11 @@ def pillow_jpeg(path, kind, image, max_side=MAX_SIDE, max_pixels=MAX_PIXELS):
     except NotAPhoto:
         raise
     except UnidentifiedImageError:
-        # a HEIC with no pillow-heif to read it, or bytes that only start like a photo
-        raise NotAPhoto(path, "save this photo as a JPEG first" if kind == ".heic" else "can't be read as a photo") from None
-    except (OSError, ValueError, image.DecompressionBombError):
+        # a HEIC where pillow-heif isn't installed to read one, or bytes that only start like a photo (a cut-off HEIC)
+        reads_heic = ".heic" in getattr(image, "registered_extensions", dict)()
+        raise NotAPhoto(path, "save this photo as a JPEG first" if kind == ".heic" and not reads_heic
+                        else "can't be read as a photo") from None
+    except Exception:  # noqa: BLE001 - a broken PNG chunk (SyntaxError), a cut-off HEIC (EOFError) and the like
         raise NotAPhoto(path, "can't be read as a photo") from None
     upright.thumbnail((max_side, max_side))  # never enlarges
     out = io.BytesIO()
