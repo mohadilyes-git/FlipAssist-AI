@@ -194,3 +194,16 @@ export function icoFrom(images: { size: number; png: Buffer }[]): Buffer {
   });
   return Buffer.concat([head, ...images.map((image) => image.png)]);
 }
+
+/** The .env with this computer's own FLIP_API_KEY when it has none of 32 characters or more, else null (9 Nov: a
+ * fresh download has no .env, and the launcher refused to start without the key). A short one is replaced and the
+ * rest kept as it was; a new .env also says where your own Claude key goes. key: a new random one. */
+export function withOwnKey(env: string, key: string): string | null {
+  if (keyFrom(env).length >= 32) return null;
+  const kept = env.split(/\r?\n/).filter((line) => !/^\s*FLIP_API_KEY\s*=/.test(line));
+  while (kept.length && kept[kept.length - 1].trim() === "") kept.pop();
+  const fresh = env.trim() ? [] : ["# FlipAssist's settings on this computer. Never uploaded (see .gitignore).",
+    "# Your own Claude API key (console.anthropic.com) turns on Claude's checks and backup: put it after the =",
+    "ANTHROPIC_API_KEY=", ""];
+  return [...kept, ...fresh, "# this computer's own key for FlipAssist's API, made on first launch", `FLIP_API_KEY=${key}`, ""].join("\n");
+}

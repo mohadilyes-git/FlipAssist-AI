@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { apiCommand, fileFor, icoFrom, keyFrom, logsFolder, modelsToWarm, ollamaPlaces, readyWords, settingFrom, typeOf,
-  windowLook } from "./parts";
+  windowLook, withOwnKey } from "./parts";
 
 test("the key is read the way the API reads .env", () => {
   assert.equal(keyFrom("ANTHROPIC_API_KEY=a\nFLIP_API_KEY=abc123\n"), "abc123");
@@ -110,4 +110,17 @@ test("the Windows icon is a real .ico: its header, one entry per size (256 writt
   assert.deepEqual([...ico.subarray(first, first + 5)], [...png(1)]);
   assert.deepEqual([...ico.subarray(second, second + 5)], [...png(2)]);
   assert.equal(ico.length, 6 + 32 + 10);
+});
+
+test("a fresh download gets its own FLIP_API_KEY on first launch, and nobody's Claude key (9 Nov)", () => {
+  const key = "k".repeat(43);
+  const made = withOwnKey("", key)!;
+  assert.equal(keyFrom(made), key);
+  assert.match(made, /^ANTHROPIC_API_KEY=$/m); // empty: the person's own Claude key goes there
+  const short = withOwnKey("ANTHROPIC_API_KEY=theirs\nFLIP_API_KEY=short\nPRICES_URL=x\n", key)!;
+  assert.equal(keyFrom(short), key);
+  assert.match(short, /^ANTHROPIC_API_KEY=theirs$/m);
+  assert.match(short, /^PRICES_URL=x$/m);
+  assert.equal(short.match(/^FLIP_API_KEY=/gm)?.length, 1);
+  assert.equal(withOwnKey(`FLIP_API_KEY=${"a".repeat(32)}\n`, key), null); // a key that's long enough is kept as it is
 });

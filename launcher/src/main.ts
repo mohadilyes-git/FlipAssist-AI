@@ -7,11 +7,12 @@
 //    server, no other program on this Mac can borrow it;
 // 4. on quit, stops only what it started.
 // --selftest checks the window, the files and the API calls, then quits.
+import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { app, BrowserWindow, clipboard, nativeTheme, net, protocol, shell } from "electron";
-import { APP_ID, fileFor, keyFrom, typeOf, windowLook } from "./parts";
+import { APP_ID, fileFor, keyFrom, typeOf, windowLook, withOwnKey } from "./parts";
 import { API, type Gemma, LOGS, Services } from "./services";
 
 const HOME = "app://flipassist";
@@ -102,8 +103,13 @@ async function launch() {
     const build = process.platform === "win32" ? "powershell -ExecutionPolicy Bypass -File launcher\\build.ps1" : "launcher/build.sh";
     return void say({ error: `The app isn't built yet: run ${build}` });
   }
+  // a fresh download has no .env, or no FLIP_API_KEY in it: this computer makes its own (9 Nov), so it starts the
+  // first time; the Claude key is the person's own to add (nobody else's key is ever in the repo)
+  const envFile = path.join(repo, ".env");
+  const own = withOwnKey(existsSync(envFile) ? readFileSync(envFile, "utf8") : "", randomBytes(32).toString("base64url"));
+  if (own !== null) writeFileSync(envFile, own, { mode: 0o600 });
   try {
-    key = keyFrom(readFileSync(path.join(repo, ".env"), "utf8"));
+    key = keyFrom(readFileSync(envFile, "utf8"));
   } catch {
     key = "";
   }

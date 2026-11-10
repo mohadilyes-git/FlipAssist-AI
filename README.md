@@ -270,6 +270,14 @@ cd launcher && npm test && npm run selftest    # the launcher's own tests, then 
 
 The self-test opens the window, checks every kind of call (files, JSON, photo uploads, refused paths, copying, saved settings) without drafting or saving anything, and quits.
 
+### Your own keys
+
+Nobody's keys are in the repo: `.env` is never uploaded (`.gitignore`). On first launch the app makes `.env` with this
+computer's own `FLIP_API_KEY`. Claude runs on your own key: put it after `ANTHROPIC_API_KEY=` in `.env`
+(console.anthropic.com), and Anthropic bills you for what you use. Without it, everything runs on this computer. The
+UK price estimate asks AlertFlip's prices service (`PRICES_URL`, `PRICES_KEY`), which isn't public; without it, the
+price tab says so.
+
 ### On Windows (9 Nov 2026: built and tested on a Mac, not yet run on a Windows PC)
 
 The same app runs on Windows: the same splash screen, icon and screens, the same API and models. What differs is only

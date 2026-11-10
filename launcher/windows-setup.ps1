@@ -4,9 +4,9 @@
 #   - Node.js 22 or newer (nodejs.org)
 #   - Ollama for Windows (ollama.com), and open it once so it's running
 #   - the Microsoft Visual C++ Redistributable (x64), if the PC doesn't have it (aka.ms/vs/17/release/vc_redist.x64.exe)
-# and put the repo's .env in the repo folder: copy yours from the Mac (it holds your keys), or fill in .env.example
-# and save it as .env. FlipAssist's own models come from the Mac: there, launcher/export-models.sh copies them to a
-# folder; bring that folder to this PC and name it here. In PowerShell, from the repo folder:
+# If you have a .env (it holds your keys), put it in the repo folder; without one, FlipAssist makes it on first launch,
+# and your own Claude API key goes in it. FlipAssist's own models come from the Mac: there, launcher/export-models.sh
+# copies them to a folder; bring that folder to this PC and name it here. In PowerShell, from the repo folder:
 #   powershell -ExecutionPolicy Bypass -File launcher\windows-setup.ps1 -Models D:\FlipAssist-models
 # Without -Models it still works: Gemma 3 4B and code do those models' jobs, as on a Mac without them.
 param([string]$Models = "")
@@ -58,9 +58,10 @@ if (-not $pyExe -and (Get-Command python -ErrorAction SilentlyContinue)) {
 $ErrorActionPreference = "Stop"
 if (-not $pyExe) { throw "Python 3.11 isn't installed: get it from python.org (tick Add python.exe to PATH), then run this again" }
 
-# the .env: your keys, which stay on this PC
+# the .env: your keys, which stay on this PC. Without one, FlipAssist makes it on first launch with this PC's own
+# FLIP_API_KEY; your Claude key (ANTHROPIC_API_KEY) is yours to add to it
 if (-not (Test-Path (Join-Path $repo ".env"))) {
-  throw "There's no .env in $repo yet: copy yours from the Mac, or fill in .env.example and save it as .env. Then run this again."
+  Write-Host "No .env yet: FlipAssist makes one on first launch. Add your own Claude API key to it to turn Claude on."
 }
 
 # the Python environment (.venv) and the libraries requirements.txt lists (on Windows, Pillow too: it converts photos)
