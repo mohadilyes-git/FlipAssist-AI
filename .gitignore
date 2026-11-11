@@ -28,3 +28,6 @@ launcher/out/
 # local editor and tool settings
 .claude/
 .DS_Store
+# model files never go in git: they're on the GitHub release (models/README.md)
+*.gguf
+*.gguf.part-*

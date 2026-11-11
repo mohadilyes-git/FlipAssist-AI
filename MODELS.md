@@ -173,15 +173,17 @@ Library versions: unsloth 2026.11, transformers 4.57.6, trl 0.22.2, peft 0.21.2.
 - The test plans and the rule for picking a model were written before the runs, so a result can't be picked after
   the fact.
 
-## Why the weights aren't public
+## Getting the weights
 
-The readers, the wording models and the flaw sorters learned from real sellers' listings. A model can repeat pieces of what it learned
-from, and those listings are other people's words, so neither the weights nor the data are published. To check them,
-ask for access: a reviewer gets the files of the models in use privately, and can match them to this page with the
-fingerprints below.
+The four model files in use are on the repo's GitHub release `models-v1` (9 Nov 2026, the owner's choice), each split
+into parts under GitHub's 2 GB limit; `launcher/get-models.sh` (Mac) and `launcher\windows-setup.ps1` (Windows)
+download them and refuse any file whose fingerprint below doesn't match the version that was tested (models/README.md).
+They're modified versions of Gemma 3 4B, under the Gemma Terms of Use (models/NOTICE).
 
-**flip-style-1b** (it learns a buyer's habits: greeting, offer, sign-off) is the exception: it was trained only on
-made-up buyers, so it can be published with its data and its test.
+The training data isn't published. The readers, the wording models and the flaw sorters learned from real sellers'
+listings, and a model can repeat pieces of what it learned: don't use them to find, rebuild or republish anyone's
+listing. **flip-style-1b** (it learns a buyer's habits: greeting, offer, sign-off) was trained only on made-up buyers,
+so its data and its test can be published too.
 
 ## How to check a model file
 

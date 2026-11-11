@@ -42,7 +42,7 @@ try {
   Step "app" { npx electron-packager . FlipAssist --platform=win32 --arch=x64 --icon=build/FlipAssist.ico `
       --out=out --overwrite --quiet --app-version=0.1.0 --win32metadata.CompanyName=AlertFlip `
       --win32metadata.ProductName=FlipAssist --win32metadata.FileDescription=FlipAssist `
-      '--ignore=^/(src|out|build\.sh|build\.ps1|windows-setup\.ps1|export-models\.sh|tsconfig\.json|build/FlipAssist\.iconset|build/FlipAssist\.ico|build/[^/]*\.test\.js)($|/)' }
+      '--ignore=^/(src|out|build\.sh|build\.ps1|windows-setup\.ps1|export-models\.sh|package-models\.sh|get-models\.sh|upload-models\.sh|tsconfig\.json|build/FlipAssist\.iconset|build/FlipAssist\.ico|build/[^/]*\.test\.js)($|/)' }
 } finally { Pop-Location }
 
 # into %LOCALAPPDATA%\Programs\FlipAssist, where Windows keeps a person's own apps; an older build is replaced

@@ -32,7 +32,7 @@ iconutil -c icns build/FlipAssist.iconset -o build/FlipAssist.icns
 arch=$(uname -m | sed 's/x86_64/x64/')
 npx electron-packager . FlipAssist --platform=darwin --arch="$arch" --icon=build/FlipAssist.icns \
   --out=out --overwrite --quiet --app-bundle-id=com.alertflip.flipassist --app-version=0.1.0 \
-  --ignore='^/(src|out|build\.sh|build\.ps1|windows-setup\.ps1|export-models\.sh|tsconfig\.json|build/FlipAssist\.iconset|build/FlipAssist\.ico|build/[^/]*\.test\.js)($|/)'
+  --ignore='^/(src|out|build\.sh|build\.ps1|windows-setup\.ps1|export-models\.sh|package-models\.sh|get-models\.sh|upload-models\.sh|tsconfig\.json|build/FlipAssist\.iconset|build/FlipAssist\.ico|build/[^/]*\.test\.js)($|/)'
 built="out/FlipAssist-darwin-$arch/FlipAssist.app"
 codesign --force --deep --sign - "$built"
 

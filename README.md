@@ -270,6 +270,12 @@ cd launcher && npm test && npm run selftest    # the launcher's own tests, then 
 
 The self-test opens the window, checks every kind of call (files, JSON, photo uploads, refused paths, copying, saved settings) without drafting or saving anything, and quits.
 
+### FlipAssist's own models
+
+On a Mac, `launcher/get-models.sh` downloads the four model files from the repo's GitHub release `models-v1`, checks
+each one against the version that was tested, and adds it to Ollama (about 10 GB in all). Without them, Gemma 3 4B and
+code do their jobs. To make the release: `launcher/package-models.sh` (models/README.md).
+
 ### Your own keys
 
 Nobody's keys are in the repo: `.env` is never uploaded (`.gitignore`). On first launch the app makes `.env` with this
@@ -296,13 +302,14 @@ To set it up:
 
 1. On the PC, install Python 3.11 (tick "Add python.exe to PATH"), Node.js 22 or newer, and Ollama, and open Ollama
    once.
-2. Copy the repo to the PC, and your `.env` from the Mac into it (it holds your keys).
-3. On the Mac, copy FlipAssist's own models out of Ollama to a USB drive (about 10 GB):
-   `launcher/export-models.sh /Volumes/USB/FlipAssist-models`.
-4. On the PC, in PowerShell in the repo folder:
-   `powershell -ExecutionPolicy Bypass -File launcher\windows-setup.ps1 -Models D:\FlipAssist-models`.
-   It sets up the Python environment, downloads Gemma 3 4B, adds the four models, and builds FlipAssist into your
-   Programs folder, with a Start menu and a desktop shortcut. After a change, `launcher\build.ps1` builds it again.
+2. Clone the repo on the PC (git clone), and put your `.env` in it if you have one (it holds your keys).
+3. On the PC, in PowerShell in the repo folder:
+   `powershell -ExecutionPolicy Bypass -File launcher\windows-setup.ps1`.
+   It sets up the Python environment, downloads Gemma 3 4B and FlipAssist's four models from the repo's GitHub release
+   (each checked against the version that was tested, models/README.md), and builds FlipAssist into your Programs
+   folder, with a Start menu and a desktop shortcut. After a change, `powershell -ExecutionPolicy Bypass -File launcher\build.ps1` builds it
+   again. With no internet for 10 GB, copy the models on a Mac to an ExFAT USB drive (`launcher/export-models.sh /Volumes/USB/FlipAssist-models`)
+   and add `-Models D:\FlipAssist-models`.
 
 How fast it drafts depends on the PC: a Mac runs the models on its own graphics, and a PC does that with a recent
 graphics card. Without one they run on the processor, and a draft takes longer.
