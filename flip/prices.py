@@ -128,6 +128,22 @@ def accessory(title):
     return bool(ACCESSORY.search(CONNECTOR.split(t, maxsplit=1)[0]))
 
 
+# what FlipAssist is made and tested for (9 Nov, the owner: "make sure the user can not give listings that we not
+# support"): a listing whose title names an iPhone, a Samsung phone or a MacBook, as kind_of reads it, or with one
+# spelled the way people slip ("iPhon 12 mini", "Apple Macbok Pro"); never what goes with one (a case, a charger)
+NOT_SUPPORTED = ("FlipAssist works with iPhone, Samsung phone and MacBook listings only, and this title doesn't name "
+                 "one. If it is one, put its model in the title (\"iPhone 13 128GB\").")
+SLIPPED_NAME = re.compile(r"\b(?:iphon|ipone|iphne|ipohne|iphoen|ifone)\w*|\bmac\s?(?:bok|boo|bk|buk|boook)\w*|\bmackbook\b",
+                          re.IGNORECASE)
+
+
+def supported(title):
+    """Whether a listing is one FlipAssist drafts offers for: its title names an iPhone, a Samsung phone or a MacBook
+    (typed slips too), and not a case, a charger or anything else that goes with one."""
+    title = title or ""
+    return kind_of(title) is not None or (bool(SLIPPED_NAME.search(title)) and not accessory(title))
+
+
 def kind_of(title):
     """"iphone", "samsung", "macbook" or None: what the prices API prices from its saved sales (and nothing that
     goes with one: a case, a charger, a box, a Galaxy Watch, a Samsung TV)."""

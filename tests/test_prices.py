@@ -1865,3 +1865,15 @@ def test_the_biggest_cut_comes_first_so_the_main_flaw_keeps_its_whole_amount():
     wear_after_fault = prices.estimate("iPhone 14 128GB", ["Scratches on the back and Face ID not working"],
                                        opener=cutting(), description="Scratches on the back and Face ID not working")
     assert [(r["kinds"], r["by"]) for r in wear_after_fault["breakdown"]] == [(["fault"], "own"), (["wear"], "own none")]
+
+
+@pytest.mark.parametrize("title, yes", [
+    ("iPhone 13 128GB unlocked", True), ("iphone13 pro max", True), ("iPhon 12 mini", True), ("ipone 11", True),
+    ("Samsung Galaxy S23 Ultra 256GB", True), ("galaxy s21", True), ("S23 ultra 512gb", True),
+    ("MacBook Air M2 13 inch", True), ("Mac book air", True), ("Apple Macbok Pro", True),
+    ("PS5 Disc edition", False), ("AirPods Pro 2", False), ("iPad Air 5", False), ("iMac 24 M1", False),
+    ("Google Pixel 8 Pro", False), ("Samsung TV 55 inch", False), ("Samsung Galaxy Watch 6", False),
+    ("iPhone 13 case", False), ("iphon charger", False), ("Phone for sale", False), ("", False),
+])
+def test_only_iphone_samsung_phone_and_macbook_listings_are_supported(title, yes):  # 9 Nov
+    assert prices.supported(title) is yes

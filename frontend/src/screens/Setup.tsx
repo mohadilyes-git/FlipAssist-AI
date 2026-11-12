@@ -21,21 +21,22 @@ type Props = {
   again: boolean;
 };
 
-// each listing shows one way you might message a seller (3 Oct: no Vinted or posted-flaw card: the eBay AirPods
-// card teaches posted deals, and how you give a flaw is the same posted or collected)
+// each listing shows one way you might message a seller (3 Oct: no Vinted or posted-flaw card: the eBay Samsung
+// card teaches posted deals, and how you give a flaw is the same posted or collected); every one an iPhone, a Samsung
+// phone or a MacBook, the listings FlipAssist works with (9 Nov: no PS5, AirPods or Dyson)
 const LISTINGS: { title: string; price: number; market: string; description: string; kind: Kind; teaches: string }[] = [
   { title: "iPhone 13 128GB, cracked back", price: 220, market: "Facebook", kind: "lower", teaches: "how you mention flaws",
     description: "Back glass cracked when I dropped it, screen perfect. Battery 86%. Collection from Leeds LS6." },
-  { title: "PS5 Disc Edition + 2 pads", price: 300, market: "Facebook", kind: "lower", teaches: "your plain offer",
-    description: "Works perfectly, boxed with both controllers. Collect from Bradford BD1." },
-  { title: "AirPods Pro 2", price: 120, market: "eBay", kind: "lower", teaches: "how you write when you can't collect",
-    description: "Used a few times, all tips included. Postage only." },
+  { title: "Samsung Galaxy S23 256GB, boxed", price: 300, market: "Facebook", kind: "lower", teaches: "your plain offer",
+    description: "Works perfectly, boxed with the charger. Collect from Bradford BD1." },
+  { title: "Samsung Galaxy S22 128GB", price: 120, market: "eBay", kind: "lower", teaches: "how you write when you can't collect",
+    description: "Always kept in a case, everything works. Postage only." },
   { title: "iPhone 12 64GB, scratches", price: 140, market: "Gumtree", kind: "lower", teaches: "small flaws",
     description: "Light scratches on the screen, does not affect use. Unlocked. Collect Leeds LS2." },
   { title: "MacBook Air M1 8GB", price: 450, market: "Facebook", kind: "asking", teaches: "paying full price",
     description: "Great condition, charger included. Price is firm, no offers." },
-  { title: "Dyson V11 Absolute", price: 180, market: "Facebook", kind: "more", teaches: "offering more to hold it",
-    description: "All attachments, new filter fitted. Lots of interest, first to collect." },
+  { title: "iPhone 14 Pro 128GB", price: 480, market: "Facebook", kind: "more", teaches: "offering more to hold it",
+    description: "Excellent condition, boxed with the cable. Lots of interest, first to collect." },
 ];
 const OFFER: Record<Kind, (asking: number) => number> = { lower: lowerPrice, asking: (asking) => asking, more: morePrice };
 const OFFER_LABEL: Record<Kind, string> = { lower: "Offer lower", asking: "Pay asking", more: "Offer more" };

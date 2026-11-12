@@ -232,8 +232,10 @@ export function MessageScreen({ onApproved, onCheckPrice, hasStyle = true, onSet
             <label className="field">
               <span>Listing title</span>
               <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={300}
-                placeholder="iPhone 13 128GB Blue" />
+                placeholder="iPhone 13 128GB Blue" aria-describedby="supported-items" />
             </label>
+            {/* 9 Nov, the owner: only listings FlipAssist supports (the API refuses others, flip.prices.supported) */}
+            <p className="sub" id="supported-items">iPhones, Samsung phones and MacBooks</p>
             <label className="field">
               <span>Asking price</span>
               <input className="input asking" value={asking} inputMode="decimal" placeholder="£220" onChange={(e) => {

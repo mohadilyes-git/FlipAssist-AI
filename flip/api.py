@@ -43,7 +43,7 @@ from flip.audit import AuditLog
 from flip.catalogue import load_catalogue, load_conditions
 from flip.draft import load_env
 from flip.kinds import model_name as kinds_model, sorter as kinds_sorter
-from flip.prices import estimate, kind_of, settings as prices_settings
+from flip.prices import NOT_SUPPORTED, estimate, kind_of, settings as prices_settings, supported
 from flip.drafter import draft_listing
 from flip.listing_code import PhrasingWriter
 from flip.message_drafter import MESSAGE_TOKENS, Refused, draft_message, offer_to_draft
@@ -602,6 +602,8 @@ def draft_a_message(request: MessageRequest, s: Setup = Depends(setup), book: St
         offer_to_draft(request.kind, to_pence(request.listing.asking_price), offer)
         if request.previous and request.length != "longer":
             raise Refused('previous is the draft to make longer: send it with "length": "longer"')
+        if not supported(request.listing.title):  # 9 Nov: only what FlipAssist is made and tested for
+            raise Refused(NOT_SUPPORTED)
     except Refused as e:
         raise HTTPException(422, str(e))
     listing = {**request.listing.model_dump(), "id": request.listing.id or new_id()}

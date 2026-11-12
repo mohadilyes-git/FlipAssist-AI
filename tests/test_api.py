@@ -636,6 +636,13 @@ def test_a_draft_id_out_of_range_is_refused_not_a_crash(client, draft_id):
     ({"listing": {**LISTING, "asking_price": "0.50"}}, "under £1"),
     ({"offer": "230"}, "isn't a lower offer"),
     ({"previous": "Hi, would you take £185?"}, 'with "length": "longer"'),
+    # 9 Nov: only iPhone, Samsung phone and MacBook listings
+    ({"listing": {**LISTING, "title": "PS5 Disc edition"}}, "iPhone, Samsung phone and MacBook listings only"),
+    ({"listing": {**LISTING, "title": "Mountain bike 26 inch"}}, "iPhone, Samsung phone and MacBook listings only"),
+    ({"listing": {**LISTING, "title": "Google Pixel 8 Pro"}}, "iPhone, Samsung phone and MacBook listings only"),
+    ({"listing": {**LISTING, "title": "iPad Air 5"}}, "iPhone, Samsung phone and MacBook listings only"),
+    ({"listing": {**LISTING, "title": "iPhone 13 case"}}, "iPhone, Samsung phone and MacBook listings only"),
+    ({"listing": {**LISTING, "title": "Samsung TV 55 inch"}}, "iPhone, Samsung phone and MacBook listings only"),
 ])
 def test_what_cant_be_drafted_is_refused_before_anything_runs(client, change, words):
     local = FakeModel("gemma3:4b")
