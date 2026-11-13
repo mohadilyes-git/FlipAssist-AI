@@ -101,23 +101,17 @@ describe("AI message", () => {
     expect(screen.queryByRole("combobox")).toBeNull();
   });
 
-  it("asks Yes or No first, shows the counts once you click Yes, and writes nothing until you pick", async () => {
+  it("starts an offer lower at Yes too (9 Nov), shows the counts, and writes nothing until you pick how many", async () => {
     const fetch = serve({ "POST /api/messages/draft": [200, DRAFT] });
     const user = userEvent.setup();
     render(<MessageScreen />);
-    // nothing picked to start with, and no counts until you click Yes (14 Oct)
+    // the owner, 9 Nov: "make say flaws on like pay asking price and offer more": Yes to start with (No is a click
+    // away), and how many flaws is still yours to pick
     expect(["Yes", "No"].map((n) => screen.getByRole("button", { name: n }).getAttribute("aria-pressed")))
-      .toEqual(["false", "false"]);
-    expect(screen.queryByRole("group", { name: "How many flaws to say" })).toBeNull();
+      .toEqual(["true", "false"]);
     expect(screen.queryByRole("button", { name: "My style" })).toBeNull();
     await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
     await user.type(screen.getByLabelText("Asking price"), "£220");
-    await user.click(screen.getByRole("button", { name: "Write my message" }));
-    expect((await screen.findByRole("alert")).textContent).toBe("Pick Yes or No");
-    expect(screen.getByRole("group", { name: "Say the flaw" }).className).toContain("missing");
-    expect(fetch).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Yes" }));
-    expect(screen.queryByRole("alert")).toBeNull(); // picking clears the red
     const counts = within(screen.getByRole("group", { name: "How many flaws to say" }));
     expect(counts.getAllByRole("button").map((b) => [b.textContent, b.getAttribute("aria-pressed")])).toEqual(
       [["1 flaw only", "false"], ["2 flaws only", "false"], ["3 flaws only", "false"], ["All flaws", "false"]]);
@@ -201,8 +195,9 @@ describe("AI message", () => {
     expect([more.kind, more.mention, more.flaws_said]).toEqual(["more", null, null]);
     await user.click(screen.getByRole("radio", { name: /Offer lower/ }));
     expect(screen.getByText("Say the flaw")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Yes" }).getAttribute("aria-pressed")).toBe("false"); // each card its own:
-    expect(screen.getByRole("button", { name: "No" }).getAttribute("aria-pressed")).toBe("false"); // yours to pick here
+    // each card its own: No was picked for Pay asking, and an offer lower is still at Yes (9 Nov: Yes to start with)
+    expect(screen.getByRole("button", { name: "Yes" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "No" }).getAttribute("aria-pressed")).toBe("false");
   });
 
   it("writes every message with no AI, and only Rewrite has Gemma 3 4B reword it (14 Oct)", async () => {
@@ -766,8 +761,8 @@ describe("AI UK price estimate", () => {
   it("says what each kind of cut is, in plain words", () => {
     const e = { ...TWO_FLAWS, damage: { ...TWO_FLAWS.damage!, rough: true, from: "the US", by: "Claude Sonnet 5.5" } };
     const said = (row: Partial<CutRow>) => cutWords({ kinds: ["fault"], words: ["x"], cut: -0.171, by: "api", ...row }, e);
-    expect(said({ kinds: ["damage"], cut: -0.304, by: "damage" })).toBe("Damage, counted as moderate: −30%. US sellers "
-      + "ask about 30% less for a mid-priced iPhone with moderate damage (191 listings, rough: from US sales) · Claude "
+    expect(said({ kinds: ["damage"], cut: -0.304, by: "damage" })).toBe("Damage, counted as moderate: −30%. Sellers "
+      + "ask about 30% less for a mid-priced iPhone with moderate damage (191 listings, rough) · Claude "
       + "Sonnet 5.5 decided how bad");
     expect(said({ kinds: ["battery"], cut: -0.048 })).toBe("Worn battery (under 80% or needs a service): −5%. UK sellers "
       + "ask about 5% less for one with a worn battery (the AlertFlip API's cut)");
@@ -819,12 +814,12 @@ describe("AI UK price estimate", () => {
 
   it("words each row as the cut was made (14 Oct review)", () => {
     const row = (r: Partial<CutRow>): CutRow => ({ kinds: ["fault"], words: ["x"], cut: -0.171, by: "api", ...r });
-    // a Samsung's damage cut is borrowed from US listings: what US sellers ask, not UK ones
+    // a Samsung's damage cut is borrowed from US listings: what sellers ask, not UK ones, and no "US" (9 Nov)
     const samsung = { ...TWO_FLAWS, kind: "samsung", damage: { level: "moderate", tier: "middle", cut: -0.444, rough: true,
       from: "the US (pooled with the bottom tier)", n: 17, by: "code" } };
     expect(cutWords(row({ kinds: ["damage"], cut: -0.444, by: "damage" }), samsung)).toBe("Damage, counted as moderate: "
-      + "−44%. US sellers ask about 44% less for a mid-priced Samsung with moderate damage (17 listings, rough: from US "
-      + "sales) · how bad: code");
+      + "−44%. Sellers ask about 44% less for a mid-priced Samsung with moderate damage (17 listings, rough) · how bad: "
+      + "code");
     // no for-parts sales to go on: the API's rough cut for a locked one, which nothing is cut on top of
     const locked = { ...TWO_FLAWS, parts_price: false, breakdown: [row({ kinds: ["lock"], cut: -0.38, by: "lock" }),
       row({ kinds: ["damage"], cut: null, by: "not on top" })] };
@@ -1591,7 +1586,7 @@ describe("the damage cut by how bad (fix 1, 14 Oct)", () => {
     const samsung = { ...base, kind: "samsung", damage: { level: "minor", tier: "top", cut: -0.059, rough: true,
       from: "the US", n: 11 } };
     expect(damageLine(samsung)).toBe("Damage counted as minor: −6% for a pricier Samsung, from 11 listings like it "
-      + "(rough: from US sales)");
+      + "(rough)");
   });
   it("doesn't call a MacBook's damage cut one measured on phones", () => {
     const mac = { ...base, kind: "macbook", model: "macbook air 13 m1", sales: 40, exact: true,

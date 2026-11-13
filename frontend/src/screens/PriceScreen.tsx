@@ -200,7 +200,8 @@ const NOUNS: Record<string, string> = { iphone: "iPhone", samsung: "Samsung", ma
 export function damageLine(e: PriceEstimate): string {
   const d = e.damage;
   if (!d) return "";
-  const where = !d.rough ? "" : d.from?.includes("the US") ? " (rough: from US sales)"
+  // a cut borrowed from US listings says only that it's rough (9 Nov, the owner: "do not mention us sales")
+  const where = !d.rough ? "" : d.from?.includes("the US") ? " (rough)"
     : d.from?.includes("the iPhone") ? " (rough: from iPhones)" : " (rough: few listings, pooled with a group next to it)";
   const judged = !d.by ? "" : d.by.startsWith("Claude Sonnet") ? ` · ${d.by} decided how bad`
     : ` · how bad: ${d.by}`;  // the hybrid (14 Oct): code and Claude Haiku 5.5, Claude Sonnet 5.5 when they disagree
@@ -249,12 +250,13 @@ export function cutWords(row: CutRow, e: PriceEstimate): string {
   const names = and(row.kinds.map(kindName));
   const d = e.damage;
   if (row.by === "damage" && d && row.cut != null) {
-    const rough = !d.rough ? "" : d.from?.includes("the US") ? ", rough: from US sales"
+    const rough = !d.rough ? "" : d.from?.includes("the US") ? ", rough"
       : d.from?.includes("the iPhone") ? ", rough: from iPhones" : ", rough: few listings, pooled with a group next to it";
     const judged = !d.by ? "" : d.by.startsWith("Claude Sonnet") ? ` · ${d.by} decided how bad` : ` · how bad: ${d.by}`;
     const what = TIERS[d.tier] ? `a ${TIERS[d.tier]} ${NOUNS[e.kind ?? ""] ?? "one"}` : `a ${NOUNS[e.kind ?? ""] ?? "one"}`;
-    // a cut borrowed from US listings (every Samsung's, most MacBooks') is what US sellers ask (14 Oct review)
-    const who = d.from?.includes("the US") ? "US sellers" : "UK sellers";
+    // a cut borrowed from US listings (every Samsung's, most MacBooks') is what sellers ask, never "UK sellers" (14 Oct
+    // review), and never "US" either (9 Nov, the owner: "do not mention us sales")
+    const who = d.from?.includes("the US") ? "Sellers" : "UK sellers";
     return `Damage, counted as ${d.level}: ${percent(row.cut)}. ${who} ask about ${Math.round(-row.cut * 100)}% less `
       + `for ${what} with ${d.level} damage (${d.n} listings${rough})${judged}`;
   }

@@ -57,7 +57,9 @@ export function MessageScreen({ onApproved, onCheckPrice, hasStyle = true, onSet
   // each card's own choice (14 Oct): at Offer lower you pick Yes or No yourself, and the counts come once you click
   // Yes; at Pay asking and Offer more saying you don't mind the flaw starts at Yes (4 Nov, the owner: "it become on
   // the yes always at the start unless they change it"), and how many flaws to say is still yours to pick
-  const [mentions, setMentions] = useState<Record<Kind, Mention | null>>({ lower: null, asking: "yes", more: "yes" });
+  // Yes to start with for every kind of offer (9 Nov, the owner: "make say flaws on like pay asking price and offer
+  // more"): an offer lower gives its flaws as the reason unless you pick No; how many is still yours to pick
+  const [mentions, setMentions] = useState<Record<Kind, Mention | null>>({ lower: "yes", asking: "yes", more: "yes" });
   const [counts, setCounts] = useState<Record<Kind, FlawsSaid | null>>({ lower: null, asking: null, more: null });
   const mention = mentions[kind];
   const flaws = counts[kind]; // how many: none picked until you pick (14 Oct)
