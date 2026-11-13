@@ -24,6 +24,9 @@ export type PriceEstimate = {
   ram_gb?: number | null;
   /** the size code found in the listing (null: it found none), against storage_gb/ram_gb, the size it priced */
   asked_storage_gb?: number | null; asked_ram_gb?: number | null;
+  /** the title the price was asked for when the listing's didn't say which model (9 Nov): with the description's
+   * year, chip or size ("MacBook Pro 15 inch 2018 Core i7"); null when the title was asked as it is */
+  asked_title?: string | null;
   /** "iphone", "samsung" or "macbook"; kinds: the kinds of flaw found in the flaws and the title ("damage",
    * "fault"...); cuts: the ones the price was cut for. A locked or for-parts one is priced as that alone: cuts is just
    * "lock" or "parts", or none with parts_price (what for-parts ones sell for) */

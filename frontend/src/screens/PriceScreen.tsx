@@ -386,6 +386,10 @@ function Estimated({ estimate, title }: { estimate: PriceEstimate; title: string
         <p className="hero-big">{pounds(estimate.price)}</p>
         {/* a for-parts price is from for-parts sales: the count is of the clean ones its "no flaws" price is from */}
         <p className="sub">{item} · {estimate.parts_price ? `for-parts price · clean price ${from}` : from}</p>
+        {/* 9 Nov: a title that didn't say which model was asked with the description's year, chip or size */}
+        {estimate.asked_title && (
+          <p className="sub">Priced as “{estimate.asked_title}”, with the model details from the description</p>
+        )}
         <div className="hero-rule" />
         <div className="hero-stats three">
           <div><strong>{pounds(estimate.middle)}</strong><span>with no flaws</span></div>

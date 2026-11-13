@@ -143,6 +143,260 @@ def supported(title):
     title = title or ""
     return kind_of(title) is not None or (bool(SLIPPED_NAME.search(title)) and not accessory(title))
 
+# 9 Nov (the owner: "if we do not find the model in the [title] we should basically take it from the description"):
+# a title that doesn't say which model ("MacBook Pro 15 inch") is asked with what the description's own model line adds
+# ("Apple MacBook Pro 15" (2018) – Core i7 – 16GB RAM"): a MacBook's year, chip and screen size, an iPhone's or a
+# Samsung's model. The prices API prices a MacBook by its year: with none it prices any year, and can't use its RAM and
+# SSD. Never a year said of something else ("Motherboard Replaced in 2021", "bought in 2019"), nor another machine's line.
+# The 9 Nov review of it (20 findings, each now a test): a storage size is no model ("iPhone 128GB" isn't an iPhone 12),
+# a model keeps its suffix ("S23+", "6s", "SE 2nd gen"), another device's model, chip or size is never read ("Upgraded to
+# the iPhone 15 Pro so selling my iPhone 12 mini", "Also have a MacBook Pro 2021 for sale", "a 15 inch sleeve"), nor a
+# year or chip that contradicts the title's, a model identifier's number ("MacBookPro15,2") or Intel's "Core m3" as M3
+MODEL_YEAR = re.compile(r"(?<![£$\d.])\b(20(?:0[6-9]|1\d|2[0-6]))\b(?!\s?(?:mah|gb|tb|w\b|mhz|ghz|p\b))", re.IGNORECASE)
+# the MacBook's own name and colours, which never make a year something else's: "Brand new MacBook Air 2020", "Apple
+# MacBook Air in Space Grey 2020"
+OWN_WORDS = r"(?!(?:space|grey|gray|silver|gold|rose|midnight|starlight|sky|black|apple|mac\s?book|air|pro)\b)"
+# a year said of something else, up to two words (and a date's day and month) before it: a repair, a warranty or
+# AppleCare+ ("valid to 2025", "until 06/2025", "bought 03/2021"), the battery's, Office's, the one it replaces; "from"
+# not straight after the MacBook's name or size ("MacBook Pro 13 inch from 2017" is its year, "parts from a 2019" isn't)
+NOT_ITS_YEAR = re.compile(
+    rf"(?:\b(?:since|until|till|on|by|bought|purchased|replaced|repaired|serviced|fitted|changed|new|warranty|"
+    rf"applecare|receipt|dated|expires?|ends?|updated|upgraded|valid|office|cycle\scount|replaces|my\sold|previous)\b"
+    rf"\+?[\s,:(]*(?:{OWN_WORDS}[\w'.]+[\s,(]+){{0,2}}"
+    rf"|\bin\b[\s,:(]*(?:{OWN_WORDS}[\w'.]+[\s,(]+){{0,2}}"
+    rf"|(?<!inch\s)(?<!\d\s)(?<!\"\s)(?<!pro\s)(?<!air\s)(?<!book\s)\bfrom\b[\s,:(]*(?:[\w'.]+[\s,(]+){{0,2}}"
+    rf"|\bbattery\s)(?:\d{{1,2}}[/.-]){{0,2}}$", re.IGNORECASE)
+UNSURE_YEARS = re.compile(r"\b20\d\d\s?(?:or|/|-|–|to)\s?20\d\d\b", re.IGNORECASE)  # "2017 or 2018": no year
+# Apple's M1 to M5 (with Pro, Max or Ultra), Intel's Core i3 to i9 and Core m3, m5 and m7 ("Core m3" is no Apple M3)
+CHIP = re.compile(r"\b(?:core\s)?i[3579]\b|\bcore\sm[357]\b|(?<!core\s)\bm[1-5](?!\d)(?:\s?(?:pro|max|ultra)\b)?",
+                  re.IGNORECASE)
+INCH_MARK = r"\s?(?:\"|”|″|''|-?\s?inch(?:es)?\b|in\b)"
+SIZED_THING = r"\s*(?:[a-z]+\s)?(?:sleeves?|bags?|backpacks?|monitors?)\b"  # "15 inch sleeve", "17 inch laptop bag"
+SCREEN_SIZE = re.compile(rf"\b(1[1-7])(?:[.,]\d)?{INCH_MARK}(?!{SIZED_THING})", re.IGNORECASE)  # never a sleeve's
+ACCESSORY_SIZE = re.compile(rf"\b1[1-7](?:[.,]\d)?{INCH_MARK}{SIZED_THING}", re.IGNORECASE)
+MACBOOK_LINE = re.compile(r"\bmac\s?book\s?(air|pro)\b|\bmb(a|p)\b", re.IGNORECASE)  # "MBP" is a Pro, "MBA" an Air
+# a size with no "inch" a space after the name ("MacBook Pro 13", "MacBook Air 13.3"), never its RAM ("16GB", the 16 of
+# "16/512") nor a model identifier's number ("MacBookPro15,2" is a 13-inch)
+BARE_SIZE = re.compile(r"\bmac\s?book\s?(?:air|pro)?\s(1[1-7])(?:\.\d)?\b(?!,\d|\s?(?:gb|tb|%|/))", re.IGNORECASE)
+# an iPhone's model: its number ends there, so a storage size isn't one ("iPhone 128GB" is no iPhone 12, "iPhone 5G" no
+# iPhone 5), with its suffix ("6s", "6s Plus", "8+", "14 Pro Max", "16e"), an SE's generation ("SE2", "SE 2nd gen", "SE
+# 3rd generation (2022)"), written as people write it ("I phone 13 pro")
+IPHONE_MODEL = re.compile(
+    r"\bi[\s-]?phone\s?(?:\d{1,2}(?:\s?(?:pro\s?max|pro|plus|mini|e|s(?:\s?plus)?)\b|\s?\+|\b)(?!\s?(?:gb|tb|gigs?|g)\b)"
+    r"|se(?:[23]\b|\b(?:\s?\(?(?:20(?:16|20|22)|[123](?:st|nd|rd)?(?:\s?gen(?:eration)?)?)\b\)?)?)"
+    r"|x[rs]?(?:\s?max)?\b|air\b)", re.IGNORECASE)
+# a Samsung's model with its suffix ("S23+", "S23 +", "Note 10+", "Note 10 Plus", "S10e", "S10 Lite", "Z Flip7 FE"), a
+# Fold or Flip with or without the Z ("Galaxy Fold 4"), never inside a model code ("SM-S911B" is no S91)
+SAMSUNG_MODEL_NAME = re.compile(
+    r"(?<![\w-])(?:galaxy\s)?(?:s\d{1,2}(?!\d)(?:\s?(?:ultra|plus|fe|edge|lite)\b|e\b|\s?\+)?|a\d{2}(?!\d)s?\b|"
+    r"(?:z\s?)?(?:fold|flip)\s?\d(?:\s?fe)?\b|z\s?(?:fold|flip)\b|note\s?\d{1,2}(?!\d)(?:\s?(?:ultra|plus|lite)\b|\s?\+)?)",
+    re.IGNORECASE)
+# where a description names each kind of device: a Samsung's model said without the brand ("S23 Ultra") counts
+MENTION = {"iphone": IPHONE, "samsung": re.compile(rf"{SAMSUNG.pattern}|{SAMSUNG_MODEL_NAME.pattern}", re.IGNORECASE),
+           "macbook": MACBOOK}
+# what says the device named next is another one: what it was upgraded, switched or moved to or from, got, would be
+# swapped, traded or part-exchanged for, also has or sells, replaces, is better than or bought instead of ("Upgraded to
+# the iPhone 15 Pro", "Got the S24 Ultra so selling my S21", "Also have a MacBook Pro 2021 for sale", "tougher than an
+# S22", "as I upgraded to an M2"), with up to three small words, a year or a chip between ("got the new", "upgraded
+# from my old", "upgraded to an M2 MacBook Air"); not "no swaps", nor "selling my old iPhone 13" (that's the one sold)
+ANOTHER = re.compile(
+    r"(?:\balso\s(?:have|got|selling|sell|for\ssale|available)|\bgot\s(?:the|a|an|myself|my\snew)|\bgetting\s(?:the|a|an)|"
+    r"\b(?:upgrad|switch)\w*\s(?:to|from)|\bmov(?:ed|ing)\s(?:on\s)?(?:to|from)|"
+    r"(?<!\bno\s)(?<!\bnot\s)\b(?:swaps?|swapping|swapped|trades?|trading|traded|px|part[\s-]?ex\w*)|"
+    r"\b(?:previous|instead\sof|than|replaces))\b[\s,:]*"
+    r"(?:(?:the|a|an|my|new|old|brand|latest|newer|for|with|me|myself|selling|apple|samsung|galaxy|20\d\d|"
+    r"m[1-5](?:\s?(?:pro|max))?|:)[\s,:]*){0,3}$", re.IGNORECASE)
+# ...and a list of them goes on being another's: "swap for an iPhone 15 or iPhone 14", "iPhone 15 Pro, iPhone 14"
+LIST_GOES_ON = re.compile(r"^[\w+ ]{0,24}?(?:\s*[,/&]\s*|\s+(?:or|and)\s+)(?:an?\s|the\s)?$", re.IGNORECASE)
+# a part of the description saying another one is for sale too ("MacBook Air 2020 also available")
+ALSO_FOR_SALE = re.compile(r"\b(?:also|too)\b[^.!?\n]{0,20}\b(?:for\ssale|selling|available(?!\s(?:for|to)\s(?:local\s)?"
+                           r"(?:collect|deliver|pick|post|ship|view)))\b|\bfor\ssale\stoo\b", re.IGNORECASE)
+# a sentence that may be about another one, whose size isn't this MacBook's ("Also selling my old MacBook Pro 15 inch")
+NOT_THIS_ONE = re.compile(r"\b(?:also|other|previous|(?<!years\s)(?<!year\s)(?<!months\s)old|upgrad\w*|instead\sof|"
+                          r"(?<!\bno\s)(?:swaps?|swapping|swapped|trades?|trading|traded|px|part[\s-]?ex\w*))\b",
+                          re.IGNORECASE)
+MAC_LINES = re.compile(r"(?<=[.!?])\s+|\n+")  # a MacBook's spec line stays whole: "|", "•" and ";" don't cut it
+
+
+def own_match(pattern, text):
+    """The first match of pattern in text that isn't said of another device (ANOTHER): "as I upgraded to an M2" is no
+    chip of this MacBook's, "Upgraded to the iPhone 15" no model of this iPhone's."""
+    return next((m for m in pattern.finditer(text or "") if not ANOTHER.search(text[:m.start()])), None)
+
+
+def screen_size(text):
+    """The screen size a text names ("15", from '15"', "15-inch" or "MacBook Pro 15"), or None: never a sleeve's, a
+    bag's or a monitor's, nor one said of another machine ("upgraded from a 13 inch")."""
+    found = own_match(SCREEN_SIZE, text) or own_match(BARE_SIZE, text)
+    return found.group(1) if found else None
+
+
+def family(text):
+    """"air" or "pro", as a text names the MacBook ("MacBook Pro", "MBA"), or None."""
+    named = MACBOOK_LINE.search(text or "")
+    if not named:
+        return None
+    return "air" if (named.group(1) or "").lower() == "air" or (named.group(2) or "").lower() == "a" else "pro"
+
+
+def own_spans(piece, kind):
+    """The parts of a piece of the description about this listing's device (9 Nov review): from its first mention
+    (with the words before it: '15" MacBook Pro 2018') to the end, cut where another device is named (ANOTHER: "...,
+    also selling a MacBook Pro 15 inch"), and taken up again at the next mention of its own. A list after another one
+    goes on being another's ("swap for an iPhone 15 or iPhone 14")."""
+    starts = sorted({m.start() for m in MENTION[kind].finditer(piece)}) or [0]
+    spans, begin, other = [], None, None  # begin: where its own part began; other: where another's mention began
+    for at, start in enumerate(starts):
+        lead = ANOTHER.search(piece[:start])
+        if lead or (other is not None and LIST_GOES_ON.search(piece[other:start])):
+            if begin is not None:
+                spans.append(piece[begin:lead.start() if lead else start])
+                begin = None
+            other = start
+        else:
+            other = None
+            if begin is None:
+                begin = 0 if at == 0 else start
+    if begin is not None:
+        spans.append(piece[begin:])
+    return [span.strip() for span in spans if span.strip()]
+
+
+def about(piece, kind):
+    """Whether a piece of the description is about this kind of device, as kind_of reads it; a MacBook's line that
+    names an iPhone too ("MacBook Pro 2019 | AirDrop to iPhone") is still the MacBook's."""
+    of = kind_of(piece)
+    return of == kind or (kind == "macbook" and of == "iphone" and kind_of(IPHONE.sub(" ", piece)) == "macbook")
+
+
+def also_for_sale(span, kind):
+    """Whether the item of a part naming this device says it's another one for sale too (ALSO_FOR_SALE: "MacBook Air
+    2020 also available"); a MacBook spec line's other items ("MacBook Pro 2019 • Also selling my iPad") don't count."""
+    named = MENTION[kind].search(span)
+    at = named.end() if named else 0
+    return bool(ALSO_FOR_SALE.search(span[:at] + re.split(r"[;|•]", span[at:], maxsplit=1)[0]))
+
+
+def gives(span, kind):
+    """Whether a part about this device gives its model: an iPhone's or a Samsung's, a MacBook's year, chip or size."""
+    if kind == "macbook":
+        return bool(year_in(span) or own_match(CHIP, span) or screen_size(span))
+    return bool(own_match(IPHONE_MODEL if kind == "iphone" else SAMSUNG_MODEL_NAME, span))
+
+
+def model_line(description, kind):
+    """The description's first part about this listing's own device (own_spans) that gives its model: a line or a
+    sentence, a MacBook's split only at line breaks and sentence ends, so a spec line stays whole ('Apple MacBook Pro 15"
+    | 2018 | Core i7'). Never one led into as another device's or one also for sale. With none giving one, a MacBook's
+    first part about it (its size may be in another sentence); "" when there's none."""
+    first = ""
+    for piece in (MAC_LINES if kind == "macbook" else DESCRIPTION_SENTENCES).split(description or ""):
+        if not piece.strip() or not about(piece, kind):
+            continue
+        for span in own_spans(piece, kind):
+            if also_for_sale(span, kind):
+                continue  # "MacBook Air 2020 also available"
+            if gives(span, kind):
+                return span
+            first = first or span
+    return first if kind == "macbook" else ""
+
+
+def year_in(text):
+    """The model year a text gives: the first year in it not said of something else (NOT_ITS_YEAR: "replaced in 2021",
+    "AppleCare+ valid to 2025") or of another machine (ANOTHER); None with none, or with two on offer ("2017 or 2018")."""
+    text = text or ""
+    if UNSURE_YEARS.search(text):
+        return None
+    for m in MODEL_YEAR.finditer(text):
+        if not NOT_ITS_YEAR.search(text[:m.start()]) and not ANOTHER.search(text[:m.start()]):
+            return m.group(1)
+    return None
+
+
+def size_said(description):
+    """The one screen size the description's other sentences give this MacBook ("MacBook Pro 2017. 15" has a damaged
+    screen"), or None: only from a sentence naming no device or this MacBook, never one about another (NOT_THIS_ONE,
+    ANOTHER, ALSO_FOR_SALE) or a sleeve's, a bag's or a monitor's size (ACCESSORY_SIZE: "Fits a 13 or a 15 inch sleeve")."""
+    said = set()
+    for piece in DESCRIPTION_SENTENCES.split(description or ""):
+        of = kind_of(piece)
+        if of not in (None, "macbook") or NOT_THIS_ONE.search(piece) or ALSO_FOR_SALE.search(piece) \
+                or ACCESSORY_SIZE.search(piece):
+            continue
+        for part in own_spans(piece, "macbook") if of else [piece]:
+            said |= {m.group(1) for named in (SCREEN_SIZE, BARE_SIZE) for m in named.finditer(part)
+                     if not ANOTHER.search(part[:m.start()])}
+    return said.pop() if len(said) == 1 else None
+
+
+def chip_key(chip):
+    """A chip as it compares: "Core i7" is "i7", "M1 Pro" is "m1"."""
+    return re.sub(r"^core\s", "", chip.group(0).lower())[:2]
+
+
+# 9 Nov (gap 1): a spec written as label lines ("Year: 2019", "Processor: i7", "Screen: 16 inch") gives the listing's
+# own MacBook's year, chip and size, though no label line names the MacBook
+LABEL = re.compile(r"^[ \t]*(?:[-•*·][ \t]*)?(model[ \t]+year|year[ \t]+of[ \t]+release|release[ \t]+year|released|year|"
+                   r"processor|cpu|chip(?:set)?|screen[ \t]+size|screen|display[ \t]+size|display|size)[ \t]*[:=–-][ \t]*(.+)$",
+                   re.IGNORECASE | re.MULTILINE)
+BARE_INCHES = re.compile(r"^\s*(1[1-7])(?:[.,]\d)?\b(?!\s?(?:gb|tb|%))", re.IGNORECASE)
+
+
+def labelled(description):
+    """A spec's label lines: {"year", "chip", "size"} they give, each None when none does or two disagree."""
+    said = {"year": set(), "chip": set(), "size": set()}
+    for m in LABEL.finditer(description or ""):
+        label, value = m.group(1).lower(), m.group(2)
+        if label.startswith(("model year", "year", "release", "released")):
+            said["year"].add(year_in(value))
+        elif label.startswith(("processor", "cpu", "chip")):
+            chip = own_match(CHIP, value)
+            said["chip"].add(chip.group(0) if chip else None)
+        else:
+            bare = BARE_INCHES.match(value)
+            said["size"].add(screen_size(value) or (bare.group(1) if bare else None))
+    return {key: next(iter(found - {None})) if len(found - {None}) == 1 else None for key, found in said.items()}
+
+
+def model_details(title, description, kind):
+    """What the description's model line adds to a title that doesn't say which model (9 Nov): "2018 Core i7" for
+    "MacBook Pro 15 inch" with "Apple MacBook Pro 15" (2018) – Core i7 – 16GB RAM"; "" when the title says it already,
+    the description has no such line, or its line is about another machine: an Air for a Pro (or an MBP), a 13" for a
+    15", another year ("2021" for a 2019) or another chip ("M1 Pro" for an i9). An M1 Pro on a 13-inch or an Air is the
+    M1 (no Pro or Max chip came in either)."""
+    line = model_line(description, kind)
+    spec = labelled(description) if kind == "macbook" else {}
+    if not line and not any(spec.values()):
+        return ""
+    if kind == "macbook":
+        families = [family(text) for text in (title, line)]
+        if all(families) and families[0] != families[1]:
+            return ""
+        sizes = [screen_size(text) for text in (title, line)]
+        if not sizes[1]:  # its size in another sentence ("MacBook Pro 2017. 15" has a damaged screen"), if just one
+            sizes[1] = size_said(description) or spec["size"]
+        if all(sizes) and sizes[0] != sizes[1]:
+            return ""
+        years = [year_in(title), year_in(line) or spec["year"]]  # a spec's "Year: 2019" when the line has none
+        if all(years) and years[0] != years[1]:
+            return ""  # another year's machine
+        chips = [own_match(CHIP, title), own_match(CHIP, line) or (own_match(CHIP, spec["chip"]) if spec["chip"] else None)]
+        if all(chips) and chip_key(chips[0]) != chip_key(chips[1]):
+            return ""  # another chip's: an i9 title, an M1 Pro line
+        line_name = families[1].title() if families[1] and not families[0] else None  # "Macbook" + its line: Pro
+        year = None if years[0] else years[1]
+        chip = None if chips[0] else chips[1] and chips[1].group(0)
+        if chip and ("13" in sizes or "air" in families):
+            chip = re.sub(r"\s?(?:pro|max)$", "", chip, flags=re.IGNORECASE)  # "Macbook M1 Pro 13 inch": the M1
+        size = f"{sizes[1]} inch" if sizes[1] and not sizes[0] else None
+        return " ".join(part for part in (line_name, year, chip, size) if part)
+    model = IPHONE_MODEL if kind == "iphone" else SAMSUNG_MODEL_NAME
+    if model.search(title):
+        return ""
+    found = own_match(model, line)
+    return found.group(0).strip() if found else ""
+
 
 def kind_of(title):
     """"iphone", "samsung", "macbook" or None: what the prices API prices from its saved sales (and nothing that
@@ -1261,7 +1515,10 @@ def estimate(title, flaws=(), country="uk", opener=None, description=None, sorte
     # a Samsung's or a MacBook's own cuts (4 Nov): the API is asked for the clean price, and they come off it
     table = kind_table(kind, country)
     own_kinds = [k for k in kinds if k in OWN_KINDS] if table and not whole else []
-    body = {"action": "price", "country": country, "title": title, "strict": True,
+    # 9 Nov: a title that doesn't say which model is asked with the description's model details (model_details)
+    details = model_details(title, description, kind)
+    asked_title = f"{title} {details}" if details else title
+    body = {"action": "price", "country": country, "title": asked_title, "strict": True,
             "kinds": [k for k in kinds if not (own_damage and k == "damage") and not (own_battery and k == "battery")
                       and k not in own_kinds]}
     if whole:
@@ -1287,8 +1544,11 @@ def estimate(title, flaws=(), country="uk", opener=None, description=None, sorte
                         found.get("api_factor"))
         return {**{k: v for k, v in done.items() if k not in ("api_factor", "own_parts")}, **rows}
 
+    # what this call added to its title, said on the card: its own, never kept with the answer, which another title
+    # asked the same way shares ("MacBook Pro 15 inch" with the description's "2018 Core i7", then that title typed in)
+    shown = {"asked_title": asked_title} if details else {}
     if remembered in _seen:
-        return priced(_seen[remembered])
+        return {**priced(_seen[remembered]), **shown}
     request = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
                                      headers={"Content-Type": "application/json", "x-prices-key": key})
     try:
@@ -1321,7 +1581,7 @@ def estimate(title, flaws=(), country="uk", opener=None, description=None, sorte
              "exact": bool(answer.get("exact_match")), "mode": answer.get("mode"),
              "api_factor": answer.get("factor") if isinstance(answer.get("factor"), (int, float)) else None}
     _seen[remembered] = found
-    return priced(found)
+    return {**priced(found), **shown}  # asked_title only when the description's model was added
 
 
 def with_damage(found, own, kinds, flaws, title, judge=None, description=None):

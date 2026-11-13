@@ -581,6 +581,17 @@ describe("AI UK price estimate", () => {
       { title: "iPhone 13 128GB Blue", description: "Cracked back, battery 81%" });
   });
 
+  it("says when the price was asked for the model the description names (9 Nov)", async () => {
+    serve({ "POST /api/prices/estimate": [200, { ...PRICED, asked_title: "MacBook Pro 15 inch 2018 Core i7" }] });
+    const user = userEvent.setup();
+    render(<PriceScreen />);
+    await user.type(screen.getByLabelText("Listing title"), "MacBook Pro 15 inch");
+    await user.type(screen.getByLabelText("The seller's description"), "Apple MacBook Pro 15 (2018) Core i7");
+    await user.click(screen.getByRole("button", { name: "Check the UK price" }));
+    expect((await screen.findByLabelText("UK price")).textContent)
+      .toContain("Priced as “MacBook Pro 15 inch 2018 Core i7”, with the model details from the description");
+  });
+
   it("says when it's not a phone it prices, and drops a price once the listing changes", async () => {
     serve({ "POST /api/prices/estimate": [[200, { currency: "GBP", cuts: [], rough: false, exact: false,
       skipped: "Estimates are for iPhones, Samsung phones and MacBooks only" }], [200, PRICED]] });

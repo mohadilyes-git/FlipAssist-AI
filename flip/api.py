@@ -747,6 +747,9 @@ class PriceEstimate(BaseModel):
     # with too few for-parts sales ({"kind", ...the same})
     own_cuts: dict | None = None
     own_whole: dict | None = None
+    # the title the price was asked for when the listing's didn't say which model (9 Nov): with the description's year,
+    # chip or size (flip.prices.model_details); None when the listing's title was asked as it is
+    asked_title: str | None = None
     # each kind of flaw with its own cut, in the listing's order, with the flaws' own words (flip.prices.cut_rows, 13
     # Nov: "Cracked back" damage -30%, "The balck dot in the front screen" a fault -17%); the flaws cut for nothing
     breakdown: list[CutRow] = []

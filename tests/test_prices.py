@@ -1877,3 +1877,297 @@ def test_the_biggest_cut_comes_first_so_the_main_flaw_keeps_its_whole_amount():
 ])
 def test_only_iphone_samsung_phone_and_macbook_listings_are_supported(title, yes):  # 9 Nov
     assert prices.supported(title) is yes
+
+
+# 9 Nov (the owner: "if we do not find the model in the [title] we should basically take it from the description")
+MAC_DESCRIPTION = ('Apple MacBook Pro 15" (2018) – Core i7 – 16GB RAM – 256GB SSD – Radeon Pro 4GB\nPrice: £295 ONO\n'
+                   "Excellent Condition | Fully Working | Apple Motherboard Replaced in 2021 | Charger Included\n"
+                   "Selling my Apple MacBook Pro 15-inch (2018), a great machine.")
+
+
+@pytest.mark.parametrize("title, description, kind, details", [
+    ("MacBook Pro 15 inch", MAC_DESCRIPTION, "macbook", "2018 Core i7"),
+    ("MacBook Pro 15 inch", "Excellent condition. Apple Motherboard Replaced in 2021.", "macbook", ""),
+    ("MacBook Pro 2019 16 inch", 'MacBook Pro 16" 2019 i9 32GB', "macbook", "i9"),
+    ("MacBook Pro 13", "Bought in 2019. MacBook Pro 13 inch, battery replaced in 2022", "macbook", ""),
+    ("MacBook Pro 15", "Also have a MacBook Air 2020 for sale", "macbook", ""),
+    ("MacBook Air", "MacBook Air (M1, 2020) 8GB 256GB", "macbook", "2020 M1"),
+    ("MacBook Pro 13", "MacBook Pro 15-inch 2017", "macbook", ""),
+    ("Macbook", "Selling my MacBook Pro 14 M3 Pro 2023, mint", "macbook", "Pro 2023 M3 Pro 14 inch"),
+    ("MacBook Pro 16GB", "MacBook Pro 13 2020 M1", "macbook", "2020 M1 13 inch"),
+    ("Apple iPhone unlocked", "iPhone 13 Pro 256GB in Sierra Blue", "iphone", "iPhone 13 Pro"),
+    ("iPhone 13 128GB", "iPhone 14 is better", "iphone", ""),
+    ("Samsung phone 128GB", "Samsung Galaxy S23 Ultra, unlocked", "samsung", "Galaxy S23 Ultra"),
+    ("Samsung Galaxy S21", "Galaxy S22 case included", "samsung", ""),
+    ("MacBook Pro 15 inch", None, "macbook", ""),
+])
+def test_a_title_that_doesnt_say_which_model_takes_it_from_the_descriptions_model_line(title, description, kind, details):
+    assert prices.model_details(title, description, kind) == details
+
+
+def test_the_prices_api_is_asked_for_the_model_the_description_names():
+    opener, sent = asking()
+    found = prices.estimate("MacBook Pro 15 inch", [], opener=opener, description=MAC_DESCRIPTION)
+    body = sent[0][2]
+    assert body["title"] == "MacBook Pro 15 inch 2018 Core i7"  # the 2018 one, not any year's
+    assert (body.get("storage_gb"), body.get("ram_gb")) == (256, 16)  # the description's, not the graphics' 4GB
+    assert found["asked_title"] == "MacBook Pro 15 inch 2018 Core i7"
+    prices._seen.clear()
+    opener, sent = asking()
+    found = prices.estimate("MacBook Pro 15 inch 2018 i7", [], opener=opener, description=MAC_DESCRIPTION)
+    assert (sent[0][2]["title"], found.get("asked_title")) == ("MacBook Pro 15 inch 2018 i7", None)  # the title said it
+
+
+def test_a_size_in_another_sentence_of_the_description_is_its_size_when_it_gives_only_one():  # 9 Nov
+    two = 'MacBook Pro 2017. 15" has a damaged screen and is in need of a replacement or you can use with another monitor'
+    assert prices.model_details("MacBook Pro", two, "macbook") == "2017 15 inch"
+    assert prices.model_details("MacBook Pro", "MacBook Pro 2017. Fits a 13 inch or a 15 inch sleeve", "macbook") == "2017"
+
+
+# ── the 9 Nov review of the model the description adds (two reviewers, 20 findings): each finding's inputs ──────────
+
+@pytest.mark.parametrize("title, description, kind, details", [
+    # a storage size straight after "iPhone" is no model ("iPhone 128GB" was an iPhone 12, "256GB" an iPhone 25), so a
+    # title with only its size names none and the description's model is added
+    ("iPhone 128GB", "iPhone 11 Pro Max in gold, battery 88%.", "iphone", "iPhone 11 Pro Max"),
+    ("Apple iPhone 256GB unlocked", "Apple iPhone 14 Pro, deep purple.", "iphone", "iPhone 14 Pro"),
+    ("Apple iPhone", "iPhone 128GB, model 13 mini", "iphone", ""),  # no model after "iPhone": nothing
+    ("Apple iPhone 128GB unlocked", "iPhone 13 Pro 128GB in Sierra Blue, battery 88%", "iphone", "iPhone 13 Pro"),
+    ("Apple iPhone unlocked", "iPhone 128gb, unlocked, battery 85%. Model: iPhone 13", "iphone", "iPhone 13"),
+    ("Apple iPhone unlocked", "iPhone 256GB Midnight, model iPhone 13", "iphone", "iPhone 13"),
+    ("iPhone 64GB", "iPhone 11 64GB black, unlocked", "iphone", "iPhone 11"),
+    ("iPhone 2nd hand 128GB", "iPhone XR 128GB", "iphone", "iPhone XR"),
+    # an iPhone's suffix is kept
+    ("Apple iPhone unlocked", "iPhone 8+ 64GB gold, works perfectly", "iphone", "iPhone 8+"),
+    ("Apple iPhone unlocked", "iPhone 7+ 128GB jet black", "iphone", "iPhone 7+"),
+    ("Apple iPhone unlocked", "iPhone 6s 32GB space grey", "iphone", "iPhone 6s"),
+    ("Apple iPhone unlocked", "iPhone 6s Plus 64GB rose gold", "iphone", "iPhone 6s Plus"),
+    ("Apple iPhone unlocked", "iPhone 14 + 128GB", "iphone", "iPhone 14 +"),
+    # an SE's generation, and "I phone"
+    ("Apple iPhone unlocked", "iPhone SE2 64GB red", "iphone", "iPhone SE2"),
+    ("Apple iPhone 64GB", "iPhone SE 2nd gen 64GB white", "iphone", "iPhone SE 2nd gen"),
+    ("Apple iPhone unlocked", "iPhone SE 3rd generation (2022) 64GB", "iphone", "iPhone SE 3rd generation"),
+    ("Apple iPhone unlocked", "I phone 13 pro 128gb graphite", "iphone", "I phone 13 pro"),
+    # a Samsung's suffix is kept
+    ("Samsung phone 256GB", "Samsung Galaxy S23+ 256GB Phantom Black", "samsung", "Galaxy S23+"),
+    ("Samsung phone", "Samsung Galaxy Note 10+ 256GB aura glow", "samsung", "Galaxy Note 10+"),
+    ("Samsung phone", "Samsung Galaxy Note 10 Plus 256GB", "samsung", "Galaxy Note 10 Plus"),
+    ("Samsung phone", "Samsung Galaxy S10e 128GB", "samsung", "Galaxy S10e"),
+    ("Samsung phone", "Samsung Galaxy S10 Lite 128GB", "samsung", "Galaxy S10 Lite"),
+    ("Samsung phone", "Samsung Galaxy Z Flip7 FE 256GB", "samsung", "Galaxy Z Flip7 FE"),
+    ("Samsung phone", "Samsung S9+ 64GB", "samsung", "S9+"),
+    ("Samsung phone", "Samsung S23 + 256gb lavender", "samsung", "S23 +"),
+    # never a model inside a model code ("SM-S911B" was an S91), in the description or the title
+    ("Samsung phone", "Samsung SM-S911B Galaxy S23 128GB black", "samsung", "Galaxy S23"),
+    ("Samsung Galaxy SM-S918B 256GB", "Samsung Galaxy S23 Ultra 256GB", "samsung", "Galaxy S23 Ultra"),
+    # a Fold or Flip without the Z
+    ("Samsung phone", "Samsung Galaxy Fold 4 256GB, crease as normal", "samsung", "Galaxy Fold 4"),
+    ("Samsung phone", "Samsung Flip 5 512GB mint", "samsung", "Flip 5"),
+])
+def test_a_storage_size_is_no_model_and_a_model_keeps_its_suffix(title, description, kind, details):  # 9 Nov review
+    assert prices.model_details(title, description, kind) == details
+
+
+@pytest.mark.parametrize("title", ["iPhone 64GB", "iPhone 1TB", "iPhone 5G", "iPhone 2nd hand 128GB", "iPhone 512GB",
+                                   "Apple iPhone 128 GB"])
+def test_a_title_with_only_a_size_after_iphone_names_no_model(title):  # 9 Nov review
+    assert prices.IPHONE_MODEL.search(title) is None
+
+
+@pytest.mark.parametrize("title, model", [("iPhone 13.", "iPhone 13"), ("iphone13 pro", "iphone13 pro"),
+                                          ("iPhone 16e 128GB", "iPhone 16e"), ("iPhone 12 128GB", "iPhone 12"),
+                                          ("iPhone 13 Pro Max 256GB", "iPhone 13 Pro Max"), ("iPhone XS Max", "iPhone XS Max")])
+def test_an_iphones_own_number_is_still_its_model(title, model):  # 9 Nov review: what the end of the number kept
+    assert prices.IPHONE_MODEL.search(title).group(0) == model
+
+
+@pytest.mark.parametrize("text", ["Samsung SM-S911B", "SM-A546B", "Galaxy flip case", "Samsung Galaxy Ultra 512GB"])
+def test_a_samsung_model_code_or_a_flip_case_is_no_model(text):  # 9 Nov review
+    assert prices.SAMSUNG_MODEL_NAME.search(text) is None
+
+
+@pytest.mark.parametrize("title, description, kind, details", [
+    # another device's model or chip, said of what it was upgraded to, got, swapped for or is tougher than, is never
+    # this listing's: the listing's own is read from its own mention
+    ("MacBook Pro 13", "Selling my MacBook Pro as I upgraded to an M2. It's a 2017 i5 model.", "macbook", ""),
+    ("Apple iPhone", "Upgraded to the iPhone 15 so selling my old iPhone 13.", "iphone", "iPhone 13"),
+    ("MacBook Air", "Selling my MacBook Air because I got the new M3 one. 2017, i5, 8GB.", "macbook", ""),
+    ("Samsung Galaxy Xcover 6 Pro", "Samsung Galaxy XCover 6 Pro, rugged, tougher than an S22", "samsung", ""),
+    ("Apple iPhone unlocked", "Selling as I got the iPhone 16 Pro for Christmas. iPhone 14 128GB, unlocked.", "iphone",
+     "iPhone 14"),
+    ("Apple iPhone unlocked", "Upgraded to the iPhone 15 Pro so selling my iPhone 12 mini 64GB", "iphone",
+     "iPhone 12 mini"),
+    ("Apple iPhone unlocked", "Open to swaps, iPhone 15 Pro or S23 Ultra. iPhone 12 128GB blue", "iphone", "iPhone 12"),
+    ("Samsung phone", "Got the S24 Ultra so selling my Samsung Galaxy S21 Ultra 128GB", "samsung", "Galaxy S21 Ultra"),
+    ("Samsung phone", "Samsung Galaxy S22 for sale, upgraded from my old S10", "samsung", "Galaxy S22"),
+    # ...while the listing's own chip stays, after the other one or before it
+    ("MacBook Air", "MacBook Air M2 16GB 512GB, 2022 model, upgraded to M3 so selling", "macbook", "2022 M2"),
+    ("MacBook Air", "Brand new MacBook Air M2 sealed, 2022", "macbook", "2022 M2"),
+    ("MacBook Air", "MacBook Air in space grey, M1", "macbook", "M1"),
+    # another MacBook also for sale, or the one it was upgraded from, is never the line
+    ("MacBook Pro", "Excellent condition, 8GB 256GB. Also have a MacBook Pro 2021 M1 Pro for sale, message me.",
+     "macbook", ""),
+    ("MacBook Pro 2019 i9", "16GB 1TB, mint. Also selling a MacBook Pro 14 inch 2021, message me.", "macbook", ""),
+    ("MacBook Pro 2019", "Also selling: MacBook Pro 16 inch 2021 M1 Pro 32GB 1TB", "macbook", ""),
+    ("MBA M1 8GB 256GB", "Great condition. Also selling my MacBook Pro 16 inch 2019, ask.", "macbook", ""),
+    ("Macbook", "Upgraded from a MacBook Air, selling this MacBook Pro 2019", "macbook", "Pro 2019"),
+    ("MacBook Pro", "MacBook Air 2020 also available. MacBook Pro 2019 i5", "macbook", "2019 i5"),
+    ("MacBook Air", "MacBook Air M1 2020, also selling a MacBook Pro 15 inch", "macbook", "2020 M1"),
+])
+def test_another_devices_model_chip_or_line_is_never_added(title, description, kind, details):  # 9 Nov review
+    assert prices.model_details(title, description, kind) == details
+
+
+@pytest.mark.parametrize("title, description, details", [
+    # a year or a chip in the line that contradicts the title's: another machine, so nothing is added
+    ("MacBook Pro 2019", "MacBook Pro 2021 M1 Pro 16 inch", ""),
+    ("MacBook Pro i9", "MacBook Pro 16 inch M1 Pro 2021", ""),
+    ("MacBook Pro 2019 i7", "MacBook Pro 2019 Core i7 16 inch", "16 inch"),  # "Core i7" is the title's "i7"
+    # MBP is a Pro and MBA an Air, in the title and in the line
+    ("MBP 2019", "MacBook Air 13 2020 i5", ""),
+    ("MBP", "MacBook Air M1 2020", ""),
+    ("MBA", "MacBook Air M1 2020", "2020 M1"),
+    ("Macbook", "MBP 2019 i7 16 inch", "Pro 2019 i7 16 inch"),
+])
+def test_a_macbook_line_that_contradicts_the_title_adds_nothing(title, description, details):  # 9 Nov review
+    assert prices.model_details(title, description, "macbook") == details
+
+
+@pytest.mark.parametrize("title, description, details", [
+    # a model identifier's number or the RAM of "16/512" is no screen size
+    ("MacBook Pro", "MacBookPro15,2 i5 2.3GHz 8GB 256GB", "i5"),
+    ("MacBook Pro", "MacBookPro17,1 M1 8GB 256GB", "M1"),
+    ("MacBook Pro", "MacBookPro14,1 i5 8GB 128GB", "i5"),
+    ("MacBook Pro", "MacBook Pro 16/512 M1 2020", "2020 M1"),
+    # nor a sleeve's, a bag's, a monitor's, or another machine's in another sentence, or in the line itself
+    ("MacBook Pro", "MacBook Pro 2019 i5 8GB 256GB. Comes with a 15 inch sleeve.", "2019 i5"),
+    ("MacBook Pro", "MacBook Pro 2018 i5 8GB 256GB\nModel Identifier: MacBookPro15,2", "2018 i5"),
+    ("MacBook Air", "MacBook Air M1 2020 8GB 256GB. Also selling my old MacBook Pro 15 inch, ask.", "2020 M1"),
+    ("MacBook Pro", "MacBook Pro 2019 i9 32GB 1TB. Fits in a 17 inch laptop bag.", "2019 i9"),
+    ("MacBook Pro", 'MacBook Pro M1 2020. Comes with a 15.6" portable monitor', "2020 M1"),
+    ("MacBook Air", "MacBook Air M1 2020, comes with a 15 inch sleeve. 8GB 256GB", "2020 M1"),
+    ("MacBook Pro", "MacBook Pro 2019 i7. Upgraded from a 13 inch.", "2019 i7"),
+    # ...while its own size in another sentence still is ("2 years old" is no other one)
+    ("MacBook Pro", "MacBook Pro 2019 i7. It's 2 years old and 15 inch.", "2019 i7 15 inch"),
+])
+def test_a_model_identifier_a_ram_pair_or_a_sleeve_gives_no_screen_size(title, description, details):  # 9 Nov review
+    assert prices.model_details(title, description, "macbook") == details
+
+
+@pytest.mark.parametrize("text, size", [("MacBook Pro 13 2020 M1", "13"), ("MacBook Pro 14 M3 Pro", "14"),
+                                        ("MacBook Air 13.3", "13"), ("MacBookPro15,2", None), ("MacBook Pro 16/512", None),
+                                        ("MacBook Pro 16GB", None), ("a 15 inch sleeve", None), ('15.6" portable monitor', None)])
+def test_a_screen_size_is_read_only_where_it_is_the_macbooks(text, size):  # 9 Nov review
+    assert prices.screen_size(text) == size
+
+
+@pytest.mark.parametrize("title, description, details", [
+    # a year said of a warranty, AppleCare+, a purchase date, the battery, Office or the one it replaces isn't its year
+    ("MacBook Pro 13", "MacBook Pro 13 i5 8GB 256GB, AppleCare+ valid to 2025", "i5"),
+    ("MacBook Pro 13", "MacBook Pro 13 i5 8GB 256GB, warranty until 06/2025", "i5"),
+    ("MacBook Air", "MacBook Air 13 inch i5, bought 03/2021 from Currys, 8GB 128GB", "i5 13 inch"),
+    ("MacBook Pro 13", "MacBook Pro 13 i5 8GB 256GB, Battery 2023", "i5"),
+    ("MacBook Pro 13", "MacBook Pro 13 inch with Microsoft Office 2019 installed, M1 2020", "2020 M1"),
+    ("MacBook Pro 13", "MacBook Pro 13 i5, battery cycle count 2020", "i5"),
+    ("MacBook Pro", "MacBook Pro 13 inch Touch Bar, replaces my old 2015 one, it's the 2019", "2019 13 inch"),
+    ("MacBook Pro 13", "MacBook Pro 13 2017 or 2018, i5 8GB", "i5"),  # two on offer: no year
+    # "new", "in <colour>" and "from" just after its own name don't hide its year
+    ("MacBook Air", "Brand new MacBook Air 2020 M1 sealed", "2020 M1"),
+    ("MacBook Pro", "Like new MacBook Pro 2023 M3 14 inch", "2023 M3 14 inch"),
+    ("MacBook Air", "Apple MacBook Air in Space Grey 2020, i3, 8GB", "2020 i3"),
+    ("MacBook Pro 13", "MacBook Pro 13 inch from 2017, i5, 8GB, 128GB", "2017 i5"),
+])
+def test_a_year_said_of_something_else_or_two_on_offer_isnt_its_year(title, description, details):  # 9 Nov review
+    assert prices.model_details(title, description, "macbook") == details
+
+
+@pytest.mark.parametrize("text, year", [("had it from 2018", None), ("MacBook Pro 13 i5 - spare parts from a 2019", None),
+                                        ("purchased in 2021", None), ("MacBook Pro 2019", "2019"),
+                                        ("MacBook Pro 2017/2018", None), ("MacBook Pro (13-inch, 2019)", "2019")])
+def test_a_year_is_its_year_only_when_nothing_else_has_it(text, year):  # 9 Nov review
+    assert prices.year_in(text) == year
+
+
+@pytest.mark.parametrize("title, description, details", [
+    # Intel's Core m3/m5 is no Apple M3/M5, and Apple's M5 is read
+    ("MacBook 12 inch", 'Apple MacBook 12" Retina (2017) Core m3 1.2GHz 8GB 256GB', "2017 Core m3"),
+    ("MacBook Pro 14", "MacBook Pro 14 M5 2025 16GB 512GB", "2025 M5"),
+    ("MacBook 12 inch", "MacBook 12 2016 Core m5 8GB 512GB", "2016 Core m5"),
+    # no Pro or Max chip came in a 13-inch MacBook or an Air: "M1 Pro" there is the M1 MacBook Pro
+    ("MacBook Pro 13 inch", "Apple Macbook M1 Pro 13 inch 2020 8GB 256GB", "2020 M1"),
+    ("MacBook Pro", 'Selling my MacBook Pro 13" M1 Pro 2020', "2020 M1 13 inch"),
+    ("MacBook Pro", "MacBook Pro 16 inch 2021 M1 Pro 16GB 512GB", "2021 M1 Pro 16 inch"),  # a 16-inch's stays
+])
+def test_intels_core_m3_is_no_apple_m3_and_no_pro_chip_is_on_a_13_inch(title, description, details):  # 9 Nov review
+    assert prices.model_details(title, description, "macbook") == details
+
+
+@pytest.mark.parametrize("title, description, kind, details", [
+    # the first part that gives a model is read, not the first that names the kind; a MacBook's spec line stays whole
+    ("MacBook Pro 15 inch", 'Apple MacBook Pro 15" | 2018 | Core i7 | 16GB RAM | 256GB SSD', "macbook", "2018 Core i7"),
+    ("MacBook Pro", "• MacBook Pro 2019 • 16 inch • i9 • 16GB RAM • 1TB", "macbook", "2019 i9 16 inch"),
+    ("MacBook Pro 13", "Selling my MacBook Pro as I've upgraded. Model: MacBook Pro (13-inch, 2019, Two Thunderbolt 3 "
+     "ports)", "macbook", "2019"),
+    ("MacBook Pro", "Original MacBook charger included\nMacBook Pro 13 2019 i5 8GB", "macbook", "2019 i5 13 inch"),
+    ("Samsung phone", "Samsung\nGalaxy S22 Ultra\n256GB", "samsung", "Galaxy S22 Ultra"),
+    ("Samsung phone 128GB", "Brand: Samsung\nModel: Samsung Galaxy S21+ 5G", "samsung", "Galaxy S21+"),
+    ("Apple iPhone", "iPhone for sale\niPhone 13 128GB blue", "iphone", "iPhone 13"),
+    # the words before its name are its own ('15" MacBook Pro'); a spec line's other item isn't ("Also selling my iPad")
+    ("MacBook Pro", '15" MacBook Pro 2018 i7 16GB', "macbook", "2018 i7 15 inch"),
+    ("MacBook Pro", "MacBook Pro 2019 • i7 • 16GB • Also selling my iPad", "macbook", "2019 i7"),
+    ("MacBook Pro", "MacBook Pro 2019 | AirDrop to iPhone works | i7", "macbook", "2019 i7"),
+])
+def test_the_first_part_that_gives_the_model_is_read(title, description, kind, details):  # 9 Nov review
+    assert prices.model_details(title, description, kind) == details
+
+
+@pytest.mark.parametrize("title, description, asked, storage", [
+    ("Apple iPhone 128GB unlocked", "iPhone 13 Pro 128GB in Sierra Blue, battery 88%",
+     "Apple iPhone 128GB unlocked iPhone 13 Pro", None),  # the title's own 128GB: no storage_gb sent
+    ("Apple iPhone unlocked", "iPhone 128gb, unlocked, battery 85%. Model: iPhone 13", "Apple iPhone unlocked iPhone 13",
+     128),
+    ("Apple iPhone unlocked", "iPhone 256GB Midnight, model iPhone 13", "Apple iPhone unlocked iPhone 13", 256),
+    ("Apple iPhone unlocked", "Upgraded to the iPhone 15 Pro so selling my iPhone 12 mini 64GB",
+     "Apple iPhone unlocked iPhone 12 mini", 64),
+    ("Samsung phone", "Samsung SM-S911B Galaxy S23 128GB black", "Samsung phone Galaxy S23", 128),
+    ("Samsung phone", "Got the S24 Ultra so selling my Samsung Galaxy S21 Ultra 128GB", "Samsung phone Galaxy S21 Ultra",
+     128),
+    # nothing to add: the title as it is, and no "Priced as" on the card
+    ("Apple iPhone", "iPhone 128GB, model 13 mini", "Apple iPhone", 128),
+    ("MacBook Pro 13", "Selling my MacBook Pro as I upgraded to an M2. It's a 2017 i5 model.", "MacBook Pro 13", None),
+])
+def test_the_prices_api_is_asked_for_the_listings_own_model(title, description, asked, storage):  # 9 Nov review
+    opener, sent = asking()
+    found = prices.estimate(title, [], opener=opener, description=description)
+    body = sent[0][2]
+    assert (body["title"], body.get("storage_gb")) == (asked, storage)
+    assert found.get("asked_title") == (asked if asked != title else None)
+
+
+def test_the_card_says_what_its_own_check_added_never_a_remembered_answers():  # 9 Nov review
+    # the short title is asked with the description's "2018 Core i7": the same body as that title typed in, so the
+    # second check is answered from what was remembered, and each says only what it added itself
+    opener, sent = asking()
+    short = prices.estimate("MacBook Pro 15 inch", [], opener=opener, description=MAC_DESCRIPTION)
+    full = prices.estimate("MacBook Pro 15 inch 2018 Core i7", [], opener=opener, description=MAC_DESCRIPTION)
+    assert len(sent) == 1
+    assert (short.get("asked_title"), full.get("asked_title")) == ("MacBook Pro 15 inch 2018 Core i7", None)
+    prices._seen.clear()
+    opener, sent = asking()
+    full = prices.estimate("MacBook Pro 15 inch 2018 Core i7", [], opener=opener, description=MAC_DESCRIPTION)
+    short = prices.estimate("MacBook Pro 15 inch", [], opener=opener, description=MAC_DESCRIPTION)
+    assert len(sent) == 1
+    assert (full.get("asked_title"), short.get("asked_title")) == (None, "MacBook Pro 15 inch 2018 Core i7")
+    assert all("asked_title" not in remembered for remembered in prices._seen.values())
+
+
+@pytest.mark.parametrize("title, description, details", [  # 9 Nov, gap 1: a spec written as label lines
+    ("MacBook Pro", "Apple MacBook Pro\nYear: 2019\nProcessor: i7\nScreen: 16 inch", "2019 i7 16 inch"),
+    ("MacBook", "• Model year: 2017\n• CPU: Intel Core i5 2.3GHz\n• Display: 13.3\"\n• RAM: 8GB\n• Storage: 256GB",
+     "2017 Core i5 13 inch"),
+    ("MacBook Pro 2019", "Year: 2021\nChip: M1 Pro\nScreen: 14 inch", ""),  # another machine's year: nothing added
+    ("MacBook Air", "Chip: Apple M2\nScreen size: 13.6\nStorage: 512GB", "M2 13 inch"),
+    ("MacBook Pro", "Year: 2018\nYear: 2019\nProcessor: i7", "i7"),  # two years disagree: no year guessed
+])
+def test_a_spec_written_as_label_lines_gives_the_macbooks_year_chip_and_size(title, description, details):
+    assert prices.model_details(title, description, "macbook") == details
