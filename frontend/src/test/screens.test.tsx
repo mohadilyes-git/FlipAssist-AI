@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App, markShell, SETUP_DONE, THEME } from "../App";
@@ -198,6 +198,36 @@ describe("AI message", () => {
     // each card its own: No was picked for Pay asking, and an offer lower is still at Yes (9 Nov: Yes to start with)
     expect(screen.getByRole("button", { name: "Yes" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "No" }).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("sends the same listing's reading and checked reason back on another offer, and reads a changed one afresh (9 Nov)", async () => {
+    // the owner: "when we do one and we not change the listing ... get the flaws that the reader found straight from
+    // the previous request do not read it again"
+    const first = { ...DRAFT, reason: { clause: "there's a black dot on the screen", by: "flip-wording-4b", checked: "ok" } };
+    const fetch = serve({ "POST /api/messages/draft": [[200, first], [200, { ...first, kind: "asking" }],
+      [200, { ...first, kind: "asking", draft_id: 9 }]] });
+    const user = userEvent.setup();
+    render(<MessageScreen />);
+    await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
+    await user.type(screen.getByLabelText("Asking price"), "£220");
+    await user.click(screen.getByRole("button", { name: "1 flaw only" }));
+    await user.click(screen.getByRole("button", { name: "Write my message" }));
+    await screen.findByDisplayValue(DRAFT.message!);
+    expect(sent(fetch, "POST /api/messages/draft", 0).reading).toBeNull(); // the first draft reads it
+    await user.click(screen.getByRole("radio", { name: /Pay asking/ }));
+    await user.click(screen.getByRole("button", { name: "1 flaw only" }));
+    await user.click(screen.getByRole("button", { name: "Write my message" }));
+    await vi.waitFor(() => expect(fetch.mock.calls.filter(([url]) => url === "/api/messages/draft").length).toBe(2));
+    const again = sent(fetch, "POST /api/messages/draft", 1);
+    expect(again.reading).toEqual({ flaws: DRAFT.reading.flaws, quotes: DRAFT.reading.quotes, pickup: DRAFT.reading.pickup,
+      no_offers: DRAFT.reading.no_offers, read_by: DRAFT.reading.read_by });
+    expect(again.reason.clause).toBe("there's a black dot on the screen"); // worded and checked once, kept
+    await screen.findAllByDisplayValue(DRAFT.message!);
+    await user.type(screen.getByLabelText("The seller's description"), "Battery 80%.");
+    await user.click(screen.queryByRole("button", { name: "Write my message" }) ?? screen.getByRole("button", { name: "Rewrite" }));
+    await vi.waitFor(() => expect(fetch.mock.calls.filter(([url]) => url === "/api/messages/draft").length).toBe(3));
+    const changed = sent(fetch, "POST /api/messages/draft", 2);
+    expect([changed.reading, changed.reason]).toEqual([null, null]); // a changed listing is read and worded afresh
   });
 
   it("writes every message with no AI, and only Rewrite has Gemma 3 4B reword it (14 Oct)", async () => {
@@ -1223,11 +1253,102 @@ describe("the app", () => {
     await screen.findByDisplayValue(DRAFT.message!);
     await user.click(screen.getByRole("button", { name: "Check the UK price" }));
     expect(window.location.hash).toBe("#price");
-    await waitFor(() => expect(sent(fetch, "POST /api/prices/estimate")).toEqual(
-      { title: "iPhone 13 128GB Blue", description: "Small crack on the back." }));
+    // with the flaws its draft's reader found and who that was (9 Nov, the owner: "it already get passed the founded
+    // flaws so we safe time"): the price tab doesn't read the listing again
+    await waitFor(() => expect(sent(fetch, "POST /api/prices/estimate")).toEqual({ title: "iPhone 13 128GB Blue",
+      description: "Small crack on the back.", flaws: ["Black dot on the screen"], read_by: "gemma3:4b" }));
     const price = screen.getByRole("region", { name: "The item" });
     expect(within(price).getByDisplayValue("iPhone 13 128GB Blue")).toBeTruthy();
     expect(within(price).getByDisplayValue("Small crack on the back.")).toBeTruthy();
+  });
+
+  // 9 Nov review: a listing typed in on the price tab is read for its flaws (slow), a sent one comes with them (fast)
+  const priced = (price: number): PriceEstimate => ({ price, middle: 175, low: 160, high: 190, currency: "GBP",
+    sales: 51, model: "iphone 13", storage_gb: 128, asked_storage_gb: 128, kind: "iphone", kinds: [], cuts: [],
+    rough: false, exact: true, flaws: [], breakdown: [], not_cut: [] });
+  const checks = (fetch: { mock: { calls: [string, RequestInit?][] } }) =>
+    fetch.mock.calls.filter(([url]) => url === "/api/prices/estimate").length;
+  /** The listing written on AI message, its draft shown, and Check the UK price clicked */
+  async function draftAndSend(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(screen.getAllByRole("textbox", { name: "Listing title" })[0], "iPhone 13 128GB Blue");
+    await user.type(screen.getAllByRole("textbox", { name: "The seller's description" })[0], "Small crack on the back.");
+    await user.type(screen.getByLabelText("Asking price"), "£220");
+    await user.click(screen.getByRole("button", { name: "No" }));
+    await user.click(screen.getByRole("button", { name: "Write my message" }));
+    await screen.findByDisplayValue(DRAFT.message!);
+    await user.click(screen.getByRole("button", { name: "Check the UK price" }));
+  }
+
+  it("shows the latest check's price: an older check that answers last is dropped (9 Nov review)", async () => {
+    localStorage.setItem(SETUP_DONE, "1");
+    window.location.hash = "#message";
+    const answers: Record<string, unknown> = { "GET /api/health": HEALTH, "GET /api/style": STYLE,
+      "GET /api/stats": STATS, "POST /api/messages/draft": DRAFT };
+    let answerTheOld: () => void = () => {};
+    let oldRead = false;
+    const fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      const route = `${init?.method ?? "GET"} ${url}`;
+      if (route !== "POST /api/prices/estimate") {
+        if (!(route in answers)) throw new TypeError(`nothing serves ${route}`);
+        return { ok: true, status: 200, json: async () => answers[route] };
+      }
+      if (JSON.parse(String(init?.body)).flaws) return { ok: true, status: 200, json: async () => priced(150) };
+      await new Promise<void>((resolve) => { answerTheOld = () => resolve(); }); // typed in: it's read first, so slow
+      return { ok: true, status: 200, json: async () => { oldRead = true; return priced(999); } };
+    });
+    vi.stubGlobal("fetch", fetch);
+    const user = userEvent.setup();
+    render(<App />);
+    // another listing typed in and checked on the price tab, still being read...
+    await user.click(screen.getByRole("link", { name: /AI UK price estimate/ }));
+    const item = screen.getByRole("region", { name: "The item" });
+    await user.type(within(item).getByRole("textbox", { name: "Listing title" }), "iPhone 14 256GB");
+    await user.click(screen.getAllByRole("button", { name: "Check the UK price" }).at(-1)!);
+    // ...when a draft's listing is sent from AI message, with its flaws: it answers first
+    await user.click(screen.getByRole("link", { name: /AI message/ }));
+    await draftAndSend(user);
+    expect((await screen.findByLabelText("UK price")).textContent).toContain("£150");
+    await act(async () => {
+      answerTheOld();
+      await vi.waitFor(() => expect(oldRead).toBe(true));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    // the older check's answer is dropped: the sent listing and its price stay, and the button isn't busy
+    expect(screen.getByLabelText("UK price").textContent).toContain("£150");
+    expect(screen.queryByText("£999")).toBeNull();
+    expect((within(item).getByRole("textbox", { name: "Listing title" }) as HTMLInputElement).value)
+      .toBe("iPhone 13 128GB Blue");
+    expect(screen.getAllByRole("button", { name: "Check the UK price" }).at(-1)!.getAttribute("aria-busy")).toBe("false");
+    expect(checks(fetch)).toBe(2);
+  });
+
+  it("checks a sent listing once: back from Set up my style it isn't checked again (9 Nov review)", async () => {
+    localStorage.setItem(SETUP_DONE, "1");
+    window.location.hash = "#message";
+    const fetch = serve({ ...usual, "GET /api/style": [200, NO_STYLE], "POST /api/messages/draft": [200, DRAFT],
+      "POST /api/prices/estimate": [200, priced(150)] });
+    const user = userEvent.setup();
+    render(<App />);
+    await draftAndSend(user);
+    await waitFor(() => expect(checks(fetch)).toBe(1));
+    // another listing checked on the price tab
+    const title = within(screen.getByRole("region", { name: "The item" })).getByRole("textbox", { name: "Listing title" });
+    await user.clear(title);
+    await user.type(title, "iPhone 14 256GB");
+    await user.click(screen.getAllByRole("button", { name: "Check the UK price" }).at(-1)!);
+    await waitFor(() => expect(checks(fetch)).toBe(2));
+    // checked after an edit, the listing is read afresh: the sent draft's flaws aren't sent with it
+    expect(sent(fetch, "POST /api/prices/estimate", 1)).toEqual(
+      { title: "iPhone 14 256GB", description: "Small crack on the back." });
+    // the setup opened from AI message and left: the tabs come back, and the sent listing isn't checked a third time
+    await user.click(screen.getByRole("link", { name: /AI message/ }));
+    await user.click(await screen.findByRole("button", { name: "Set up my style" }));
+    await user.click(screen.getByRole("button", { name: "Go back" }));
+    expect(window.location.hash).toBe("#message");
+    await user.click(screen.getByRole("link", { name: /AI UK price estimate/ }));
+    const back = within(screen.getByRole("region", { name: "The item" }));
+    expect((back.getByRole("textbox", { name: "Listing title" }) as HTMLInputElement).value).toBe("");
+    expect(checks(fetch)).toBe(2);
   });
 
   it("opens on a welcome at first launch, then AI message: the setup is never forced (4 Nov, the owner)", async () => {

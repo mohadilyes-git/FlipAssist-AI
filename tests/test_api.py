@@ -652,6 +652,21 @@ def test_what_cant_be_drafted_is_refused_before_anything_runs(client, change, wo
     assert local.asked == []  # not even the reading ran
 
 
+def test_the_same_listing_again_isnt_read_again(client):
+    """9 Nov, the owner: "get the flaws that the reader found straight from the previous request do not read it
+    again": a draft sent with its listing's earlier reading uses it as it is."""
+    local = FakeModel("gemma3:4b")
+    client.use(local=local, messages=PAST)
+    earlier = {"flaws": ["Black dot on the screen"], "quotes": ["Black dot on the screen."], "pickup": "Leeds LS6",
+               "no_offers": "", "read_by": "flip-reader-5"}
+    found = client.post("/messages/draft", json={"listing": LISTING, "kind": "asking", "mention": False,
+                                                 "writer": "template", "reading": earlier})
+    assert found.status_code == 200, found.text
+    assert local.asked == []  # nothing read again
+    read = found.json()["reading"]
+    assert (read["flaws"], read["read_by"], read["attempts"]) == (earlier["flaws"], "flip-reader-5", [])
+
+
 def test_a_local_model_that_hangs_up_falls_back_to_code(client, monkeypatch):
     import http.client
     import io
@@ -742,6 +757,11 @@ def test_flaws_already_read_are_used_as_they_are(client, monkeypatch, prices_api
     client.use(local=local)
     found = client.post("/prices/estimate", json={"title": "iPhone 13", "description": "x", "flaws": ["battery 71%"]})
     assert (found.json()["cuts"], found.json()["read_by"], local.asked) == (["battery 71%"], None, [])
+    # 9 Nov: flaws sent from AI message's Check the UK price come with who read them, shown as it is, nothing read again
+    found = client.post("/prices/estimate", json={"title": "iPhone 13", "description": "x", "flaws": ["battery 71%"],
+                                                  "read_by": "flip-reader-5"})
+    assert (found.json()["cuts"], found.json()["read_by"], local.asked) == (["battery 71%"], "flip-reader-5", [])
+    assert client.post("/prices/estimate", json={"title": "iPhone 13", "flaws": [], "read_by": "<script>"}).status_code == 422
 
 
 def test_the_price_tab_sorts_the_flaws_with_flip_kinds_when_ollama_has_it(client, monkeypatch, prices_api):

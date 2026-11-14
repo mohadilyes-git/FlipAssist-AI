@@ -549,11 +549,16 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     # a fault added to the description) gets its reason worded again (3 Oct: a kept reason left out "the phone turns
     # off and on sometimes", added after it was worded, and a new listing got the last one's)
     # the reader's sentences before code's story cut (reading["quotes"]): flip-wording was trained on them whole
-    on_screen = (previous or rewrite_of).lower()
+    on_screen = (previous or rewrite_of or "").lower()
     same_lines = reason_on_screen is not None and \
         [q.strip() for q in reason_on_screen.get("quotes") or []] == [q.strip() for q in lines if q.strip()]
-    kept = reason_on_screen if reason_on_screen and same_lines and on_screen and reason_on_screen.get("clause") and \
-        reason_on_screen["clause"].lower() != "none" and reason_on_screen["clause"].lower() in on_screen else None
+    # a new draft of the same listing (9 Nov, the owner: "when we do one and we not change the listing ... do not read
+    # it again"), another kind of offer or the same again: the reason worded and checked for these very lines is kept;
+    # Make it longer and Rewrite keep it only while the message on screen still says it
+    fresh = not (previous or rewrite_of)
+    kept = reason_on_screen if reason_on_screen and same_lines and reason_on_screen.get("clause") and \
+        reason_on_screen["clause"].lower() != "none" and (fresh or reason_on_screen["clause"].lower() in on_screen) \
+        else None
     if wording is not None and point and mention and point["about"] == "flaw" and kind in ("lower", "asking", "more"):
         worded = {k: kept[k] for k in ("clause", "by", "checked")} if kept else \
             worded_reason(title, completed(lines, listing.get("description") or ""),

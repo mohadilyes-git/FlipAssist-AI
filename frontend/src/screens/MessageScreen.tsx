@@ -40,12 +40,13 @@ function keeper(done: ReasonCheck): string | undefined {
     && !a.problems.length)?.model;
 }
 
-/** onCheckPrice(title, description): the listing goes to AI UK price estimate, which opens and checks it (4 Nov) */
+/** onCheckPrice(title, description, read): the listing goes to AI UK price estimate, which opens and checks it (14
+ * Nov), with the flaws its draft's reader found and who that was, when the draft is of this listing (9 Nov) */
 /** hasStyle: My style has learned something (4 Nov: until then its On/Off is greyed out, with Set up my style beside it,
  * onSetUp opening the setup) */
 export function MessageScreen({ onApproved, onCheckPrice, hasStyle = true, onSetUp }: {
   onApproved?: () => void;
-  onCheckPrice?: (title: string, description: string) => void;
+  onCheckPrice?: (title: string, description: string, read?: { flaws: string[]; readBy: string }) => void;
   hasStyle?: boolean;
   onSetUp?: () => void;
 }) {
@@ -148,10 +149,14 @@ export function MessageScreen({ onApproved, onCheckPrice, hasStyle = true, onSet
         rewrite_of: overrides.rewrite_of ?? null,
         check_later: true,
         style: myStyle && hasStyle,
-        // Rewrite keeps the reason the message on screen gives (it may be Sonnet's fix), but only for the same
-        // listing: a listing you've changed since gets its reason worded again (3 Oct: a new listing was given the
-        // last one's "there's a scratch on the screen")
-        reason: overrides.rewrite_of && draft?.reason && draftedFor === thisListing
+        // the same listing again, any kind of offer (9 Nov, the owner: "get the flaws that the reader found straight
+        // from the previous request do not read it again"): its reading goes back as it is, and so does its reason
+        // (it may be Sonnet's fix) for Rewrite, or once its check is done; a listing you've changed since is read and
+        // worded again (3 Oct: a new listing was given the last one's "there's a scratch on the screen")
+        reading: draft && draftedFor === thisListing ? { flaws: draft.reading.flaws, quotes: draft.reading.quotes,
+          pickup: draft.reading.pickup, no_offers: draft.reading.no_offers, read_by: draft.reading.read_by } : null,
+        reason: draft?.reason && draftedFor === thisListing
+          && (overrides.rewrite_of || ["ok", "fixed", "flagged, kept"].includes(draft.reason.checked))
           ? { ...draft.reason, quotes: worded(draft) } : null,
       });
       if (!found.message && overrides.rewrite_of) {
@@ -321,7 +326,8 @@ export function MessageScreen({ onApproved, onCheckPrice, hasStyle = true, onSet
                   title and description go to that tab, which opens and checks them */}
               {onCheckPrice && (
                 <button type="button" className="second" disabled={!title.trim()}
-                  onClick={() => onCheckPrice(title, description)}>
+                  onClick={() => onCheckPrice(title, description, shown && draftedFor === JSON.stringify([title, description])
+                    ? { flaws: shown.reading.quotes ?? shown.reading.flaws, readBy: shown.reading.read_by } : undefined)}>
                   Check the UK price
                 </button>
               )}

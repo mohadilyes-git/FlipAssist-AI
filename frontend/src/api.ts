@@ -98,8 +98,11 @@ export type MessageRequest = {
   check_later?: boolean;
   /** write it in My style (true, the default) or the default way (false: My style Off, 14 Oct) */
   style?: boolean;
-  /** with previous or rewrite_of: the reason the message on screen gives, and the lines it was worded from
-   * (reading.quotes): kept rather than worded and checked again, when this listing still reads the same */
+  /** the same listing's reading from the draft before (9 Nov): used as it is, not read again */
+  reading?: { flaws: string[]; quotes?: string[]; pickup: string; no_offers: string; read_by: string } | null;
+  /** the reason a draft of this listing gives, and the lines it was worded from (reading.quotes): kept rather than
+   * worded and checked again, with previous or rewrite_of while the message still says it, or with a new draft of the
+   * same listing once its check is done (9 Nov) */
   reason?: (Reason & { quotes: string[] }) | null;
   /** with mention, how many flaws a lower offer gives (14 Oct); left out, as before */
   flaws_said?: FlawsSaid | null;
@@ -291,8 +294,9 @@ export const api = {
   stats: () => call<Stats>("/stats"),
   draftMessage: (request: MessageRequest) => call<MessageDraft>("/messages/draft", json(request)),
   checkReason: (request: ReasonCheckRequest) => call<ReasonCheck>("/messages/check-reason", json(request)),
-  /** with description, the API reads it for the flaws first; with flaws, they're used as they are */
-  estimatePrice: (request: { title: string; description?: string; flaws?: string[] }) =>
+  /** with description, the API reads it for the flaws first; with flaws, they're used as they are (read_by: who read
+   * them, 9 Nov: a draft's reader, from AI message's Check the UK price) */
+  estimatePrice: (request: { title: string; description?: string; flaws?: string[]; read_by?: string }) =>
     call<PriceEstimate>("/prices/estimate", json(request)),
   draftListing: (form: FormData) => call<ListingDraft>("/listings/draft", { method: "POST", body: form }),
   /** learn: the message joins the ones My style is learned from (false when it was written with My style Off) */

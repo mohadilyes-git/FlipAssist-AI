@@ -280,3 +280,21 @@ def test_a_rewrite_keeps_the_checked_reason_as_reason_and_rewords_the_rest():
     assert "Add nothing new" in told and "very small scratches" not in told
     plain = rewrite_lines("Hi, would you take £255? Can collect today.")
     assert "[REASON]" not in plain and "Word every other sentence differently" in plain
+
+
+def test_a_new_draft_of_the_same_listing_keeps_its_checked_reason():
+    """9 Nov, the owner: "when we do one and we not change the listing ... do not read it again": another kind of offer
+    keeps the reason worded and checked for the same lines (no wording, no check, no paid call); other lines are worded
+    afresh."""
+    fixed = {"clause": "there's a hairline crack on the top left of the screen and the battery health is 79%",
+             "by": "claude-sonnet-5-5", "checked": "fixed", "quotes": READING["flaws"]}
+    for kind in ("lower", "asking"):  # (an offer more in this test's listing gives no flaw, so has no reason)
+        used = models()
+        result = draft_message(LISTING, {}, kind=kind, mention=True, reading=READING, writer="template", wording=used,
+                               reason_on_screen=fixed)
+        assert result["reason"] == {k: fixed[k] for k in ("clause", "by", "checked")}
+        assert not used["wording"].asked and not used["check"].asked
+    used = models()
+    draft_message(LISTING, {}, kind="asking", mention=True, reading=READING, writer="template", wording=used,
+                  reason_on_screen={**fixed, "quotes": ["Batt 79"]})  # worded from other lines: worded again
+    assert used["wording"].asked

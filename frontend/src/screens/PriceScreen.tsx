@@ -2,7 +2,7 @@
 // its own tab). The seller's description is read for its flaws as a draft's is (flip-reader-5 on this device), then the
 // AlertFlip app's prices API prices it: the middle price of clean ones of the same model and size (sales Claude Haiku
 // 5.5 sorted), cut for the kinds of flaw found, or what for-parts ones sell for when it's locked or for parts.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, type CutRow, type OwnCut, type PriceEstimate } from "../api";
 import { modelName, readBy } from "../format";
 import { Head, PoundIcon, Warn } from "../ui";
@@ -36,29 +36,39 @@ export function itemName(model: string) {
     : /^[a-z]{1,2}$|^\dg$/.test(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1))).join(" ");
 }
 
-/** A listing sent here from AI message's Check the UK price (4 Nov): a new one each time it's sent */
-export type SentListing = { title: string; description: string };
+/** A listing sent here from AI message's Check the UK price (4 Nov): a new one each time it's sent. flaws: what its
+ * draft's reader found in it, and readBy who that was (9 Nov, the owner: "it already get passed the founded flaws so
+ * we safe time"): used as they are, so it isn't read again */
+export type SentListing = { title: string; description: string; flaws?: string[]; readBy?: string };
+type Read = { flaws: string[]; readBy?: string };
 
-export function PriceScreen({ sent = null }: { sent?: SentListing | null }) {
+/** sent: a listing AI message sent here, checked once; onTaken: told when it's been taken, so it isn't sent again */
+export function PriceScreen({ sent = null, onTaken }: { sent?: SentListing | null; onTaken?: () => void }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [found, setFound] = useState<{ listing: string; estimate: PriceEstimate } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // which check is the latest (9 Nov review): only its answer changes the screen. A listing typed in here is read for
+  // its flaws first and a sent one isn't, so an older check can answer last; its answer is dropped, not shown
+  const latest = useRef(0);
   const listing = JSON.stringify([title, description]);
   // an estimate belongs to the listing it was checked for: change the title or the description and it goes
   const shown = found && found.listing === listing ? found.estimate : null;
 
-  async function check(forTitle = title, forDescription = description) {
+  async function check(forTitle = title, forDescription = description, read?: Read) {
+    const n = ++latest.current;
     const asked = JSON.stringify([forTitle, forDescription]);
     setBusy(true);
     setError("");
     try {
-      setFound({ listing: asked, estimate: await api.estimatePrice({ title: forTitle, description: forDescription }) });
+      const flaws = read ? { flaws: read.flaws, ...(read.readBy ? { read_by: read.readBy } : {}) } : {};
+      const estimate = await api.estimatePrice({ title: forTitle, description: forDescription, ...flaws });
+      if (n === latest.current) setFound({ listing: asked, estimate });
     } catch (e) {
-      setError((e as Error).message);
+      if (n === latest.current) setError((e as Error).message);
     } finally {
-      setBusy(false);
+      if (n === latest.current) setBusy(false);
     }
   }
 
@@ -68,7 +78,11 @@ export function PriceScreen({ sent = null }: { sent?: SentListing | null }) {
     if (!sent) return;
     setTitle(sent.title);
     setDescription(sent.description);
-    void check(sent.title, sent.description);
+    // its draft's flaws, for this check only: checked again after an edit, the listing is read afresh
+    void check(sent.title, sent.description, sent.flaws ? { flaws: sent.flaws, readBy: sent.readBy } : undefined);
+    // checked once (9 Nov review): taken, so the tabs coming back after the setup don't check it (and its old draft's
+    // flaws) again
+    onTaken?.();
   }, [sent]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   return (

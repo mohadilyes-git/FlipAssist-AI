@@ -95,8 +95,10 @@ export function App() {
   const [theme, toggleTheme] = useTheme();
   const [style, setStyle] = useState<Style | null>(null);
   const [running, setRunning] = useState<Running>(null);
-  // a listing AI message sent to the price tab (4 Nov): a new object each time, so the tab checks it again
+  // a listing AI message sent to the price tab (4 Nov): a new object each time, so the tab checks it again; cleared
+  // once the tab has taken it (9 Nov review), so the tab mounting again after the setup doesn't check it again
   const [sentToPrice, setSentToPrice] = useState<SentListing | null>(null);
+  const priceTaken = useCallback(() => setSentToPrice(null), []);
 
   const loadStyle = useCallback(async () => {
     try {
@@ -216,12 +218,14 @@ export function App() {
                   {/* the screens you type into stay put while you look elsewhere; the others load fresh */}
                   <div className="screen" hidden={tab !== "message"}>
                     <MessageScreen onApproved={loadStyle} hasStyle={style ? count > 0 : true}
-                      onSetUp={() => setUpFrom("message")} onCheckPrice={(title, description) => {
-                      setSentToPrice({ title, description });
+                      onSetUp={() => setUpFrom("message")} onCheckPrice={(title, description, read) => {
+                      setSentToPrice({ title, description, ...(read ? { flaws: read.flaws, readBy: read.readBy } : {}) });
                       go("price");
                     }} />
                   </div>
-                  <div className="screen" hidden={tab !== "price"}><PriceScreen sent={sentToPrice} /></div>
+                  <div className="screen" hidden={tab !== "price"}>
+                    <PriceScreen sent={sentToPrice} onTaken={priceTaken} />
+                  </div>
                   <div className="screen" hidden={tab !== "listing"}>
                     <ListingScreen writer={running && running !== "down" ? running.listing_model : undefined}
                       reader={running && running !== "down" ? running.listing_reader : undefined} />

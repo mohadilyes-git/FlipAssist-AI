@@ -100,8 +100,21 @@ class ReasonOnScreen(BaseModel):
                               "reason is kept only when the listing still reads as these same lines")
 
 
+class ReadingSent(BaseModel):
+    """This listing's reading from the draft before (9 Nov, the owner: "get the flaws that the reader found straight
+    from the previous request do not read it again"): sent back, as that draft gave it, when nothing in the listing has
+    changed, so another kind of offer doesn't read it again."""
+    flaws: list[str] = Field(max_length=50)
+    quotes: list[str] = Field(default_factory=list, max_length=50)
+    pickup: str = Field("", max_length=300)
+    no_offers: str = Field("", max_length=500)
+    read_by: str = Field(min_length=1, max_length=100)
+
+
 class MessageRequest(BaseModel):
     listing: Listing
+    reading: ReadingSent | None = Field(None, description="this same listing's reading from the draft before (9 Nov): "
+                                                         "used as it is, not read again")
     kind: Literal["lower", "asking", "more"] = "lower"
     mention: bool | None = Field(None, description="say the listing's flaw or good condition; null: your style decides")
     length: Literal["usual", "longer"] = "usual"
@@ -607,7 +620,9 @@ def draft_a_message(request: MessageRequest, s: Setup = Depends(setup), book: St
     except Refused as e:
         raise HTTPException(422, str(e))
     listing = {**request.listing.model_dump(), "id": request.listing.id or new_id()}
-    reading = read_listing_with_ai(listing, s.reading_model(), s.api, request.mode, s.log)
+    # the same listing again (9 Nov): its reading from the draft before, as it is; else it's read now
+    reading = {**request.reading.model_dump(), "attempts": []} if request.reading is not None else \
+        read_listing_with_ai(listing, s.reading_model(), s.api, request.mode, s.log)
     try:
         # My style off: written the default way, as with no messages to learn from (14 Oct)
         card, index = (book.card(), book.index) if request.style else (None, None)
@@ -692,6 +707,8 @@ class PriceRequest(BaseModel):
                                     description="the seller's description: read for its flaws (as a draft's reading is) "
                                                 "when flaws aren't sent")
     flaws: list[str] | None = Field(None, max_length=30, description="the flaws to cut for, if already read")
+    read_by: str | None = Field(None, max_length=40, pattern=r"^[A-Za-z0-9.:_ -]{1,40}$",
+                                description="who read the flaws sent (a draft's reading.read_by, 9 Nov): shown with them")
 
 
 class CutRow(BaseModel):
@@ -774,7 +791,8 @@ def estimate_price(request: PriceRequest, s: Setup = Depends(setup)):
     (the AI UK price estimate tab); send flaws and they're used as they are."""
     if kind_of(request.title) is None or not all(prices_settings()):  # before any reading: nothing to price it
         return PriceEstimate(**estimate(request.title))
-    flaws, read_by = request.flaws or [], None
+    # flaws sent along (9 Nov: a draft's, from AI message's Check the UK price) are used as they are, by whoever read them
+    flaws, read_by = request.flaws or [], (request.read_by if request.flaws is not None else None)
     if request.flaws is None and request.description is not None:
         listing = {"id": new_id(), "title": request.title, "description": request.description}
         reading = read_listing_with_ai(listing, s.reading_model(), s.api, "auto",
