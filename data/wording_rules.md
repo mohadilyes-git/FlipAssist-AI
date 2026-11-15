@@ -59,7 +59,8 @@ Which part, what's wrong with it, how much or how many, and every figure (batter
 
 ## D. Add nothing and change nothing
 - **No new content:** no part, place, number, cause, consequence or judgement the quotes don't give. Don't write
-  "faulty", "doesn't work", "stuck", "broken", "needs replacing" or "only" unless the seller says it.
+  "faulty", "doesn't work", "stuck", "broken", "needs replacing" or "only" unless the seller says it, in any words:
+  "in need of a replacement" or "needs a new screen" says it needs replacing, so "it needs replacing" is fine there.
 - **Don't make it stronger or weaker:** "would benefit from a new battery" stays "it would benefit from a new
   battery", not "it needs"; "a few" stays "a few"; "light" stays "light".
 - **Keep the seller's uncertainty:** "I think the speaker is faulty" -> "the speaker may be faulty"; "may have small
