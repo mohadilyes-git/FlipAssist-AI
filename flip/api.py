@@ -116,9 +116,12 @@ class ReadingSent(BaseModel):
 class MessageRequest(BaseModel):
     listing: Listing
     reading: ReadingSent | None = Field(None, description="this same listing's reading from the draft before (9 Nov): "
-                                                         "used as it is, not read again")
+                                                         "used as it is when it checks out against the listing "
+                                                         "(flip.reader.check_reading); one that doesn't is read again")
     kind: Literal["lower", "asking", "more"] = "lower"
-    mention: bool | None = Field(None, description="say the listing's flaw or good condition; null: your style decides")
+    mention: bool | None = Field(None, description="say the listing's flaw or good condition; null: a lower "
+                                         "offer gives its reason, at the asking price the draft asks, and over "
+                                         "asking your style decides whether good condition goes in")
     length: Literal["usual", "longer"] = "usual"
     previous: str | None = Field(None, max_length=1000, description='the draft on screen, to make longer: only with '
                                                                     '"length": "longer"')

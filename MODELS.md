@@ -209,10 +209,9 @@ into parts under GitHub's 2 GB limit, with each model's Modelfile and SHA256SUMS
 Modelfile. [`launcher/get-models.sh`](launcher/get-models.sh) (Mac) and
 [`launcher\windows-setup.ps1`](launcher/windows-setup.ps1) (Windows) download them, check every part against
 SHA256SUMS and then each whole model file against its fingerprint below, and add a model to Ollama only if it's the
-version that was tested ([models/README.md](models/README.md)). On a Mac each Modelfile (the model's prompt template
-and settings) must match its fingerprint below too, as must one `launcher/export-models.sh` copies out;
-windows-setup.ps1 checks a release's Modelfile only against SHA256SUMS. A model Ollama already has as the tested
-version is skipped. The other models below aren't on the release: their fingerprints are the record of what was
+version that was tested ([models/README.md](models/README.md)). Each Modelfile (the model's prompt template and
+settings) must match its fingerprint below too, on a Mac and on Windows, as must one `launcher/export-models.sh` copies
+out. A model Ollama already has as the tested version is skipped. The other models below aren't on the release: their fingerprints are the record of what was
 tested.
 
 If the release isn't there (a fork's clone has none: GitHub doesn't copy releases), or a model or a file isn't on it,
@@ -268,7 +267,7 @@ is what Ollama 0.40.11's `ollama show --modelfile` prints for the tested model, 
 
 An Ollama that prints a Modelfile differently gives other values for the same model: `launcher/upload-models.sh`,
 `package-models.sh` and `export-models.sh` then refuse it until these values are changed together, here and in those
-scripts and `get-models.sh`.
+scripts, `get-models.sh` and `windows-setup.ps1`.
 
 ## A test you can run yourself
 

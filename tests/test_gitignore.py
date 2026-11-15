@@ -25,3 +25,10 @@ def test_git_really_ignores_them():
         return subprocess.run(["git", "check-ignore", "-q", "--no-index", path], cwd=ROOT).returncode == 0
     assert [path for path in PRIVATE_FILES if not ignored(path)] == []
     assert not ignored(".env.example")
+
+
+def test_the_example_env_leaves_the_claude_key_empty():
+    """Any value in ANTHROPIC_API_KEY counts as a key and turns Claude on, so .env.example's must stay empty: a copy
+    of it with a placeholder would ask Claude with a key that can only fail."""
+    lines = (ROOT / ".env.example").read_text(encoding="utf-8").splitlines()
+    assert "ANTHROPIC_API_KEY=" in lines

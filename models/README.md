@@ -11,8 +11,8 @@ packed).
 Both skip a model Ollama already has as the version that was tested, and check there's room for the rest first (about
 13 GB free to add all four on one disk). For each model they download every part and check it against the release's
 own list (`SHA256SUMS`), then check the whole model file against the SHA-256 fingerprint of the version that was
-tested (MODELS.md), and add the model to Ollama. A file that doesn't match is refused. On a Mac each model's Modelfile
-is checked against the one that was tested too; on Windows, for now, only against the release's list.
+tested (MODELS.md), and add the model to Ollama. A file that doesn't match is refused. Each model's Modelfile is
+checked against the one that was tested too, before any of its parts is downloaded.
 
 If the release, or a file on it, can't be downloaded, both stop and say which; a model they added before that stays,
 and running them again carries on with the rest. On a Mac what a stopped run downloaded is kept in

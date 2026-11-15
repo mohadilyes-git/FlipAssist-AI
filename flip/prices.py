@@ -485,7 +485,8 @@ PAST_LOCK = re.compile(rf"""\b(?:previously|originally|formerly|used\sto\sbe|onc
     locked\s(?:to|on)\s(?:the\s)?{NETWORKS}|(?:network|carrier|sim)[\s-]?locked)\b""", X)
 # The owner's carrier rule (6 Oct 2026, buyer-safe): a carrier or network named for the phone ("Carrier: AT&T", "Galaxy
 # S21 EE", "for Straight Talk", "works on Verizon") is a network lock unless the listing says it's unlocked or works on
-# any network: a locked phone bought as unlocked costs more than an offer 5-10% lower. flip-kinds-1 answers that way by
+# any network: a locked phone bought as unlocked costs more than offering less for one that turns out unlocked.
+# flip-kinds-1 answers that way by
 # itself (it matched a blind relabel to the rule on 158 of 161 test sentences); these let code's rules do the same for
 # the title and for any flaw the model can't answer (network_lock, in kinds_of). Two independent reviews tried 350+ ways
 # sellers write it (6 Oct evening); tests/test_carrier_rule.py keeps them.

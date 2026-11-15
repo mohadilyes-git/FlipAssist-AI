@@ -407,7 +407,8 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     (flip.style.style_card) and index a MessageIndex of your past messages;
     both are None before you have any. kind: "lower", "asking" or "more".
     mention: whether to say what the listing gives this offer (a flaw, or good
-    condition). None lets your style decide, and a draft that leaves it out
+    condition). None: a lower offer gives its reason, over asking your style
+    decides whether good condition goes in, and a draft that leaves it out
     then asks you in result["ask"]. length: "usual" or "longer". previous: the
     draft on screen to make longer, as the drafter wrote it; it's kept and
     added to, and it settles the mention the way it was drafted. reading: the

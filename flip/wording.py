@@ -10,7 +10,9 @@ flip-reader-5 has picked out the seller's sentences that state a flaw. Here:
 
 Measured on 740 held-out listings, judged blind (3 Oct, round 3): flip-wording alone 91.6% sendable; with Haiku's flag
 and Sonnet's fix about 95%, with Sonnet called on about 10% of messages. Round 4b, judged side by side with round 3 under
-the four rules added on 6 Oct (MODELS.md): 90.3% sendable against 88.0% (p = 0.024), a made-up fact 3.4% against 5.0%. Each step can fail without stopping the draft: no
+the four rules added on 6 Oct (MODELS.md): 90.3% sendable against 88.0% (p = 0.024), a made-up fact 3.4% against 5.0%;
+on fresh listings it isn't proven better (94.5% against 91.4%, then a tie at 90.8%). Each step can fail without
+stopping the draft: no
 Ollama or no flip-wording -> None (code words the reason, as before); Haiku or Sonnet fails or times out ->
 flip-wording's clause as it is. In "local" mode nothing leaves the Mac: flip-wording only.
 

@@ -4,6 +4,7 @@
 #   - Node.js 22 or newer (nodejs.org)
 #   - Ollama for Windows (ollama.com), and open it once so it's running
 #   - the Microsoft Visual C++ Redistributable (x64), if the PC doesn't have it (aka.ms/vs/17/release/vc_redist.x64.exe)
+#   - Git for Windows (git-scm.com), to clone the repo (from a ZIP download instead, give -Repo owner/name)
 # Clone the repo somewhere OneDrive doesn't sync (C:\FlipAssist, say). If you have a .env (it holds your keys), put it
 # in the repo folder; without one, FlipAssist makes it on first launch, and your own Claude API key goes in it.
 # FlipAssist's own four models are downloaded from the repo's GitHub release (models-v1, models/README.md), each
@@ -81,7 +82,7 @@ Step "onnxruntime loads (MiniLM's engine)" { & $venvPython -c "import onnxruntim
 # the AI models, in Ollama
 try { Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/tags" -TimeoutSec 5 | Out-Null }
 catch { throw "Ollama isn't running: open Ollama from the Start menu, then run this again" }
-Step "Gemma 3 4B (about 3.3 GB to download)" { ollama pull gemma3:4b }
+Step "Gemma 3 4B (about 3.4 GB to download)" { ollama pull gemma3:4b }
 
 # the tested versions of FlipAssist's own models (MODELS.md, How to check a model file): any other file is refused
 $tested = [ordered]@{

@@ -41,7 +41,7 @@ def main():
                         help="lower than asking (the default), the asking price, or more")
     parser.add_argument("--mention", choices=["yes", "no"],
                         help="say what the listing gives this offer: its flaw, or its good condition "
-                             "(default: your style decides)")
+                             "(default: a lower offer gives it, the asking price asks, over asking your style decides)")
     parser.add_argument("--longer", action="store_true",
                         help="aim for about twice your usual length, 30 to 70 words (two thirds of the aim passes)")
     parser.add_argument("--previous", help="the draft to make longer, as it was drafted (implies --longer)")
