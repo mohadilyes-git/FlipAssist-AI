@@ -1,8 +1,8 @@
 #!/bin/sh
 # Copies FlipAssist's own models (flip-reader-5, flip-wording-4b, flip-kinds-1, flip-style-1b) out of Ollama on this
 # Mac into a folder, each as its GGUF file beside the Modelfile that names it, to set them up on Windows
-# (launcher\windows-setup.ps1 -Models <that folder>). About 10 GB in all, so give it a USB drive or another disk, not
-# a nearly full Mac (9 Nov 2026):
+# (launcher\windows-setup.ps1 -Models <that folder>). Each must be the version that was tested (MODELS.md). About
+# 10 GB in all, so give it a USB drive or another disk, not a nearly full Mac (9 Nov 2026):
 #   launcher/export-models.sh /Volumes/USB/FlipAssist-models
 set -eu
 out=${1:?"say where to put them, e.g. launcher/export-models.sh /Volumes/USB/FlipAssist-models"}
@@ -12,19 +12,50 @@ mkdir -p "$out"
 fs=$(diskutil info "$(df "$out" | awk 'NR==2 {print $1}')" 2>/dev/null | awk -F': *' '/Type \(Bundle\)/ {print $2}')
 case "$fs" in
   exfat | msdos) ;;
-  *) echo "Note: $out is on a ${fs:-unknown} disk, which Windows can't read: use a USB drive formatted ExFAT (Disk Utility > Erase > ExFAT)" >&2 ;;
+  "") echo "Note: couldn't tell how the disk with $out is formatted: Windows needs a USB drive formatted ExFAT (Disk Utility > Erase > ExFAT)" >&2 ;;
+  *) echo "Note: $out is on a disk formatted as $fs, which Windows can't read: use a USB drive formatted ExFAT (Disk Utility > Erase > ExFAT)" >&2 ;;
 esac
+# the tested versions (MODELS.md, How to check a model file), as get-models.sh checks them: each model file, then its
+# Modelfile (ollama show --modelfile, with FROM ./<model>.gguf)
+tested() {
+  case $1 in
+    flip-reader-5) echo b946131ba11fc159fdc1cf683dab0d3b9c4a64cb80dd9726b1b4208b8632bae1 ;;
+    flip-wording-4b) echo f8ad98ddf4849746e3520afb9d1d38689fc3437dc66fbd201ef536f2b18d35e1 ;;
+    flip-kinds-1) echo 29d5df4e97c69c85892feed8c8a7f9a52f3d1f1c05fe7b07f6102a9d2dee45d0 ;;
+    flip-style-1b) echo 2e64f58682c449660927e25afaa4d7c029c298a19b9527bd2c22c305e316d694 ;;
+    *) echo unknown ;;
+  esac
+}
+tested_modelfile() {
+  case $1 in
+    flip-reader-5) echo 8c0a25f122166b29ef661b053c475a87cbcfcb7d5acd9fc4c99165538e224245 ;;
+    flip-wording-4b) echo 49bbde2bcc475d2084f7424fae3b0eeec11a0b22f86b8cdf513e29bdc09aed4d ;;
+    flip-kinds-1) echo 0eff6f2dc41da8ea134a65569b692ee8c57123b0ea9ce6f20ef473e996eeb8a1 ;;
+    flip-style-1b) echo 9f3426680520a0baefba7e3ac11d69fe2d525e694aac4357ce7e49d77e6fbff2 ;;
+    *) echo unknown ;;
+  esac
+}
 
-# each model's file in Ollama, and room for them all (plus 1 GB to spare) before anything is copied
+# each model's file in Ollama, checked against the tested version, and room for them all (plus 1 GB to spare) before
+# anything is copied; a file an earlier export left there is written over, so it needs no room twice
 need_kb=0
 for model in $models; do
-  blob=$(ollama show --modelfile "$model" | sed -n 's/^FROM //p' | head -1)
+  mf=$(ollama show --modelfile "$model") || { echo "$model isn't in Ollama (ollama list), or Ollama isn't running" >&2; exit 1; }
+  blob=$(printf '%s\n' "$mf" | sed -n 's/^FROM //p' | head -1)
   [ -f "$blob" ] || { echo "$model: Ollama's file for it isn't on this Mac ($blob)" >&2; exit 1; }
-  need_kb=$((need_kb + $(du -k "$blob" | cut -f1)))
+  echo "- checking $model"
+  got=$(shasum -a 256 "$blob" | cut -d' ' -f1)
+  [ "$got" = "$(tested "$model")" ] ||
+    { echo "$model in Ollama isn't the version that was tested (SHA-256 $got): see MODELS.md" >&2; exit 1; }
+  got=$(ollama show --modelfile "$model" | sed "s#^FROM .*#FROM ./$model.gguf#" | shasum -a 256 | cut -d' ' -f1)
+  [ "$got" = "$(tested_modelfile "$model")" ] ||
+    { echo "$model's Modelfile from Ollama isn't the one that was tested (SHA-256 $got)" >&2; exit 1; }
+  have_kb=$(du -k "$out/$model/$model.gguf" 2>/dev/null | cut -f1)
+  need_kb=$((need_kb + $(du -k "$blob" | cut -f1) - ${have_kb:-0}))
 done
 free_kb=$(df -k "$out" | awk 'NR==2 {print $4}')
 if [ "$free_kb" -lt $((need_kb + 1048576)) ]; then
-  echo "Not enough room in $out: it needs about $((need_kb / 1048576 + 1)) GB and has $((free_kb / 1048576)) GB" >&2
+  echo "Not enough room in $out: it needs about $(((need_kb + 1048576 + 1048575) / 1048576)) GB and has $((free_kb / 1048576)) GB" >&2
   exit 1
 fi
 
