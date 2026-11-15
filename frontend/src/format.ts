@@ -55,6 +55,9 @@ function doing(model: string, job: string): string {
     return model.startsWith("claude-haiku") ? "checking the reason is sendable" : model.startsWith("claude-sonnet") ? "fixing the reason"
       : "wording the reason";
   }
+  // flip-kinds-1 and flip-style-1b are counted on Home since the 15 Nov review: say what they did
+  if (job === "sort") return "sorting the flaws into kinds";
+  if (job === "style") return "reading your style";
   return "writing the message";
 }
 

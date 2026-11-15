@@ -7,8 +7,8 @@
 # Clone the repo somewhere OneDrive doesn't sync (C:\FlipAssist, say). If you have a .env (it holds your keys), put it
 # in the repo folder; without one, FlipAssist makes it on first launch, and your own Claude API key goes in it.
 # FlipAssist's own four models are downloaded from the repo's GitHub release (models-v1, models/README.md), each
-# checked against the version that was tested. One Ollama already has as that version is skipped, so after a
-# failure, running this again carries on. In PowerShell, from the repo folder:
+# checked against the version that was tested, and so is the Modelfile it's added with. One Ollama already has as
+# that version is skipped, so after a failure, running this again carries on. In PowerShell, from the repo folder:
 #   powershell -ExecutionPolicy Bypass -File launcher\windows-setup.ps1
 # -Repo owner/name: the GitHub repo with the release, when this folder isn't a clone of it; -Tag: another release;
 # -Models E:\FlipAssist-models: a folder made on a Mac with launcher/export-models.sh (on an ExFAT USB drive) instead
@@ -90,6 +90,14 @@ $tested = [ordered]@{
   "flip-kinds-1"    = "29d5df4e97c69c85892feed8c8a7f9a52f3d1f1c05fe7b07f6102a9d2dee45d0"
   "flip-style-1b"   = "2e64f58682c449660927e25afaa4d7c029c298a19b9527bd2c22c305e316d694"
 }
+# and of the Modelfile each is added with, as get-models.sh checks it: the Modelfile decides what Ollama builds (a
+# FROM line naming another model, or another template or system prompt), so any other one is refused too
+$testedModelfile = [ordered]@{
+  "flip-reader-5"   = "8c0a25f122166b29ef661b053c475a87cbcfcb7d5acd9fc4c99165538e224245"
+  "flip-wording-4b" = "49bbde2bcc475d2084f7424fae3b0eeec11a0b22f86b8cdf513e29bdc09aed4d"
+  "flip-kinds-1"    = "0eff6f2dc41da8ea134a65569b692ee8c57123b0ea9ce6f20ef473e996eeb8a1"
+  "flip-style-1b"   = "9f3426680520a0baefba7e3ac11d69fe2d525e694aac4357ce7e49d77e6fbff2"
+}
 function Sha256([string]$file) { (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLowerInvariant() }
 
 # the models Ollama doesn't have yet as the tested version (in Ollama, a model's FROM line names its file's SHA-256:
@@ -133,6 +141,7 @@ if ($NoModels) {
     $gguf = Join-Path $folder "$model.gguf"
     if (-not (Test-Path $modelfile) -or -not (Test-Path $gguf)) { throw "$model isn't in ${Models}: export it on the Mac with launcher/export-models.sh" }
     if ((Sha256 $gguf) -ne $tested[$model]) { throw "$gguf isn't the version of $model that was tested" }
+    if ((Sha256 $modelfile) -ne $testedModelfile[$model]) { throw "$modelfile isn't the Modelfile of $model that was tested" }
     Step "$model (about 2.5 GB)" { ollama create $model -f $modelfile }
   }
 } else {
@@ -186,11 +195,15 @@ if ($NoModels) {
       $gguf = Join-Path $work "$model.gguf"
       $joined = [IO.File]::Create($gguf)
       try {
-        foreach ($name in $parts + @("$model.Modelfile")) {
+        # its Modelfile first, so one that isn't the tested one is refused before any 2 GB part comes
+        foreach ($name in @("$model.Modelfile") + $parts) {
           $file = Join-Path $work $name
           Write-Host "- downloading $name"
           Fetch "$base/$name" $file
           if ((Sha256 $file) -ne $sums[$name]) { throw "$name didn't download right: run this again" }
+          if ($name -eq "$model.Modelfile" -and (Sha256 $file) -ne $testedModelfile[$model]) {
+            throw "$model's Modelfile on the release isn't the one that was tested"
+          }
           if ($name -like "*.gguf.part-*") {
             $in = [IO.File]::OpenRead($file)
             try { $in.CopyTo($joined) } finally { $in.Close() }

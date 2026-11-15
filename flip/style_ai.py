@@ -3,7 +3,7 @@ twice; people write differently (long sentences, typos, shortcuts, "100£", "sam
 reads your messages and suggests your habits as fill-in-the-blank phrases ("I can pay {price}", "I like the {item}").
 Since 6 Oct our AI is flip-style-1b (MODEL): Gemma 3 4B fine-tuned on 2,833 made-up buyers to name the habits they
 repeat. On the hard style test (evals/style, 40 made-up buyers it never saw) it found 182 of 189 habits, with 6 wrong
-and 3 invented, where plain Gemma 3 4B found 146, with 37 wrong and 230 invented (FLIP_STYLE_AI=gemma3:4b goes back).
+and 3 invented, where plain Gemma 3 4B found 146, with 28 wrong and 230 invented (FLIP_STYLE_AI=gemma3:4b goes back).
 
 Every suggestion is checked by code against your messages before it's used: it's kept only when its words are in at
 least HABIT of them (and SHARE), with the blanks filled by each message's own price and item. So the AI can find a

@@ -52,6 +52,13 @@ describe("Rewrite's own job (14 Oct)", () => {
   });
 });
 
+describe("the flaw sorter and the style reader on Home (15 Nov review)", () => {
+  it("says what flip-kinds-1 and flip-style-1b did, not that they wrote the message", () => {
+    expect(jobName("flip-kinds-1", "sort")).toBe("sorting the flaws into kinds");
+    expect(jobName("flip-style-1b", "style")).toBe("reading your style");
+  });
+});
+
 describe("the damage judges on Home (14 Oct)", () => {
   it("says Claude Haiku 5.5 judges and Claude Sonnet 5.5 decides how bad, not as a backup", () => {
     expect(jobName("claude-haiku-5-5", "severity")).toBe("judging how bad the damage is");

@@ -175,3 +175,19 @@ def test_the_build_names_what_can_really_hold_the_app_folder_open():
     message = re.search(r'catch \{ throw "(Something still has[^"]*)" \}', BUILD).group(1)
     assert not re.search(r"Ollama|taskkill|tray", message)
     assert all(what in message for what in ("PowerShell", "Command Prompt", "File Explorer", "antivirus"))
+
+
+# ── scripts-mac-1, the Windows half: the setup checked each model file against the tested one, but not the Modelfile
+# it's added with, which decides what Ollama builds ───────────────────────────────────────────────────────────────
+
+def test_each_modelfile_is_checked_against_the_tested_one_as_on_a_mac():
+    pins = dict(re.findall(r'"(flip-[\w-]+)"\s*=\s*"([0-9a-f]{64})"', SETUP[SETUP.index("$testedModelfile = "):]))
+    mac = (LAUNCHER / "get-models.sh").read_text(encoding="utf-8")
+    mac = dict(re.findall(r"(flip-[\w-]+)\) echo ([0-9a-f]{64})", mac[mac.index("tested_modelfile()"):]))
+    assert pins == mac and len(pins) == 4  # the same four values as get-models.sh
+    # from the release: refused before any part comes, as its Modelfile is fetched first
+    loop = SETUP[SETUP.index('foreach ($name in @("$model.Modelfile") + $parts)'):]
+    assert loop.index("$testedModelfile[$model]") < loop.index("CopyTo") < loop.index("ollama create")
+    # from a -Models folder: refused before Ollama adds it
+    folder = SETUP[SETUP.index("$modelfile = Join-Path $folder"):]
+    assert folder.index("(Sha256 $modelfile) -ne $testedModelfile[$model]") < folder.index("ollama create")

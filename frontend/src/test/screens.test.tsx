@@ -1197,6 +1197,11 @@ describe("List on eBay", () => {
     expect(screen.getByText(/Code fills the specs, flip-reader-5 reads your notes, and Claude Haiku 5\.5 \(Claude Sonnet 5\.5 if a check fails\) writes the rest from what it found\./))
       .toBeTruthy();
     cleanup();
+    // 15 Nov review: with neither flip-reader-5 nor Gemma 3 4B in Ollama, /health says code reads the notes
+    render(<ListingScreen writer="claude-haiku-5-5" reader="code" />);
+    expect(screen.getByText(/Code fills the specs, code reads your notes, and Claude Haiku 5\.5 \(Claude Sonnet 5\.5 if a check fails\) writes the rest from what it found\./))
+      .toBeTruthy();
+    cleanup();
     render(<ListingScreen />);
     expect(screen.queryByLabelText("The seller's description")).toBeNull();
     await user.type(screen.getByLabelText("Which iPhone"), "iphone 13");

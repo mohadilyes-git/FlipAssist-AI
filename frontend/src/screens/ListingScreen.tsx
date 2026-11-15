@@ -142,7 +142,7 @@ export function ListingScreen({ writer, reader }: { writer?: string; reader?: st
               <span className="tile"><TagIcon size={20} /></span>
               <strong>Your eBay draft shows here</strong>
               <p className="sub">For iPhones only. Add photos and your notes, then Draft listing. Code fills the specs,
-                {reader ? ` ${modelName(reader)} reads your notes,` : ""} and {writer?.startsWith("claude")
+                {reader ? (reader === "code" ? " code reads your notes," : ` ${modelName(reader)} reads your notes,`) : ""} and {writer?.startsWith("claude")
                   ? `${modelName(writer)} (${modelName("claude-sonnet-5-5")} if a check fails)`
                   : modelName(writer || "gemma3:4b")} writes the rest from {reader ? "what it found" : "your notes"}.</p>
             </div>

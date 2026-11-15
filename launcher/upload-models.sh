@@ -77,11 +77,13 @@ for model in $models; do
   echo "$(shasum -a 256 "$model.Modelfile" | cut -d' ' -f1)  $model.Modelfile" >> SHA256SUMS
 done
 
-# the release with the small files, then each model's parts, made, checked, uploaded and deleted in turn
+# the release with the small files, then each model's parts, made, checked, uploaded and deleted in turn, and the list
+# of them all (SHA256SUMS) last: get-models.sh starts from that list, so an upload that stops part-way never lists a
+# part that isn't there yet, and running this again finishes it
 gh release view "$tag" --repo "$repo" >/dev/null 2>&1 ||
   gh release create "$tag" --repo "$repo" --title "FlipAssist's models ($tag)" --notes-file README.md
 # shellcheck disable=SC2086 # the small files, by name
-gh release upload "$tag" --repo "$repo" --clobber $extras SHA256SUMS ./*.Modelfile
+gh release upload "$tag" --repo "$repo" --clobber $extras ./*.Modelfile
 for model in $models; do
   blob_of "$model"
   echo "- $model"
@@ -94,4 +96,5 @@ for model in $models; do
   gh release upload "$tag" --repo "$repo" --clobber "$model".gguf.part-*
   rm -f "$model".gguf.part-*
 done
+gh release upload "$tag" --repo "$repo" --clobber SHA256SUMS
 echo "Uploaded: https://github.com/$repo/releases/tag/$tag"
