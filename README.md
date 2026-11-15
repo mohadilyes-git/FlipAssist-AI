@@ -75,7 +75,7 @@ Drafts eBay listings and offer messages for a reseller. Plain code does everythi
     - Lower: 15% under asking by default, rounded down to a tidy number.
     - The asking price.
     - More: asking plus 5%, rounded up to a tidy number and at least one step over.
-  - **FlipAssist's own reader reads the listing when this Mac has it.** That's flip-reader-5: Gemma 3 4B fine-tuned on 33,160 labelled listings to quote exactly the sentences that state a flaw. It isn't shipped with the repo; when Ollama doesn't list it, or it doesn't answer, Gemma 3 4B reads as described below, and `FLIP_READER_MODEL=` (empty) in `.env` turns it off. Its reading gets the safety checks only: every quote must be in the listing, a flaw the seller denies is dropped, a seller's story told before the flaw is cut off, and the pickup and "no offers" are checked as for any reading. The splitting and adding below (counting only quotes in so many flaw words, adding code's own flaws) is left out because on 5,032 listings no model had seen (26 Sep 2026) it took the flaws the reader found from 96.5% to 89.4% on UK iPhones and from 94.3% to 68.3% on US and Canadian listings. The message's reason is worded from the reader's whole sentences (next point), never cut to a few words.
+  - **FlipAssist's own reader reads the listing when this Mac has it.** That's flip-reader-5: Gemma 3 4B fine-tuned on 33,160 labelled listings to quote exactly the sentences that state a flaw. It isn't in the repo itself (it's on the repo's GitHub release: [FlipAssist's own models](#flipassists-own-models)); when Ollama doesn't list it, or it doesn't answer, Gemma 3 4B reads as described below, and `FLIP_READER_MODEL=` (empty) in `.env` turns it off. Its reading gets the safety checks only: every quote must be in the listing, a flaw the seller denies is dropped, a seller's story told before the flaw is cut off, and the pickup and "no offers" are checked as for any reading. The splitting and adding below (counting only quotes in so many flaw words, adding code's own flaws) is left out because on 5,032 listings no model had seen (26 Sep 2026) it took the flaws the reader found from 96.5% to 89.4% on UK iPhones and from 94.3% to 68.3% on US and Canadian listings. The message's reason is worded from the reader's whole sentences (next point), never cut to a few words.
   - **The reason is worded by FlipAssist's own wording model, and checked** (`flip/wording.py`, 3 Oct 2026):
     1. flip-wording (Gemma 3 4B with a LoRA trained on 14,513 labelled reasons, merged for Ollama as `flip-wording-4b`; `flip-wording-3` before 6 Oct) turns the reader's flaw sentences into one clause: "the battery health is 81%, there's a small chip on the bottom left corner and there are a few light scratches on the screen". Free, on this Mac.
     2. Claude Haiku checks every clause against the rules (`data/wording_rules.md`) and answers only "ok" or "fix" (about 0.01-0.04p).
@@ -273,8 +273,20 @@ The self-test opens the window, checks every kind of call (files, JSON, photo up
 ### FlipAssist's own models
 
 On a Mac, `launcher/get-models.sh` downloads the four model files from the repo's GitHub release `models-v1`, checks
-each one against the version that was tested, and adds it to Ollama (about 10 GB in all). Without them, Gemma 3 4B and
-code do their jobs. To make the release: `launcher/package-models.sh` (models/README.md).
+each one against the version that was tested, and adds it to Ollama (about 10 GB in all; it needs about 13 GB free
+while it runs). A model Ollama already has as that version is skipped, and a download that stops part-way is kept in
+`~/Library/Caches/FlipAssist-models`, so running it again carries on from there. If the release, or a file on it,
+can't be downloaded, it stops and says which, and the models it added before that stay. In a folder downloaded as a
+ZIP, or a fork's clone (GitHub doesn't copy releases), name the repo:
+`launcher/get-models.sh mohadilyes-git/FlipAssist-AI`. Without the models, Gemma 3 4B and code do their jobs
+(models/README.md).
+
+To make the release, on a Mac with the four models in Ollama, once the code is pushed (a repo with no commits can't
+have a release): `launcher/upload-models.sh mohadilyes-git/FlipAssist-AI`. It needs GitHub's gh tool, logged in
+(`brew install gh`, then `gh auth login`), makes the release `models-v1` with models/README.md as its notes, and
+uploads one model at a time, so it needs room for only one model's parts (about 2.5 GB). Or
+`launcher/package-models.sh <an empty folder with about 11 GB free>` makes the same files, to upload to a release
+tagged `models-v1` by hand. Both refuse a model in Ollama, or its Modelfile, that isn't the version that was tested.
 
 ### Your own keys
 
@@ -300,16 +312,27 @@ where things live, all in `launcher/src/parts.ts` and tested on the Mac for both
 
 To set it up:
 
-1. On the PC, install Python 3.11 (tick "Add python.exe to PATH"), Node.js 22 or newer, and Ollama, and open Ollama
-   once.
-2. Clone the repo on the PC (git clone), and put your `.env` in it if you have one (it holds your keys).
+1. On the PC, install Python 3.11 (tick "Add python.exe to PATH"), Node.js 22 or newer, Git for Windows
+   (git-scm.com), Ollama, and the Microsoft Visual C++ Redistributable (x64) if the PC doesn't have it
+   (aka.ms/vs/17/release/vc_redist.x64.exe), and open Ollama once.
+2. Clone the repo on the PC (git clone), somewhere OneDrive doesn't sync (C:\FlipAssist, say), and put your `.env` in
+   it if you have one (it holds your keys). From a ZIP download or a fork's clone instead, add
+   `-Repo mohadilyes-git/FlipAssist-AI` to the command in step 3, so it finds the models' release.
 3. On the PC, in PowerShell in the repo folder:
    `powershell -ExecutionPolicy Bypass -File launcher\windows-setup.ps1`.
-   It sets up the Python environment, downloads Gemma 3 4B and FlipAssist's four models from the repo's GitHub release
-   (each checked against the version that was tested, models/README.md), and builds FlipAssist into your Programs
-   folder, with a Start menu and a desktop shortcut. After a change, `powershell -ExecutionPolicy Bypass -File launcher\build.ps1` builds it
-   again. With no internet for 10 GB, copy the models on a Mac to an ExFAT USB drive (`launcher/export-models.sh /Volumes/USB/FlipAssist-models`)
-   and add `-Models D:\FlipAssist-models`.
+   It sets up the Python environment, downloads Gemma 3 4B through Ollama (about 3.4 GB) and FlipAssist's four models
+   from the repo's GitHub release (about 10 GB, each checked against the version that was tested, models/README.md),
+   and builds FlipAssist into your Programs folder, with a Start menu and a desktop shortcut. After a change,
+   `powershell -ExecutionPolicy Bypass -File launcher\build.ps1` builds it again. To save the 10 GB of FlipAssist's
+   models, copy them on a Mac to an ExFAT USB drive (`launcher/export-models.sh /Volumes/USB/FlipAssist-models`) and add
+   `-Models D:\FlipAssist-models`: Gemma 3 4B and the Python and Node libraries still download.
+
+Step 3 needs about 13 GB free on C: while it adds all four models. If it stops, run it again: a model Ollama already
+has as the tested version is skipped, and within a run a dropped download carries on where it stopped (up to 5 tries,
+10 s apart), though a model left half downloaded when a run stopped starts again. If the release, or a file on it,
+can't be downloaded, it stops before building FlipAssist and says why; `-NoModels` builds it without them (Gemma 3 4B
+and code do their jobs). Behind a proxy, set `HTTPS_PROXY`: the model files come with curl.exe, which doesn't read
+Windows' proxy settings.
 
 How fast it drafts depends on the PC: a Mac runs the models on its own graphics, and a PC does that with a recent
 graphics card. Without one they run on the processor, and a draft takes longer.

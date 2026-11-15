@@ -1,9 +1,10 @@
-A copy of Google's Gemma Terms of Use, from https://ai.google.dev/gemma/terms (taken 9 Nov 2026). It comes with
-FlipAssist's model files because the Terms ask anyone who shares a Gemma model to give its recipients a copy.
+A copy of Google's Gemma Terms of Use, from https://ai.google.dev/gemma/terms (taken 9 Nov 2026), with the addresses
+of its links to the "Gemma 4 license" and to the archive of earlier versions in brackets. It comes with FlipAssist's
+model files because the Terms ask anyone who shares a Gemma model to give its recipients a copy.
 
 Gemma Terms of Use
 
-The terms below apply to Gemma models listed in the Appendix at bottom of this page. For Gemma 4 terms, see the Gemma 4 license.
+The terms below apply to Gemma models listed in the Appendix at bottom of this page. For Gemma 4 terms, see the Gemma 4 license (https://ai.google.dev/gemma/apache_2).
 Last modified: April 1, 2026
 By using, reproducing, modifying, distributing, performing or displaying any portion or element of Gemma, Model Derivatives including via any Hosted Service, (each as defined below) (collectively, the "Gemma Services") or otherwise accepting the terms of this Agreement, you agree to be bound by this Agreement.
 Section 1: DEFINITIONS
@@ -80,5 +81,5 @@ Appendix
 	•	FunctionGemma
 	•	T5Gemma 2
 	•	TranslateGemma
-Note: Previous versions of these Terms are archived here.
+Note: Previous versions of these Terms are archived here (https://ai.google.dev/gemma/terms-archive).
 
