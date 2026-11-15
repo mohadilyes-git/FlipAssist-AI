@@ -271,6 +271,26 @@ def test_the_api_request_holds_haiku_to_the_shape_at_low_effort():
     assert client.sent["messages"][0]["content"][0]["source"]["media_type"] == "image/jpeg"
 
 
+def test_a_paid_model_waits_a_minute_and_tries_once_more_not_half_an_hour(monkeypatch):
+    """15 Nov review: the paid backup and List on eBay's writer made their client with the SDK's own defaults, 600 s
+    and 2 retries, so one hung call could hold a draft about half an hour. A client handed in keeps its own (the
+    reason's 30 s check)."""
+    import flip.ai as ai
+    made = []
+
+    class Anthropic:
+        def __init__(self, **settings):
+            made.append(settings)
+            self.messages = FakeClient(haiku_response())
+
+    monkeypatch.setattr(ai.anthropic, "Anthropic", Anthropic)
+    reply = ApiModel("claude-sonnet-5-5").ask("s", "u", [], {"type": "object"})
+    assert reply.answer == GOOD and made == [{"timeout": 60, "max_retries": 1}]
+    given = FakeClient(haiku_response())
+    ApiModel("claude-haiku-5-5", client=given).ask("s", "u", [], {"type": "object"})
+    assert len(made) == 1 and given.sent["model"] == "claude-haiku-5-5"
+
+
 def test_an_api_refusal_or_cut_off_answer_counts_as_wrong():
     for stop in ("refusal", "max_tokens"):
         reply = ApiModel(client=FakeClient(haiku_response(stop, ""))).ask("s", "u", [], {})

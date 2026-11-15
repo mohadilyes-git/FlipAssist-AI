@@ -4,6 +4,7 @@ your messages, only in the gaps code left, and marked as found by our AI. Made-u
 from flip.message_drafter import draft_message
 from flip.style import StyleBook, shortcuts_of, shortened, without
 from flip.ai import Reply
+from flip.audit import AuditLog
 from flip.style_ai import checked, merged, tidy
 from tests.fakes import FakeModel
 
@@ -78,6 +79,24 @@ def test_a_new_style_model_reads_the_same_messages_again(tmp_path):
     quiet = StyleBook(tmp_path / "quiet.sqlite3", ai=FakeModel("flip-style-1b", nothing))
     quiet.add(rows, "added")
     assert quiet.learn_with_ai() and not quiet.ai_stale() and quiet.ai_proposals() == {}  # "no habits" is kept
+
+
+def test_each_reading_by_our_ai_is_in_the_audit_log(tmp_path):
+    """15 Nov review: flip-style-1b never wrote to the audit log, so Home's "who did the work" and its count of
+    successful outputs left it out. Each time it reads your messages is an attempt, job "style": an answer passed (one
+    of no habits too), one it couldn't give failed."""
+    log = AuditLog(tmp_path / "audit.sqlite3")
+    rows = [{k: m[k] for k in ("listing_title", "asking_price", "marketplace", "my_message")} for m in JO]
+    book = StyleBook(tmp_path / "style.sqlite3", ai=FakeModel("flip-style-1b", SAID), log=log)
+    book.add(rows, "added")
+    assert book.learn_with_ai() and not book.learn_with_ai()  # read once: one attempt
+    down = StyleBook(tmp_path / "down.sqlite3", log=log, ai=FakeModel(
+        "flip-style-1b", Reply("flip-style-1b", error="Ollama isn't running on this device", reachable=False)))
+    down.add(rows, "added")
+    assert down.learn_with_ai() is False
+    assert log.db.execute("select model, job, problems from attempts order by id").fetchall() == [
+        ("flip-style-1b", "style", "[]"), ("flip-style-1b", "style", '["Ollama isn\'t running on this device"]')]
+    assert (log.stats()["outputs_here"], log.stats()["outputs"]) == (1, 1)
 
 
 def test_a_draft_writes_your_shortcuts_after_the_checks(tmp_path):

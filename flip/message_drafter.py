@@ -23,7 +23,9 @@
    your usual points and questions the listing doesn't answer
    (flip.questions). It can start from the draft on screen.
 6. The checks decide, whoever wrote it: the exact offer and no other price,
-   the condition only as the listing says it, enough words for a longer one,
+   the condition only as the listing says it (a reason flip.wording worded
+   counts as the listing's own words there: Haiku's check is what holds it
+   to the listing), enough words for a longer one,
    no promise about collecting or paying that your messages don't make, no
    invented numbers or stories, no contact details, nothing off the
    platform, AlertFlip's rules (flip.checks.check_message_manner) and
@@ -572,8 +574,13 @@ def draft_message(listing, card=None, index=None, local=None, api=None, mode="au
     if worded:
         point = {**point, "worded": worded["clause"]}
         result["reason"] = worded
-    # the condition checks read the checked reason as the listing's own words: "the battery health is 79%" for
-    # "Battery 79" (only these two checks: places, cash and questions still read the listing alone)
+    # the condition and battery checks read the worded reason as the listing's own words, checked or not ("not checked"
+    # with no Anthropic key, in local mode or when the check fails; "pending" until /messages/check-reason): "the
+    # battery health is 79%" for "Battery 79" (only these two checks: numbers, places, cash and questions still read the
+    # listing alone). Code can't judge flip-wording's rewording: held to the listing alone, these checks would have
+    # dropped 57 of the 925 right reasons flip-wording-4b wrote in the saved blind tests (6.2%: "replaced" for "new
+    # screen", "locked to T-Mobile" for "T-Mobile only", a French listing in English) to catch 8 of its 35 made-up ones
+    # (15 Nov review), so a fact it makes up is caught only by Haiku's check, and with no key nothing catches it
     checked_sources = f"{sources}\n{point['worded']}" if point and point.get("worded") else sources
     disagree = models_disagree(title, listing.get("description"), load_catalogue())
     if disagree:

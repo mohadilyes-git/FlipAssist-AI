@@ -115,6 +115,35 @@ def test_health_names_each_model_by_its_job_and_says_which_isnt_installed(client
     assert "reads your style" not in {m["job"] for m in TestClient(api.app).get("/health").json()["models"]}
 
 
+@pytest.mark.parametrize("body", ['{"models": 3}', "[" * 100000, '["not", "ollama"]', "not json", None])
+def test_health_answers_whatever_is_on_ollamas_port(client, monkeypatch, body):
+    """15 Nov review: an answer that isn't Ollama's model list ({"models": 3}, deeply nested JSON, a broken status
+    line) made /health a 500, so Home couldn't show the models. Something else on its port is no Ollama running, as
+    the reader's own lookup (flip.reader.installed) already took it."""
+    import http.client
+    import io
+    import urllib.request
+
+    class Tags(io.BytesIO):
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    def opened(url, timeout):
+        if body is None:
+            raise http.client.BadStatusLine("x")
+        return Tags(body.encode())
+
+    monkeypatch.setattr(urllib.request, "urlopen", opened)
+    answer = TestClient(api.app).get("/health")
+    assert answer.status_code == 200
+    assert (answer.json()["local_running"], answer.json()["models"]) == (False, [])
+
+
 @pytest.mark.parametrize("headers, status", [({}, 401), ({"X-API-Key": "wrong"}, 401)])
 def test_everything_else_needs_the_key(client, headers, status):
     for answer in (TestClient(api.app, headers=headers).get("/stats"),
@@ -143,6 +172,13 @@ def test_a_message_from_your_own_sentences_with_the_reading_and_the_note(client)
     assert draft["reading"]["flaws"] == ["Black dot on the screen"] and draft["reading"]["read_by"] == "gemma3:4b"
     assert draft["kind"] == "lower" and isinstance(draft["draft_id"], int) and draft["cost_pence"] == 0
     assert len(local.asked) == 1  # the reading only
+
+
+def test_the_docs_name_the_paid_backup_as_a_messages_paid_writer():
+    """15 Nov review: /docs said a message is written by "template (no AI), gemma3:4b or claude-haiku-5-5"; since 14 Oct
+    the paid writer is the backup, Claude Sonnet 5.5 unless FLIP_BACKUP_MODEL names another, and Haiku writes none."""
+    said = api.app.openapi()["components"]["schemas"]["MessageDraft"]["properties"]["written_by"]["description"]
+    assert "haiku" not in said and api.BACKUP_MODEL in said and "FLIP_BACKUP_MODEL" in said
 
 
 def test_a_message_the_ai_writes(client):
@@ -308,7 +344,24 @@ def test_the_app_phrases_the_facts_unless_set_back(monkeypatch):
     assert (api.listing_from_facts(), api.listing_writer_name()) == (False, "gemma3:4b")
     monkeypatch.delenv("FLIP_LISTING_WRITER")
     monkeypatch.setattr(api, "reader_name", lambda: "flip-reader-5")
+    monkeypatch.setattr(api, "ollama_models", lambda url: {"flip-reader-5:latest", "gemma3:4b"})
     assert TestClient(api.app).get("/health").json()["listing_reader"] == "flip-reader-5"
+
+
+@pytest.mark.parametrize("listed, reads", [({"flip-reader-5:latest", "gemma3:4b"}, "flip-reader-5"),
+                                           ({"gemma3:4b"}, "gemma3:4b"), (set(), "code"), (None, "code")])
+def test_health_names_who_really_reads_list_on_ebays_notes(monkeypatch, listed, reads):
+    """15 Nov review: listing_reader named flip-reader-5 whether or not this device's Ollama had it. Without it
+    Gemma 3 4B reads your notes (flip.reader.reader_for), and with no model to read them (no Ollama), code."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "pretend-anthropic-key")
+    for setting in ("FLIP_LISTING_WRITER", "FLIP_READER_MODEL"):
+        monkeypatch.delenv(setting, raising=False)
+    monkeypatch.setattr(api, "ollama_models", lambda url: listed)
+    assert TestClient(api.app).get("/health").json()["listing_reader"] == reads
+    monkeypatch.setenv("FLIP_READER_MODEL", "")  # FlipAssist's reader turned off in .env: Gemma reads, if it can
+    assert TestClient(api.app).get("/health").json()["listing_reader"] == ("code" if reads == "code" else "gemma3:4b")
+    monkeypatch.setenv("FLIP_LISTING_WRITER", "notes")  # Claude Haiku 5.5 reads your notes itself: nobody else does
+    assert TestClient(api.app).get("/health").json()["listing_reader"] == ""
 
 
 def test_a_colour_gemma_couldnt_see_comes_from_haikus_look_and_says_so(client):
@@ -667,6 +720,26 @@ def test_the_same_listing_again_isnt_read_again(client):
     assert (read["flaws"], read["read_by"], read["attempts"]) == (earlier["flaws"], "flip-reader-5", [])
 
 
+@pytest.mark.parametrize("sent", [{"flaws": ["Screen is smashed"]},
+                                  {"flaws": ["Black dot on the screen"], "quotes": ["Face ID doesn't work."]},
+                                  {"flaws": ["Black dot on the screen"], "pickup": "Manchester M1"},
+                                  {"flaws": ["No scratches"]}])
+def test_a_reading_that_isnt_this_listings_is_read_again(client, sent):
+    """15 Nov review: a reading sent back was used as it was, never held to the listing, so a flaw the listing doesn't
+    have went into a ready message ("...because the screen is smashed..."). One whose words aren't the listing's, or
+    that gives as a flaw what the seller denies, is read again."""
+    local = FakeModel("gemma3:4b", READ)
+    client.use(local=local, messages=PAST)
+    reading = {"quotes": [], "pickup": "", "no_offers": "", "read_by": "flip-reader-5", **sent}
+    found = client.post("/messages/draft", json={"listing": {**LISTING, "description": f"{LISTING['description']} "
+                                                             "No scratches."},
+                                                 "mention": True, "writer": "template", "reading": reading})
+    assert found.status_code == 200, found.text
+    assert len(local.asked) == 1  # read again
+    assert found.json()["reading"]["read_by"] == "gemma3:4b" and "black dot" in found.json()["message"].lower()
+    assert not {"smashed", "face id", "manchester", "scratch"} & set(found.json()["message"].lower().split())
+
+
 def test_a_local_model_that_hangs_up_falls_back_to_code(client, monkeypatch):
     import http.client
     import io
@@ -793,13 +866,30 @@ def test_no_flaws_means_flip_kinds_isnt_looked_for(client, monkeypatch, prices_a
 
 def test_the_app_looks_for_flip_kinds_in_the_ollama_that_reads(monkeypatch, tmp_path):
     seen = []
-    monkeypatch.setattr(api, "kinds_sorter", lambda url: seen.append(url) or "sorter")
-    monkeypatch.setattr(api, "audit", lambda: AuditLog(tmp_path / "audit.sqlite3"))  # never the real log
+    log = AuditLog(tmp_path / "audit.sqlite3")  # never the real log
+    monkeypatch.setattr(api, "kinds_sorter", lambda url, log=None: seen.append((url, log)) or "sorter")
+    monkeypatch.setattr(api, "audit", lambda: log)
     api.setup.cache_clear()
     try:
-        assert api.setup().flaw_sorter() == "sorter" and seen == ["http://127.0.0.1:11434"]
+        # its answers are kept in the audit log, so Home counts them (15 Nov review)
+        assert api.setup().flaw_sorter() == "sorter" and seen == [("http://127.0.0.1:11434", log)]
     finally:
         api.setup.cache_clear()
+
+
+def test_the_apps_style_reader_keeps_its_readings_in_the_audit_log(monkeypatch, tmp_path):
+    """15 Nov review: flip-style-1b's readings went into no audit log, so Home's "who did the work" left it out."""
+    made = {}
+    log = AuditLog(tmp_path / "audit.sqlite3")  # never the real log, nor your real style
+    monkeypatch.setattr(api, "StyleBook", lambda **settings: made.update(settings) or "book")
+    monkeypatch.setattr(api, "MessageIndex", lambda: "index")
+    monkeypatch.setattr(api, "audit", lambda: log)
+    monkeypatch.delenv("FLIP_STYLE_AI", raising=False)
+    api.style.cache_clear()
+    try:
+        assert api.style() == "book" and made.get("log") is log and made["ai"].name == "flip-style-1b"
+    finally:
+        api.style.cache_clear()
 
 
 def test_the_price_tab_reads_nothing_but_iphones_samsungs_and_macbooks(client, prices_api):

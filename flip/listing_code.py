@@ -398,7 +398,9 @@ class PhrasingWriter:
 
     def write(self, entry, item, model, condition, photos=()):
         """The draft, phrased from the facts. When code couldn't fill the colour and there are photos, the phraser picks
-        it from them in the same call (as the writer did before the facts, 14 Oct): never a second, dearer look."""
+        it from them in the same call (as the writer did before the facts, 14 Oct). Only when it's unsure, or saw the
+        colour only on the screen or a case, does the paid backup (Claude Sonnet 5.5) take one look at the colour alone
+        (flip.drafter.second_look)."""
         started = time.monotonic()
         flaws, notes, text = read_flaws(entry, self.reader, self.sorter, self.log)
         facts = facts_of(item, model, condition, flaws, notes, text)

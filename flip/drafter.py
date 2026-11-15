@@ -6,9 +6,10 @@
    condition note and description, held to that one condition.
 3. The checks decide, model by model (flip.attempts): local first, one try on
    the paid model if a check fails, and never the API in place of a local
-   model that can't be reached. When the local model's answer passes but it
-   can't tell the colour from the photos, the paid model gets one look at
-   the colour alone (about 0.01p).
+   model that can't be reached. When the first writer's answer passes (the
+   local model's, or Claude Haiku 5.5's in the app) but it can't tell the
+   colour from the photos, or saw it only on the screen or a case, the paid
+   backup gets one look at the colour alone.
 4. eBay's category and fields ("item specifics") come from the same facts, in
    eBay's own words (flip.ebay): "Apple iPhone 13", "128 GB", "Black".
 5. A draft is "ready" only when nothing is missing. Anything the AI was unsure
@@ -70,8 +71,8 @@ def draft_listing(entry, catalogue, conditions, local=None, api=None, mode="auto
     # With no photos it had nothing to look at, so its pick is a guess: the colour stays for you
     colour = (result["answer"] or {}).get("colour")
     colour_by = result["attempts"][-1]["model"] if result["answer"] is not None else None
-    # the local model's answer passed but it couldn't tell the colour: the paid model gets one look at the
-    # colour alone (auto mode, where an answer from the local model is the only attempt so far)
+    # the first writer's answer passed (the local model's, or Claude Haiku 5.5's in the app) but it couldn't tell the
+    # colour: the paid backup gets one look at the colour alone (auto mode, where that answer is the only attempt so far)
     if photos and not item.get("colour") and unsure(colour) and mode == "auto" and api is not None \
             and len(result["attempts"]) == 1 and result["answer"] is not None:
         colour, colour_by = second_look(api, system, user, photos, model, result, log)

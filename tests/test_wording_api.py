@@ -114,6 +114,28 @@ def test_a_fix_that_cant_go_in_leaves_the_message_and_says_why(client):
     assert none["reason"]["checked"] == "flagged, kept"
 
 
+@pytest.mark.parametrize("fix, why", [
+    (f"{BETTER}, text me on 07700 900123", "contains a link, email, phone number"),
+    (f"{BETTER} and I've seen it for £150 elsewhere", "must offer exactly £185.00 and no other price"),
+    ("there's a small chip on the bottom left corner and the battery health is 71%",
+     "numbers that aren't in your inputs: 71"),
+    (f"{BETTER} and the screen is cracked", "condition the listing doesn't: crack"),
+])
+def test_a_fix_is_held_to_the_listing_like_any_message(client, fix, why):
+    """15 Nov review: a fix went into the message after only the condition checks, which read the fix itself as the
+    listing's words, so a phone number, another price, a battery figure the listing doesn't give and a made-up crack
+    went in. The listing is "Small chip on the bottom left corner. Batt 81. Otherwise great."."""
+    draft = drafted(client, models())
+    done = checked(client, draft, models(check="fix", fix=("fix", fix)))
+    assert not done["changed"] and done["message"] == draft["message"]
+    assert done["reason"] == {"clause": CLAUSE, "by": "flip-wording-3", "checked": "flagged, kept"}
+    assert done["problems"] and all(p.startswith("Claude Sonnet 5.5's fix wasn't put in: with it, ")
+                                    for p in done["problems"])
+    assert any(why in p for p in done["problems"]), done["problems"]
+    approved = client.post(f"/drafts/{draft['draft_id']}/approve", json={"sent": draft["message"]}).json()
+    assert approved["edited"] is False  # the audit log still has the message as drafted
+
+
 def test_with_the_step_off_nothing_is_checked(client):
     draft = drafted(client, models())
     client.use(None)

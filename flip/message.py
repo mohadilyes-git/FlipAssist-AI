@@ -17,7 +17,7 @@ import argparse
 import os
 from pathlib import Path
 
-from flip.ai import ApiModel, LocalModel
+from flip.ai import ApiModel, LocalModel, backup_model
 from flip.attempts import MODES
 from flip.audit import AuditLog
 from flip.draft import load_env
@@ -67,7 +67,7 @@ def main():
 
     listing = {"id": "cli", "title": args.title, "description": args.description, "asking_price": args.asking,
                "marketplace": args.marketplace}
-    api = ApiModel() if os.environ.get("ANTHROPIC_API_KEY") else None
+    api = ApiModel(backup_model()) if os.environ.get("ANTHROPIC_API_KEY") else None  # as the app's
     local, log = LocalModel(max_tokens=MESSAGE_TOKENS), AuditLog()
     reading = read_listing_with_ai(listing, reader_for(local), api, args.mode, log)
     mention = {"yes": True, "no": False}.get(args.mention)

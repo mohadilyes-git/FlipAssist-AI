@@ -1482,7 +1482,9 @@ def estimate(title, flaws=(), country="uk", opener=None, description=None, sorte
     flaws: the reader's sentences (quotes); description: the seller's, for the flaws' context and the size when the
     title has none. storage_gb/ram_gb are the size it priced, asked_* the size the listing gives (None: it gives
     none). sorter: flip-kinds (flip.kinds.Sorter), asked each flaw's kinds; a flaw it can't answer, and the title,
-    code sorts (kinds_of). sorted_by says which did. opener: urllib.request.urlopen's stand-in (tests)."""
+    code sorts (kinds_of). sorted_by says which did. judge: how bad the damage is (flip.api.damage_judge, paid models
+    with an Anthropic key), asked on a thread before the prices API, so it's asked even when that call fails; None:
+    code alone. opener: urllib.request.urlopen's stand-in (tests)."""
     kind = kind_of(title)
     if kind is None:
         return {"skipped": SKIPPED}

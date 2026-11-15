@@ -14,7 +14,7 @@ import os
 from decimal import Decimal
 from pathlib import Path
 
-from flip.ai import ApiModel, LocalModel
+from flip.ai import ApiModel, LocalModel, backup_model
 from flip.attempts import MODES
 from flip.audit import AuditLog
 from flip.catalogue import load_catalogue, load_conditions
@@ -71,7 +71,7 @@ def main():
     entries = json.loads(path.read_text(encoding="utf-8"))[:args.limit]
     catalogue, conditions = load_catalogue(), load_conditions()
     local = LocalModel()
-    api = ApiModel() if os.environ.get("ANTHROPIC_API_KEY") else None
+    api = ApiModel(backup_model()) if os.environ.get("ANTHROPIC_API_KEY") else None  # as the app's
     log = AuditLog()
 
     results = []

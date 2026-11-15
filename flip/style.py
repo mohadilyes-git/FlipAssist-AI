@@ -1506,16 +1506,17 @@ class StyleBook:
     approved, and any learned from a CSV. The style card and the message
     search follow every change, so the next draft already writes like the
     message you just added. index is the MessageIndex to keep in step, or
-    None for no search."""
+    None for no search. log: the audit log our AI's readings are kept in
+    (the job "style"), or None."""
 
-    def __init__(self, path=STYLE_DB, index=None, ai=None):
+    def __init__(self, path=STYLE_DB, index=None, ai=None, log=None):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(path, check_same_thread=False)  # the API answers from more than one thread
         self.lock = threading.RLock()
         self.db.executescript(TABLE)
         self.index, self._card, self._learned_card = index, None, None
         # our AI, which also reads your messages when they change (flip.style_ai): None, code alone (tests)
-        self.ai, self._learning = ai, False
+        self.ai, self._learning, self.log = ai, False, log
         if index is not None:
             self.sync()
 
@@ -1634,7 +1635,7 @@ class StyleBook:
         if self.ai is None or not self.ai_stale():
             return False
         messages = self.messages(newest_first=False)
-        proposals = propose(messages, self.ai)
+        proposals = propose(messages, self.ai, self.log)
         if proposals is None:
             return False
         at = datetime.now(timezone.utc).isoformat(timespec="seconds")

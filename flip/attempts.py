@@ -1,8 +1,10 @@
 """Trying the models in turn, the same way for listings and messages.
 
 In "auto" mode the local model goes first and an answer that fails the checks
-gets one try on the paid model (a message gets one more free try on the local
-model first, told what was wrong); "local" and "api" use one model only. A local
+gets one try on the paid model (a message that fails them gets one more free
+try on the local model first, told what was wrong; one that can't be read, cut
+off at its token limit or not JSON, has nothing to be told about and goes
+straight to the paid model); "local" and "api" use one model only. A local
 model that can't be reached (or isn't set up) stops there: nothing is sent to
 the API in its place, so an item only leaves this Mac when a local answer has
 failed the checks.
@@ -21,7 +23,8 @@ def try_models(mode, models, ask, check, result, log=None, again=None, job="draf
     None with the reason added to result["reasons"]. again(model, answer,
     problems), if given: when the local model's answer fails the checks, one
     more try on this Mac, told what was turned down, before the paid model
-    (free); it returns a Reply like ask."""
+    (free); it returns a Reply like ask. An answer that couldn't be read (cut
+    off, not JSON) gets no such try: it goes to the paid model."""
     def tried(reply):
         problems = [reply.error] if reply.answer is None else check(reply.answer)
         cost = cost_pence(reply.model, reply.tokens_in, reply.tokens_out)

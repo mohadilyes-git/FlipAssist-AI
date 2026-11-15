@@ -53,7 +53,7 @@ import re
 import urllib.request
 from functools import lru_cache
 
-from flip.ai import LocalModel
+from flip.ai import LocalModel, shown_name
 from flip.attempts import try_models
 from flip.catalogue import contains, find_phrase, words
 from flip.checks import (CONDITION_PROMISES, ESIM, MARKS, NEGATIONS, NOT_A_FLAW, PROBLEM, answered, denied_by,
@@ -72,6 +72,10 @@ MAX_FLAW = 15  # words: a flaw, not a paragraph (a sentence about one flaw can r
 MAX_BEFORE = 6  # words back a "no" can still deny a flaw
 # FlipAssist's own fine-tuned reader (round 5), when Ollama has it; FLIP_READER_MODEL= (empty) in .env reads with Gemma
 READER = "flip-reader-5"
+# seconds it may take before Gemma reads in its place: about 3 s on this Mac (6 s the slowest, 4 Nov), with room for a PC
+# that runs it on its processor. It had the writer's 300, and Gemma then 300 more (15 Nov review: a stuck reader held a
+# reading about 10 minutes)
+READER_TIMEOUT = 120
 # a denial, its apostrophe gone the way plain_words takes it out: "arent", "doesnt", "free (of)"
 NEGATORS = NEGATIONS | {"zero", "free", "arent", "isnt", "doesnt", "hasnt", "havent", "dont", "wont", "cant", "wasnt",
                         "werent", "didnt", "never", "none", "nothing", "nor"}
@@ -306,15 +310,29 @@ def as_written(quote, text):
 
 def followed(words, tokens, at, skips):
     """Where the rest of a quote's words are found in order from token at on,
-    skipping at most skips tokens: (tokens skipped, the last one's place), or None."""
+    skipping at most skips tokens: (tokens skipped, the last one's place), or None.
+    Each word takes the first place it can, the next word looks after it, and
+    when one has no place left the word before tries its next: a loop, not a
+    call for each word (15 Nov review: a run-on quote of about 500 words ran
+    out of stack, and the draft was a 500)."""
     if not words:
         return 0, None
-    for n in range(at, min(len(tokens), at + skips + 1)):
-        if typed_as(words[0], tokens[n][0]):
-            rest = followed(words[1:], tokens, n + 1, skips - (n - at))
-            if rest is not None:
-                return rest[0] + n - at, rest[1] if rest[1] is not None else n
-    return None
+    taken = []  # each word placed so far: (its token, where its search began, the skips left then)
+    w, start, left, n = 0, at, skips, at
+    while True:
+        end = min(len(tokens), start + left + 1)
+        while n < end and not typed_as(words[w], tokens[n][0]):
+            n += 1
+        if n < end:  # word w is token n
+            if w + 1 == len(words):
+                return sum(t - s for t, s, _ in taken) + n - start, n
+            taken.append((n, start, left))
+            w, start, left, n = w + 1, n + 1, left - (n - start), n + 1
+            continue
+        if not taken:
+            return None
+        n, start, left = taken.pop()  # back to the word before: its next place
+        w, n = w - 1, n + 1
 
 
 def typed_as(meant, typed):
@@ -971,14 +989,25 @@ def tidied(reply, text):
     return reply
 
 
-def installed(model, url):
-    """Whether the Ollama at url has the model, by its name ("flip-reader-5"
-    or "flip-reader-5:latest"); not when Ollama doesn't answer."""
+def ollama_models(url):
+    """The model names the Ollama at url lists ({"flip-reader-5:latest", "gemma3:4b"}), or None when nothing there
+    answers as Ollama does: not running, something else on its port, or an answer cut short. The one way /health and
+    installed read it (15 Nov review: /health caught fewer of these, so {"models": 3} on the port was a 500)."""
     try:
         with urllib.request.urlopen(f"{url}/api/tags", timeout=2) as answer:
-            names = {m.get("name") for m in json.load(answer).get("models") or [] if isinstance(m, dict)}
+            if getattr(answer, "status", 200) != 200:
+                return None
+            listed = json.load(answer).get("models") or []
+            return {m["name"] for m in listed if isinstance(m, dict) and isinstance(m.get("name"), str)}
     except (OSError, ValueError, AttributeError, TypeError, RecursionError, http.client.HTTPException):
-        return False  # something else on Ollama's port, or an answer cut short: Gemma reads
+        return None
+
+
+def installed(model, url):
+    """Whether the Ollama at url has the model, by its name ("flip-reader-5"
+    or "flip-reader-5:latest"); not when Ollama doesn't answer, or something
+    else is on its port (then Gemma reads)."""
+    names = ollama_models(url) or set()
     return model in names or f"{model}:latest" in names
 
 
@@ -997,10 +1026,16 @@ class ReaderOrGemma:
     def __init__(self, reader, gemma):
         self.reader, self.gemma = reader, gemma
         self.name, self.url, self.timeout = reader.name, getattr(reader, "url", None), getattr(reader, "timeout", None)
+        # the reader's replies that didn't answer, for the reading to keep as attempts (read_listing_with_ai, 9 Nov
+        # review: they went nowhere, and the screen said Gemma read it as if the reader were fine)
+        self.failed = []
 
     def ask(self, *args, **kwargs):
         reply = self.reader.ask(*args, **kwargs)
-        return reply if reply.reachable else self.gemma.ask(*args, **kwargs)
+        if reply.reachable:
+            return reply
+        self.failed.append(reply)
+        return self.gemma.ask(*args, **kwargs)
 
 
 def reader_for(local):
@@ -1010,7 +1045,7 @@ def reader_for(local):
     name = reader_name()
     if not name or not isinstance(local, LocalModel) or local.name == name or not installed(name, local.url):
         return local
-    return ReaderOrGemma(LocalModel(name=name, url=local.url, timeout=local.timeout), local)
+    return ReaderOrGemma(LocalModel(name=name, url=local.url, timeout=min(local.timeout, READER_TIMEOUT)), local)
 
 
 def story_cut(quote):
@@ -1102,8 +1137,19 @@ def read_listing_with_ai(listing, local=None, api=None, mode="auto", log=None):
     text = f"{listing.get('title') or ''}. {listing.get('description') or ''}"
     result = {"item_id": listing.get("id"), "reasons": [], "attempts": []}
     system, user = reading_prompt(listing)
-    answer = try_models(mode, {"local": local, "api": api},
-                        ask=lambda ai: tidied(ai.ask(system, user, [], READING_SCHEMA), text),
+
+    def ask(ai):
+        reply = ai.ask(system, user, [], READING_SCHEMA)
+        while getattr(ai, "failed", None):  # FlipAssist's reader didn't answer: Gemma was asked (ReaderOrGemma)
+            failed = ai.failed.pop(0)
+            result["attempts"].append({"model": failed.model, "problems": [failed.error], "seconds": failed.seconds,
+                                       "tokens_in": failed.tokens_in, "tokens_out": failed.tokens_out, "cost_pence": 0})
+            result["reasons"].append(f"{shown_name(failed.model)} didn't answer ({failed.error}): "
+                                     f"{shown_name(reply.model)} was asked in its place")
+            if log:
+                log.attempt(result["item_id"], failed, [failed.error], 0, job="read")
+        return tidied(reply, text)
+    answer = try_models(mode, {"local": local, "api": api}, ask=ask,
                         check=lambda found: check_reading(found, text), result=result, log=log,
                         job="read")  # logged as reading, apart from writing (Home's "who did the work", 4 Oct)
     model = result["attempts"][-1]["model"] if answer is not None else None

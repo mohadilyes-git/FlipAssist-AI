@@ -86,6 +86,18 @@ def test_a_check_that_fails_never_stops_the_draft():
     assert result["reason"]["checked"] == "not checked" and CLAUSE in result["answer"]["message"]
 
 
+def test_a_check_that_answers_neither_ok_nor_fix_is_no_check():
+    """15 Nov review: any answer but exactly "fix" counted as Haiku passing the reason ({}, "unsure", "FIX")."""
+    for answer in ({}, {"verdict": "unsure"}, {"verdict": "FIX"}, {"verdict": None}):
+        used = models()
+        used["check"] = FakeModel("claude-haiku-5-5", answer)
+        result = draft(wording=used)
+        assert result["reason"] == {"clause": CLAUSE, "by": "flip-wording-3", "checked": "not checked"}, answer
+        assert not used["fix"].asked and CLAUSE in result["answer"]["message"]
+        check = next(a for a in result["attempts"] if a["model"] == "claude-haiku-5-5")
+        assert check["problems"] == [f"the check answered {answer.get('verdict')!r}, not ok or fix"]
+
+
 def test_in_local_mode_nothing_leaves_this_mac():
     used = models()
     result = draft(wording=used, mode="local")

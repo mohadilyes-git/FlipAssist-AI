@@ -7,6 +7,7 @@ import pytest
 
 from flip import kinds, prices
 from flip.ai import Reply
+from flip.audit import AuditLog
 
 
 class Response:
@@ -125,6 +126,30 @@ def test_a_model_that_raises_never_stops_the_price():
     found = prices.estimate("iPhone 13 128GB Blue", ["Small crack on the back"], opener=opener,
                             description="Small crack on the back.", sorter=kinds.Sorter(model))
     assert found["kinds"] == ["damage"] and sent[0]["kinds"] == [] and found["sorted_by"] == "code"
+
+
+def test_each_answer_flip_kinds_gives_is_in_the_audit_log(tmp_path):
+    """15 Nov review: flip-kinds-1 never wrote to the audit log, so Home's "who did the work" and its count of successful
+    outputs left it out. Each flaw it's asked is an attempt, job "sort": one it answered passed, one it couldn't failed,
+    and once it's down the rest are code's, asked of nobody and kept nowhere."""
+    log = AuditLog(tmp_path / "audit.sqlite3")
+    model = FakeModel({"Small crack on the back": ok("damage"),
+                       "Face ID not working": Reply("flip-kinds-1", error="the answer wasn't JSON"),
+                       "Speaker crackles": Reply("flip-kinds-1", error="the local model isn't running", reachable=False),
+                       "Battery 79%": ok("battery")})
+    opener, sent = asking()
+    prices.estimate("iPhone 13 128GB Blue", list(model.answers), opener=opener,
+                    description=". ".join(model.answers) + ".", sorter=kinds.Sorter(model, log))
+    assert log.db.execute("select model, job, problems from attempts order by id").fetchall() == [
+        ("flip-kinds-1", "sort", "[]"), ("flip-kinds-1", "sort", '["the answer wasn\'t JSON"]'),
+        ("flip-kinds-1", "sort", '["the local model isn\'t running"]')]
+    stats = log.stats()
+    assert [(m["model"], m["job"], m["attempts"], m["passed"]) for m in stats["models"]] == [("flip-kinds-1", "sort", 3, 1)]
+    assert (stats["outputs_here"], stats["outputs"]) == (1, 1)
+    raises = AuditLog(tmp_path / "raises.sqlite3")
+    kinds.Sorter(FakeModel({"Small crack on the back": RuntimeError("boom")}), raises)("Small crack on the back", "", "")
+    assert raises.db.execute("select model, job, problems from attempts").fetchall() == [
+        ("flip-kinds-1", "sort", '["flip-kinds-1 couldn\'t answer (RuntimeError)"]')]
 
 
 def test_the_title_is_sorted_by_code_whatever_the_model_says():

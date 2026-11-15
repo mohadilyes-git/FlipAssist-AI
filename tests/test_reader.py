@@ -12,6 +12,7 @@ import urllib.error
 
 import flip.reader as reader
 from flip.ai import LocalModel
+from flip.audit import AuditLog
 from flip.reader import (check_reading, code_reading, fine_tuned, flaws_in, in_listing, installed, place,
                          read_listing_with_ai, reader_for, reading_checked, reading_from)
 from flip.offers import unnegated
@@ -532,6 +533,19 @@ def test_a_quote_with_the_sellers_typos_put_right_is_the_sellers_words():
     assert reading["flaws"] == ["Small scratich on the top corner as shown in the photos", "Light stcratches to the back"]
 
 
+@pytest.mark.parametrize("length", [600, 2000])
+def test_a_long_run_on_quote_with_a_typo_put_right_is_read_not_a_crash(length):
+    """15 Nov review: putting a quote back to the seller's words went one call deeper for each of its words, so a
+    run-on sentence of about 500 words or more, quoted whole with a typo put right, raised RecursionError: /messages/draft
+    and /prices/estimate were a 500."""
+    said = [f"part{n}" for n in range(length)]
+    said[length // 2] = "scratich"  # the seller's typo
+    listing = {"title": "iPhone 12 64GB", "description": " ".join(said)}
+    quote = " ".join(said).replace("scratich", "scratch")
+    reading = read_listing_with_ai(listing, FakeModel("flip-reader-5", {"flaws": [quote], "pickup": "", "no_offers": ""}))
+    assert reading["read_by"] == "flip-reader-5" and reading["quotes"] == [" ".join(said)]  # the seller's own words
+
+
 def test_a_word_the_listing_doesnt_have_isnt_a_typo():
     listing = {"title": "iPhone 12 64GB", "description": "Small scratich on the top corner."}
     gemma = {"flaws": ["Small crack on the top corner"], "pickup": "", "no_offers": ""}  # "crack" is made up
@@ -748,11 +762,41 @@ def test_the_reader_is_flipassists_own_when_ollama_has_it(monkeypatch):
     assert reader_for(gemma) is gemma  # FLIP_READER_MODEL= in .env turns it off (read at each reading)
 
 
+def test_flipassists_reader_waits_two_minutes_at_most_before_gemma_reads(monkeypatch):
+    """15 Nov review: the reader took the writer's 300 s, and Gemma then had 300 more, so a stuck reader could hold a
+    reading about 10 minutes. It answers in about 3 s on this Mac (6 s the slowest); 120 s leaves room for a PC that
+    runs it on its processor."""
+    monkeypatch.delenv("FLIP_READER_MODEL", raising=False)
+    monkeypatch.setattr(reader, "installed", lambda model, url: True)
+    gemma = LocalModel()
+    found = reader_for(gemma)
+    assert (found.reader.timeout, found.timeout, found.gemma.timeout) == (120, 120, 300)
+    assert reader_for(LocalModel(timeout=60)).reader.timeout == 60  # never longer than the writer's own
+
+
 def test_gemma_reads_when_the_reader_doesnt_answer():
     down = Reply("flip-reader-5", error="the local model refused (500): no", reachable=False)
     both = reader.ReaderOrGemma(FakeModel("flip-reader-5", down), FakeModel("gemma3:4b", GOOD_READ))
     reading = read_listing_with_ai(LISTING, both)
     assert (reading["read_by"], reading["flaws"]) == ("gemma3:4b", ["Black dot on the screen", "Cracked back"])
+
+
+def test_the_readers_failed_try_is_kept_as_an_attempt(tmp_path):
+    """15 Nov review: when flip-reader-5 didn't answer, only Gemma's reading came back, so its error and its minutes
+    were in no attempt, no reason and no audit log row: the screen said Gemma read it, as if the reader were fine."""
+    down = Reply("flip-reader-5", error="flip-reader-5 took too long", reachable=False, seconds=300.0)
+    both = reader.ReaderOrGemma(FakeModel("flip-reader-5", down), FakeModel("gemma3:4b", GOOD_READ))
+    log = AuditLog(tmp_path / "audit.sqlite3")
+    reading = read_listing_with_ai(LISTING, both, log=log)
+    assert reading["read_by"] == "gemma3:4b"
+    assert [(a["model"], a["problems"], a["seconds"]) for a in reading["attempts"]] == \
+        [("flip-reader-5", ["flip-reader-5 took too long"], 300.0), ("gemma3:4b", [], 2.0)]
+    assert reading["reasons"] == ["flip-reader-5 didn't answer (flip-reader-5 took too long): Gemma 3 4B was asked in its place"]
+    assert log.db.execute("select model, job, problems from attempts order by id").fetchall() == \
+        [("flip-reader-5", "read", '["flip-reader-5 took too long"]'), ("gemma3:4b", "read", "[]")]
+    again = read_listing_with_ai(LISTING, reader.ReaderOrGemma(FakeModel("flip-reader-5", GOOD_READ),
+                                                               FakeModel("gemma3:4b")))
+    assert [a["model"] for a in again["attempts"]] == ["flip-reader-5"] and again["reasons"] == []
 
 
 def test_a_bad_answer_on_ollamas_port_is_no_reader(monkeypatch):

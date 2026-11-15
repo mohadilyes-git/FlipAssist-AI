@@ -161,10 +161,13 @@ def check_reason(title, flaws, clause, by, models=None, result=None, log=None):
     if check is None:
         return out
     flagged = asked(check, cached(CHECKER), check_text(title, flaws, clause), FLAG)
-    tried(flagged, [flagged.error] if flagged.answer is None else [])
-    if flagged.answer is None:
-        return out  # the check failed: flip-wording's clause, as it is
-    if flagged.answer.get("verdict") != "fix":
+    # only "ok" passes it and only "fix" flags it: any other answer is no check (15 Nov review: {} and "unsure" passed)
+    verdict = flagged.answer.get("verdict") if isinstance(flagged.answer, dict) else None
+    tried(flagged, [flagged.error] if flagged.answer is None else [] if verdict in ("ok", "fix")
+          else [f"the check answered {verdict!r}, not ok or fix"])
+    if verdict not in ("ok", "fix"):
+        return out  # the check failed, or gave no verdict: flip-wording's clause, as it is
+    if verdict == "ok":
         return {**out, "checked": "ok"}
     fix = models["fix"] if "fix" in models else api_model(names["fix"]) if names["fix"] else None
     if fix is None:

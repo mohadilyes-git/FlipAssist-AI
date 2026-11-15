@@ -2,10 +2,13 @@
 returns a Reply, whichever model answers.
 
 The local model (Gemma 3 4B through Ollama) runs on this device: free, and
-nothing leaves the machine. The API model (Claude Sonnet 5.5 since 14 Oct,
-BACKUP_MODEL; Claude Haiku before) is paid and only gets items whose local
-answer failed the checks. "Couldn't be reached" and "answered
-wrongly" are kept apart, because only a wrong answer may go on to the API.
+nothing leaves the machine. The API models are paid. The backup (Claude Sonnet
+5.5 since 14 Oct, BACKUP_MODEL; Claude Haiku before) only gets items whose
+local answer failed the checks; with an Anthropic key, Claude Haiku 5.5 also
+checks every offer's reason (flip.wording), writes List on eBay's draft first
+(flip.api.listing_writer) and judges how bad a priced listing's damage is
+(flip.api.damage_judge). "Couldn't be reached" and "answered wrongly" are kept
+apart, because only a wrong answer may go on to the API.
 """
 
 import http.client
@@ -155,8 +158,9 @@ class LocalModel:
         return reply
 
 
-# the paid model that reads or writes when this device's models can't (14 Oct; Claude Haiku 5.5 before, which now only
-# checks each offer's reason): FLIP_BACKUP_MODEL in .env names another
+# the paid model that reads or writes when this device's models can't (14 Oct; Claude Haiku 5.5 before, which now
+# checks each offer's reason, writes List on eBay's draft and judges a priced listing's damage): FLIP_BACKUP_MODEL in
+# .env names another
 BACKUP_MODEL = "claude-sonnet-5-5"
 
 
@@ -175,20 +179,30 @@ def shown_name(model):
     return SHOWN_NAMES.get(model, model)
 
 
+# how long a paid call may take, and how many more tries it gets, when ApiModel makes its own client (the paid backup,
+# List on eBay's writer): the slowest seen on this Mac was 12 s, a listing with photos (4 Nov). The SDK's own default is
+# 600 s and 2 retries, so one call that hung could hold a draft about half an hour (15 Nov review)
+PAID_TIMEOUT = 60
+PAID_RETRIES = 1
+
+
 class ApiModel:
     """A Claude model through the Anthropic API: the paid fallback for answers this device's models got wrong
     (Claude Sonnet 5.5 since 14 Oct, BACKUP_MODEL), and the reason's check and fix (flip.wording)."""
 
-    def __init__(self, name="claude-haiku-5-5", client=None, thinking=None):
+    def __init__(self, name="claude-haiku-5-5", client=None, thinking=None, timeout=PAID_TIMEOUT,
+                 max_retries=PAID_RETRIES):
         self.name, self.client = name, client  # the client is made on first use
         self.thinking = thinking  # e.g. {"type": "disabled"}: a short verdict needs no thinking (flip.wording)
+        self.timeout, self.max_retries = timeout, max_retries  # for the client it makes; one handed in keeps its own
 
     def ask(self, system, user, photos, schema, vary=False):
         """vary is the local model's: this API takes no temperature, and the
         prompt already asks a rewrite for other words."""
         started = time.monotonic()
         try:
-            self.client = self.client or anthropic.Anthropic()  # reads ANTHROPIC_API_KEY
+            # reads ANTHROPIC_API_KEY
+            self.client = self.client or anthropic.Anthropic(timeout=self.timeout, max_retries=self.max_retries)
             response = self.client.messages.create(
                 model=self.name,
                 max_tokens=16000,

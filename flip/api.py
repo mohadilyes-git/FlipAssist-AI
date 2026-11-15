@@ -24,7 +24,6 @@ import os
 import re
 import subprocess
 import tempfile
-import urllib.request
 import uuid
 from functools import lru_cache
 from pathlib import Path
@@ -41,6 +40,8 @@ from starlette.responses import JSONResponse
 from flip.ai import BACKUP_MODEL, ApiModel, LocalModel, backup_model, shown_name, whole_text  # noqa: F401
 from flip.audit import AuditLog
 from flip.catalogue import load_catalogue, load_conditions
+from flip.checks import (MAX_MESSAGE, check_length, check_message_claims, check_no_contact_details,
+                         check_no_invented_numbers, check_no_off_platform, check_no_story, prices_in)
 from flip.draft import load_env
 from flip.kinds import model_name as kinds_model, sorter as kinds_sorter
 from flip.prices import NOT_SUPPORTED, estimate, kind_of, settings as prices_settings, supported
@@ -52,10 +53,11 @@ from flip.style_ai import MODEL as STYLE_MODEL
 from flip.wording import MODEL as WORDING_MODEL, api_model as wording_api_model, check_reason, completed, settings
 from flip.severity import judged
 from flip.costs import cost_pence
-from flip.money import to_pence
+from flip.money import pounds as pounds_said, to_pence
+from flip.numbers import TYPED_BATTERY
 from flip.photos import NotAPhoto, photo_base64, photo_kind
 from flip.prompts import offer_words
-from flip.reader import read_listing_with_ai, reader_for, reader_name
+from flip.reader import check_reading, ollama_models, read_listing_with_ai, reader_for, reader_name
 from flip.retrieval import MessageIndex
 from flip.style import StyleBook, phrase_rows, traits
 
@@ -192,7 +194,8 @@ class MessageDraft(BaseModel):
     draft_id: int
     status: Literal["ready", "needs you"]
     message: str | None
-    written_by: str | None = Field(description="template (no AI), gemma3:4b or claude-haiku-5-5")
+    written_by: str | None = Field(description=f"template (no AI), gemma3:4b, or the paid backup ({BACKUP_MODEL} "
+                                               "unless FLIP_BACKUP_MODEL names another)")
     kind: str
     offer: str = Field(description='the price code set, as said in the message: "£185"')
     offer_pence: int
@@ -313,8 +316,10 @@ class StyleMessage(BaseModel):
 
 class ModelUse(BaseModel):
     model: str
-    job: str = Field("draft", description='"read", "price", "draft" (writing a message), "listing" (writing an eBay '
-                                          'listing), "reason" or "colour"')
+    job: str = Field("draft", description='"read", "price", "draft" (writing a message), "rewrite", "listing" (writing '
+                                          'an eBay listing), "reason", "colour", "severity" (how bad the damage is), '
+                                          '"sort" (flip-kinds-1 sorting a flaw) or "style" (flip-style-1b reading your '
+                                          'style)')
     attempts: int
     passed: int
     cost_pence: float
@@ -353,9 +358,10 @@ class Health(BaseModel):
     prices_api_set: bool = Field(False, description="the AlertFlip prices API (fresh UK sales) has its URL and key in .env")
     listing_model: str = Field("", description="who writes List on eBay's draft first: claude-haiku-5-5 (Claude Sonnet "
                                                "5.5 when it fails the checks), or the local model (FLIP_LISTING_WRITER)")
-    listing_reader: str = Field("", description="the model that reads your notes for List on eBay's writer, which "
-                                                "phrases what it found (flip-reader-5, 14 Oct); empty when the writer "
-                                                "reads them itself")
+    listing_reader: str = Field("", description="who reads your notes for List on eBay's writer, which phrases what "
+                                                "it found (14 Oct): flip-reader-5 when this device's Ollama has it, "
+                                                "else gemma3:4b, else code (no model to read them); empty when the "
+                                                "writer reads them itself")
     flip_api_key_set: bool = Field(description=f"the key callers need is set, {MIN_KEY} characters or more; "
                                                 "without it every call is refused")
     models: list[ModelState] = Field(default_factory=list, description="the models Ollama is asked for, by job, and "
@@ -417,7 +423,7 @@ def setup():
     api = ApiModel(backup_model()) if os.environ.get("ANTHROPIC_API_KEY") else None
     local = LocalModel(max_tokens=MESSAGE_TOKENS)
     return Setup(local, api, audit(), LocalModel(), reader=lambda: reader_for(local), wording="settings",
-                 kinds=lambda: kinds_sorter(local.url), judge="settings", listing=listing_writer,
+                 kinds=lambda: kinds_sorter(local.url, audit()), judge="settings", listing=listing_writer,
                  listing_facts=listing_from_facts)
 
 
@@ -461,7 +467,8 @@ def style():
     # when they change (flip.style_ai); the drafts use only what code checks in them. FLIP_STYLE_AI= (empty) in .env
     # leaves your style to code alone; FLIP_STYLE_AI=gemma3:4b goes back to plain Gemma
     name = style_model()
-    return StyleBook(index=MessageIndex(), ai=LocalModel(name, timeout=180, max_tokens=700) if name else None)
+    return StyleBook(index=MessageIndex(), ai=LocalModel(name, timeout=180, max_tokens=700) if name else None,
+                     log=audit())  # each reading kept as the job "style", for Home (15 Nov review)
 
 
 def style_model():
@@ -575,7 +582,9 @@ class WholeTextRoute(APIRoute):
 
 app = FastAPI(title="FlipAssist", version="0.4.0",
               description="Drafts eBay listings and offer messages. Code does what it can, a local AI the rest, a "
-                          "paid AI only when the local answer fails a check, and a person approves every draft.")
+                          "paid AI when the local answer fails a check (with an Anthropic key, Claude Haiku 5.5 also "
+                          "checks every offer's reason, writes List on eBay's draft and judges a priced listing's "
+                          "damage), and a person approves every draft.")
 app.add_middleware(Gate)
 app.router.route_class = WholeTextRoute
 
@@ -584,25 +593,22 @@ app.router.route_class = WholeTextRoute
 def health():
     """Whether the local model is running and the keys are set. No key needed, and no key shown."""
     local = LocalModel()
-    running, names = False, set()
-    try:
-        with urllib.request.urlopen(f"{local.url}/api/tags", timeout=2) as answer:
-            running = answer.status == 200
-            listed = json.load(answer).get("models") or []
-            names = {m["name"] for m in listed if isinstance(m, dict) and isinstance(m.get("name"), str)}
-    except (OSError, ValueError, AttributeError):
-        pass
+    listed = ollama_models(local.url)  # None: no Ollama, or something else on its port
+    running, names = listed is not None, listed or set()
     # each model by its job, so a missing one shows (6 Oct review: Home said they were all running when Ollama was)
     wanted = [("reads listings", reader_name()), ("words the reason", settings()["wording"]),
               ("sorts price flaws", kinds_model()), ("reads your style", style_model()), ("writes messages", local.name)]
-    models = [ModelState(job=job, name=name, installed=name in names or f"{name}:latest" in names)
-              for job, name in wanted if name] if running else []
-    names = settings()  # the reason's models: empty when there's no Anthropic key or a step is off in .env
+    has = lambda name: bool(name) and (name in names or f"{name}:latest" in names)
+    models = [ModelState(job=job, name=name, installed=has(name)) for job, name in wanted if name] if running else []
+    # who really reads List on eBay's notes, as flip.reader.reader_for picks: FlipAssist's reader when Ollama has it,
+    # else Gemma 3 4B, else code (15 Nov review: it named flip-reader-5 whether or not Ollama had it)
+    reads = next((name for name in (reader_name(), local.name) if has(name)), "code")
+    steps = settings()  # the reason's models: empty when there's no Anthropic key or a step is off in .env
     return Health(local_model=local.name, local_running=running, api_model=backup_model(),
-                  api_key_set=bool(os.environ.get("ANTHROPIC_API_KEY")), check_model=names["check"],
-                  fix_model=names["fix"], prices_api_set=all(prices_settings()), listing_model=listing_writer_name(),
-                  listing_reader=(reader_name() or "") if listing_from_facts() else "",
-                  flip_api_key_set=bool(usable_key()), models=models)
+                  api_key_set=bool(os.environ.get("ANTHROPIC_API_KEY")), check_model=steps["check"],
+                  fix_model=steps["fix"], prices_api_set=all(prices_settings()), listing_model=listing_writer_name(),
+                  listing_reader=reads if listing_from_facts() else "", flip_api_key_set=bool(usable_key()),
+                  models=models)
 
 
 @app.post("/messages/draft", response_model=MessageDraft, dependencies=[Depends(key)])
@@ -620,8 +626,16 @@ def draft_a_message(request: MessageRequest, s: Setup = Depends(setup), book: St
     except Refused as e:
         raise HTTPException(422, str(e))
     listing = {**request.listing.model_dump(), "id": request.listing.id or new_id()}
-    # the same listing again (9 Nov): its reading from the draft before, as it is; else it's read now
-    reading = {**request.reading.model_dump(), "attempts": []} if request.reading is not None else \
+    # the same listing again (9 Nov): its reading from the draft before, as it is; else it's read now. A reading sent
+    # back is held to this listing as any model's is (flip.reader.check_reading: every quote the listing's, no flaw the
+    # seller denies, "no offers" that says it): one that isn't this listing's is read again (15 Nov review: its flaw
+    # went into a ready message whatever the listing said)
+    sent = request.reading.model_dump() if request.reading is not None else None
+    if sent is not None and check_reading({"flaws": [*sent["quotes"], *sent["flaws"]], "pickup": sent["pickup"],
+                                           "no_offers": sent["no_offers"]},
+                                          f"{listing['title']}. {listing.get('description') or ''}"):
+        sent = None
+    reading = {**sent, "attempts": []} if sent is not None else \
         read_listing_with_ai(listing, s.reading_model(), s.api, request.mode, s.log)
     try:
         # My style off: written the default way, as with no messages to learn from (14 Oct)
@@ -788,7 +802,8 @@ class PriceChecks:
 def estimate_price(request: PriceRequest, s: Setup = Depends(setup)):
     """What this listing sells for in the UK with its flaws: iPhones, Samsung phones and MacBooks (4 Oct), from the same
     prices API as the AlertFlip app. Send the description and the listing is read for its flaws first, as for a draft
-    (the AI UK price estimate tab); send flaws and they're used as they are."""
+    (the AI UK price estimate tab); send flaws and they're used as they are. With an Anthropic key, damage among them
+    is judged by paid models too (damage_judge)."""
     if kind_of(request.title) is None or not all(prices_settings()):  # before any reading: nothing to price it
         return PriceEstimate(**estimate(request.title))
     # flaws sent along (9 Nov: a draft's, from AI message's Check the UK price) are used as they are, by whoever read them
@@ -805,8 +820,11 @@ def estimate_price(request: PriceRequest, s: Setup = Depends(setup)):
 
 def damage_judge(s):
     """How bad the damage is, the hybrid way (flip.severity.judged, 14 Oct): code and Claude Haiku 5.5, Claude Sonnet 5.5
-    when they disagree; None without an Anthropic key (code alone). Each paid call is in the audit log as the job
-    "severity", so Home counts it and its cost (not in the cost per 100 drafts: it's the price tab's)."""
+    when they disagree; None without an Anthropic key (code alone). Each is sent the title, the first 1,500 characters
+    of the description and every flaw sentence the reader found (flip.severity.listing_for_judge), never a price. It's
+    asked on a thread while the prices API answers (flip.prices.estimate), so it's paid for even when that call fails;
+    the same listing again isn't asked again. Each paid call is in the audit log as the job "severity", so Home counts
+    it and its cost (not in the cost per 100 drafts: it's the price tab's)."""
     if not os.environ.get("ANTHROPIC_API_KEY"):
         return None
     check = wording_api_model("claude-haiku-5-5", thinking={"type": "disabled"})
@@ -819,12 +837,42 @@ def damage_judge(s):
     return lambda flaws, title, description, category: judged(flaws, title, description, category, check, decide, logged)
 
 
+# a bare figure right after the battery's own word is its health, as sellers write it ("Batt 81", "Battery: 81"); the
+# battery check's reader (flip.offers.battery_now) takes a figure with no % only after a word for health, so a fix
+# saying "the battery health is 81%" for "Batt 81" read as a battery the listing doesn't give. Not a charge level, the
+# past or a bound ("battery level 60%", "Battery was 84%", "over 85%"): a word comes between, and those stay as written
+BARE_BATTERY = re.compile(rf"(?<![a-z])({TYPED_BATTERY})\.?[ \t]*[:=\-]?[ \t]*(\d{{2,3}})(?![\d%]|\.\d|[ \t]*(?:per ?cent|"
+                          r"gb|tb|mah|hours?|hrs?|mins?|days?|cycles?)\b)", re.IGNORECASE)
+
+
+def fix_problems(request, new, fixed):
+    """What the message with a fixed reason in it (fixed: new in place of the drafted clause) fails, by the checks every
+    message passes, judged against the listing alone, never the fix itself (15 Nov review: only the condition checks
+    ran here, reading the fix as the listing's own words, so a fix with "text me on 07700 900123", "I've seen it for
+    £150 elsewhere", a battery at 71% for "Batt 81" or "the screen is cracked" went into the message). The rest of the
+    message passed its checks when it was drafted, your own sentences with it, so what the fix brings in is held to
+    the offer as the only price and no number, contact detail, dealing off the platform, story or extra the listing
+    doesn't give; the whole message to the condition and the battery as the listing says them."""
+    listed = f"{request.listing.title}. {request.listing.description}"
+    point = {"about": "flaw", "says": request.flaws, "worded": new}  # the fix is the reason the message gives
+    priced = [f"the message must offer exactly {pounds_said(request.offer_pence)} and no other price"] \
+        if prices_in(new) else []
+    battery = BARE_BATTERY.sub(lambda m: f"{m.group(1)} health {m.group(2)}%", listed)
+    return check_length("message", fixed, MAX_MESSAGE) + priced + \
+        check_no_invented_numbers("the message", new, listed) + check_no_contact_details("the message", new) + \
+        check_no_off_platform("the message", new) + check_no_story("the message", new, listed) + \
+        check_message_claims(new, listed) + \
+        check_condition_talk(fixed, listed, point, True, request.kind, request.offer_pence) + \
+        check_battery_reason(fixed, point, request.offer_pence, battery, request.listing.title, request.kind)
+
+
 @app.post("/messages/check-reason", response_model=ReasonCheck, dependencies=[Depends(key)])
 def check_a_reason(request: ReasonCheckRequest, s: Setup = Depends(setup)):
     """Steps 4-5 for a draft made with check_later: Haiku checks the reason, and only a flagged one goes to Sonnet.
-    A fixed reason replaces the old one in the message (the writer puts it in word for word), the condition checks
-    run again, and the audit log keeps the new text, so approving it counts as unedited. Anything that can't be done
-    leaves the message as it was."""
+    A fixed reason replaces the old one in the message (the writer puts it in word for word) only when the message
+    with it passes the checks every message passes, judged against the listing alone (fix_problems), and the audit
+    log keeps the new text, so approving it counts as unedited. Anything that can't be done leaves the message as it
+    was."""
     # logged for the draft's own item, so Home counts the check as part of that draft (14 Oct)
     item = s.log.item_of(request.draft_id) if s.log is not None else None
     result = {"item_id": item or request.listing.id, "attempts": []}
@@ -848,10 +896,7 @@ def check_a_reason(request: ReasonCheckRequest, s: Setup = Depends(setup)):
             problems.append(f"the message words the reason its own way, so {fixer}'s fix wasn't put in")
         else:
             fixed = request.message[:at] + new + request.message[at + len(request.clause):]
-            sources = f"{request.listing.title}. {request.listing.description}\n{new}"
-            point = {"about": "flaw", "says": request.flaws, "worded": new}
-            problems = check_condition_talk(fixed, sources, point, True, request.kind, request.offer_pence) + \
-                check_battery_reason(fixed, point, request.offer_pence, sources, request.listing.title, request.kind)
+            problems = fix_problems(request, new, fixed)
             # what's said is about the message with the fix put in, which isn't the one on screen (14 Oct)
             problems = [f"{fixer}'s fix wasn't put in: with it, {problem}" for problem in problems]
             if not problems:

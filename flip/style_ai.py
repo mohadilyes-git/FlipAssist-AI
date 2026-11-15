@@ -25,6 +25,7 @@ import json
 import re
 from collections import Counter
 
+from flip.ai import Reply
 from flip.catalogue import words
 from flip.style import (CALLED, CLOSING_SLOTS, CORE_THANKS, HABIT, HABIT_WORDS, KINDS, NOT_A_NAME, SHARE, SMILEY, TAIL_TOKEN,
                         THANKS, WHEN_WORDS, WHOLE_EMOJI, kind_of, said_tail, tail_start, unsigned)
@@ -77,21 +78,26 @@ def user_text(messages):
         f"{m.get('marketplace') or '?'}): {m['my_message']}" for n, m in enumerate(messages, 1))
 
 
-def propose(messages, model):
+def propose(messages, model, log=None):
     """Our AI's suggestions for your messages, the newest MOST_MESSAGES of them: {} when it finds no habit (or there are
     too few messages to have one), None when it couldn't answer (no model, Ollama off, a fault, an unreadable reply), so
     the reading is tried again later. 6 Oct: flip-style-1b answers all-empty for a buyer who repeats nothing, and that
-    answer counts as a reading."""
+    answer counts as a reading. log: the audit log, where each reading is kept as the job "style" (15 Nov review: none
+    was, so Home's "who did the work" and its count of successful outputs left flip-style-1b out)."""
     if model is None:
         return None
     mine = [m for m in messages if m.get("my_message")][-MOST_MESSAGES:]
     if len(mine) < HABIT:
         return {}
+    name = getattr(model, "name", "unknown")
     try:
         reply = model.ask(SYSTEM, user_text(mine), [], SCHEMA)
-    except Exception:  # noqa: BLE001 - a learning that can't run leaves your style as code learned it
-        return None
-    if not isinstance(getattr(reply, "answer", None), dict):
+    except Exception as error:  # noqa: BLE001 - a learning that can't run leaves your style as code learned it
+        reply = Reply(name, error=f"{name} couldn't answer ({type(error).__name__})", reachable=False)
+    answered = isinstance(getattr(reply, "answer", None), dict)
+    if log is not None and isinstance(reply, Reply):  # free: it's on this device
+        log.attempt(None, reply, [] if answered else [reply.error or "not an answer"], 0, job="style")
+    if not answered:
         return None
     return tidy(reply.answer)
 

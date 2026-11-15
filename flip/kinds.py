@@ -31,7 +31,7 @@ Settings, read from the environment each time (.env):
 import os
 from pathlib import Path
 
-from flip.ai import LocalModel
+from flip.ai import LocalModel, Reply
 from flip.reader import installed
 
 DATA = Path(__file__).resolve().parent.parent / "data"
@@ -69,10 +69,12 @@ def kinds_in(answer):
 
 class Sorter:
     """flip-kinds asked one sentence at a time. After a reply that says the model isn't there (Ollama stopped, the
-    model gone, minutes with no answer) it isn't asked again for this listing: code sorts the rest at once."""
+    model gone, minutes with no answer) it isn't asked again for this listing: code sorts the rest at once. log: the
+    audit log, where each answer is kept as the job "sort" (15 Nov review: none was, so Home's "who did the work" and
+    its count of successful outputs left flip-kinds-1 out); None keeps nothing."""
 
-    def __init__(self, model):
-        self.model, self.name, self.down = model, model.name, False
+    def __init__(self, model, log=None):
+        self.model, self.name, self.down, self.log = model, model.name, False, log
 
     def __call__(self, quote, title, description):
         """The sentence's kinds, or None for code to sort it."""
@@ -80,20 +82,29 @@ class Sorter:
             return None
         try:
             reply = self.model.ask(SYSTEM, user_text(title, description, quote), [], SCHEMA)
-        except Exception:  # noqa: BLE001 - any failure here falls back to code, it never stops a price
+        except Exception as error:  # noqa: BLE001 - any failure here falls back to code, it never stops a price
             self.down = True
+            self.kept(Reply(self.name, error=f"{self.name} couldn't answer ({type(error).__name__})", reachable=False))
             return None
+        found = None if reply.error else kinds_in(reply.answer)
+        self.kept(reply, found)
         if reply.error:
             self.down = self.down or not reply.reachable
             return None
-        return kinds_in(reply.answer)
+        return found
+
+    def kept(self, reply, found=None):
+        """One answer in the audit log: passed when it gave kinds (none is an answer too), else why not. Free: it's on
+        this device."""
+        if self.log is not None:
+            self.log.attempt(None, reply, [] if found is not None else [reply.error or "not an answer"], 0, job="sort")
 
 
-def sorter(url="http://127.0.0.1:11434"):
+def sorter(url="http://127.0.0.1:11434", log=None):
     """A Sorter when Ollama has flip-kinds (looked up at each price check, so one installed later is used), else None
-    (code sorts)."""
+    (code sorts). log: the audit log its answers are kept in."""
     name = model_name()
     if not name or not installed(name, url):
         return None
     # short prompts: a small working memory (as in the test), so Ollama can keep it next to the reader when memory allows
-    return Sorter(LocalModel(name, url=url, timeout=60, max_tokens=60, num_ctx=2048))
+    return Sorter(LocalModel(name, url=url, timeout=60, max_tokens=60, num_ctx=2048), log)
