@@ -15,9 +15,12 @@ const WRITERS: Record<string, string> = {
 };  // each model by its real name (4 Oct), the same everywhere; one not here shows as it's called ("flip-reader-4")
 
 /** Who worded the offer's reason and who checked it: "Reason by flip-wording · checked by Claude Haiku". keptBy: the
- * model that checked a flagged reason and kept it (Claude Sonnet 5.5), when the screen knows one did. */
-export function reasonLine(reason: { by: string; checked: string }, keptBy?: string): string {
-  const checker = modelName("claude-haiku-5-5");
+ * model that checked a flagged reason and kept it (Claude Sonnet 5.5), when the screen knows one did. checkModel: the
+ * check's model as /health names it (15 Nov review: FLIP_WORDING_CHECK in .env can name another); Claude Haiku 5.5
+ * when it isn't known. */
+export function reasonLine(reason: { by: string; checked: string }, keptBy?: string,
+  checkModel = "claude-haiku-5-5"): string {
+  const checker = modelName(checkModel || "claude-haiku-5-5");
   if (reason.checked === "fixed") return `Reason flagged by ${checker}, fixed by ${modelName(reason.by)}`;
   const by = `Reason by ${modelName(reason.by)}`;
   if (reason.checked === "ok") return `${by} · checked by ${checker}`;
@@ -32,8 +35,10 @@ export function reasonLine(reason: { by: string; checked: string }, keptBy?: str
 
 /** What a model did, for Home's "who did the work": "reading the listing", "checking the reason". */
 export function jobName(model: string, job: string): string {
-  // a paid model reads or writes only when this device's models can't (14 Oct): say so
-  const backup = model.startsWith("claude") && job !== "reason" && job !== "severity" ? " as a backup" : "";
+  // a paid model reads or writes only when this device's models can't (14 Oct): say so; but Claude Haiku 5.5 writes
+  // List on eBay's draft first (14 Oct), and only Claude Sonnet 5.5 is its backup there (15 Nov review)
+  const first = job === "listing" && model.startsWith("claude-haiku");
+  const backup = model.startsWith("claude") && !first && job !== "reason" && job !== "severity" ? " as a backup" : "";
   return doing(model, job) + backup;
 }
 

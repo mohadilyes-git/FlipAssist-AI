@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { apiCommand, fileFor, icoFrom, keyFrom, logsFolder, modelsToWarm, ollamaPlaces, readyWords, settingFrom, typeOf,
-  windowLook, withOwnKey } from "./parts";
+import { apiCommand, fileFor, icoFrom, keyFrom, logsFolder, modelsToWarm, notReadyWords, ollamaPlaces, pythonSetup,
+  readyWords, settingFrom, typeOf, windowLook, withOwnKey } from "./parts";
 
 test("the key is read the way the API reads .env", () => {
   assert.equal(keyFrom("ANTHROPIC_API_KEY=a\nFLIP_API_KEY=abc123\n"), "abc123");
@@ -65,6 +65,39 @@ test("the launch screen names what's ready and says a model that isn't installed
   // switched off in .env, or by what's set already, as the API reads them; plain Gemma 3 4B reading your style is one
   assert.equal(readyWords(all, "FLIP_KINDS_MODEL=", { FLIP_STYLE_AI: "gemma3:4b" }),
     "flip-reader-5, flip-wording-4b and Gemma 3 4B are ready");
+  // no reader and no Gemma 3 4B to read in its place: code reads (15 Nov review)
+  assert.equal(readyWords(["flip-wording-4b:latest"], "FLIP_KINDS_MODEL=\nFLIP_STYLE_AI="),
+    "flip-wording-4b is ready; flip-reader-5 isn't installed, so code reads");
+});
+
+test("without Gemma 3 4B or Ollama, the launch screen says what still runs, with a Claude key or without (15 Nov review)", () => {
+  const own = ["flip-reader-5:latest", "flip-wording-4b:latest", "flip-kinds-1:latest", "flip-style-1b:latest"];
+  const key = "ANTHROPIC_API_KEY=yours\n";
+  const prices = "PRICES_URL=https://prices.example\nPRICES_KEY=yours\n";
+  // Ollama without Gemma 3 4B: the models it has, then what Gemma 3 4B's absence stops. With a Claude key, Claude
+  // Haiku 5.5 writes List on eBay, so only Rewrite can't run; there's no AI writer to name
+  assert.equal(notReadyWords("no model", own, key), "flip-reader-5, flip-wording-4b, flip-kinds-1 and flip-style-1b are "
+    + "ready; Gemma 3 4B isn't installed, so Rewrite can't run");
+  assert.equal(notReadyWords("no model", own, ""), "flip-reader-5, flip-wording-4b, flip-kinds-1 and flip-style-1b are "
+    + "ready; Gemma 3 4B isn't installed, so Rewrite can't run and List on eBay can't write the condition note or "
+    + "description");
+  assert.equal(notReadyWords("no model", [], `${key}FLIP_WORDING_MODEL=\nFLIP_KINDS_MODEL=\nFLIP_STYLE_AI=`),
+    "flip-reader-5 isn't installed, so code reads; Gemma 3 4B isn't installed, so Rewrite can't run");
+  // no Ollama: code does the models' work, and Claude Haiku 5.5 still writes List on eBay (and, with the AlertFlip
+  // API, judges the damage), so it isn't "code only"
+  assert.equal(notReadyWords("no ollama", [], key + prices), "Ollama isn't installed: code does the models' work and "
+    + "Rewrite can't run; Claude Haiku 5.5 still writes List on eBay and judges how bad a UK price's damage is");
+  assert.equal(notReadyWords("no ollama", [], key), "Ollama isn't installed: code does the models' work and Rewrite "
+    + "can't run; Claude Haiku 5.5 still writes List on eBay");
+  assert.equal(notReadyWords("no ollama", [], prices), "Ollama isn't installed: code does the models' work, Rewrite "
+    + "can't run and List on eBay can't write the condition note or description");
+  // FLIP_LISTING_WRITER=gemma, and what's set already wins over .env, as the API reads them
+  assert.equal(notReadyWords("failed", [], key + prices, { FLIP_LISTING_WRITER: "gemma" }, "/logs/ollama.log"),
+    "Ollama didn't start (what it said is in /logs/ollama.log): code does the models' work, Rewrite can't run and List "
+    + "on eBay can't write the condition note or description; Claude Haiku 5.5 still judges how bad a UK price's damage is");
+  assert.equal(notReadyWords("failed", [], key + prices, { ANTHROPIC_API_KEY: "" }, "/logs/ollama.log"),
+    "Ollama didn't start (what it said is in /logs/ollama.log): code does the models' work, Rewrite can't run and List "
+    + "on eBay can't write the condition note or description");
 });
 
 // Windows as well as the Mac (9 Nov): every answer is checked for both, on this Mac
@@ -81,6 +114,9 @@ test("the API starts from the repo's own Python: uvicorn on a Mac, python.exe -m
     args: ["flip.api:app", "--host", "127.0.0.1", "--port", "8000"], env: {} }); // as before 9 Nov
   assert.deepEqual(apiCommand("C:\\Users\\Sam\\flip", "win32"), { command: "C:\\Users\\Sam\\flip\\.venv\\Scripts\\python.exe",
     args: ["-m", "uvicorn", "flip.api:app", "--host", "127.0.0.1", "--port", "8000"], env: { PYTHONUTF8: "1" } });
+  // ...and how that Python is set up when it isn't (15 Nov review), as the README and windows-setup.ps1 do
+  assert.equal(pythonSetup("darwin"), "python3.11 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt");
+  assert.equal(pythonSetup("win32"), "powershell -ExecutionPolicy Bypass -File launcher\\windows-setup.ps1");
 });
 
 test("logs go to ~/Library/Logs on a Mac and the user's local app data on Windows", () => {
@@ -117,6 +153,11 @@ test("a fresh download gets its own FLIP_API_KEY on first launch, and nobody's C
   const made = withOwnKey("", key)!;
   assert.equal(keyFrom(made), key);
   assert.match(made, /^ANTHROPIC_API_KEY=$/m); // empty: the person's own Claude key goes there
+  // ...with what it pays Claude for, eBay listings and the damage judge too (15 Nov review: "checks and backup")
+  const said = made.split("\n").filter((line) => line.startsWith("# ")).map((line) => line.slice(2)).join(" ");
+  assert.match(said, /Claude Haiku 5\.5 checks each offer's reason, writes eBay listings and judges how bad a UK price's damage is;/);
+  assert.match(said, /Claude Sonnet 5\.5 fixes a flagged reason, decides how bad the damage is when code and Haiku disagree, and steps in/);
+  assert.match(said, /You pay Anthropic for what you use\. Without it, everything runs on this computer\. Put it after the =/);
   const short = withOwnKey("ANTHROPIC_API_KEY=theirs\nFLIP_API_KEY=short\nPRICES_URL=x\n", key)!;
   assert.equal(keyFrom(short), key);
   assert.match(short, /^ANTHROPIC_API_KEY=theirs$/m);

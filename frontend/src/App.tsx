@@ -218,6 +218,7 @@ export function App() {
                   {/* the screens you type into stay put while you look elsewhere; the others load fresh */}
                   <div className="screen" hidden={tab !== "message"}>
                     <MessageScreen onApproved={loadStyle} hasStyle={style ? count > 0 : true}
+                      checker={running && running !== "down" ? running.check_model : undefined}
                       onSetUp={() => setUpFrom("message")} onCheckPrice={(title, description, read) => {
                       setSentToPrice({ title, description, ...(read ? { flaws: read.flaws, readBy: read.readBy } : {}) });
                       go("price");

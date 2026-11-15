@@ -22,6 +22,14 @@ describe("reasonLine", () => {
     expect(reasonLine({ by: "flip-wording-3", checked: "not checked" })).toBe("Reason by flip-wording-3 · not checked");
     expect(reasonLine({ by: "flip-wording-3", checked: "pending" })).toBe("Reason by flip-wording-3 · Claude Haiku 5.5 checking…");
   });
+  it("names the check's model as /health does, not always Claude Haiku 5.5 (15 Nov review)", () => {
+    expect(reasonLine({ by: "flip-wording-4b", checked: "ok" }, undefined, "claude-sonnet-5-5"))
+      .toBe("Reason by flip-wording-4b · checked by Claude Sonnet 5.5");
+    expect(reasonLine({ by: "claude-sonnet-5-5", checked: "fixed" }, undefined, "claude-sonnet-5-5"))
+      .toBe("Reason flagged by Claude Sonnet 5.5, fixed by Claude Sonnet 5.5");
+    expect(reasonLine({ by: "flip-wording-4b", checked: "ok" }, undefined, ""))  // not known: the usual one
+      .toBe("Reason by flip-wording-4b · checked by Claude Haiku 5.5");
+  });
 });
 
 describe("what each model did, on Home", () => {
@@ -29,6 +37,11 @@ describe("what each model did, on Home", () => {
     expect(jobName("gemma3:4b", "listing")).toBe("writing the eBay listing");
     expect(jobName("gemma3:4b", "draft")).toBe("writing the message");
     expect(jobName("claude-haiku-5-5", "reason")).toBe("checking the reason is sendable");
+  });
+  it("calls Claude Haiku 5.5 List on eBay's first writer, and only Claude Sonnet 5.5 its backup (15 Nov review)", () => {
+    expect(jobName("claude-haiku-5-5", "listing")).toBe("writing the eBay listing");
+    expect(jobName("claude-sonnet-5-5", "listing")).toBe("writing the eBay listing as a backup");
+    expect(jobName("claude-haiku-5-5", "read")).toBe("reading the listing as a backup");
   });
 });
 

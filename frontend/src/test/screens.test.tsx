@@ -26,7 +26,8 @@ const STYLE: Style = { count: 14, traits: [{ k: "Opens with", v: "'Hi mate'" }, 
 const NO_STYLE: Style = { count: 0, traits: [], phrases: [], learned: [] };
 // the same style with paying cash removed
 const NO_CASH: Style = { ...STYLE, learned: STYLE.learned.map((r) => (r.key === "mention:cash" ? { ...r, used: false } : r)) };
-// 14 Oct: Claude Haiku 5.5 only checks each reason; Claude Sonnet 5.5 writes when this device's models can't
+// 14 Oct: Claude Haiku 5.5 checks each reason; Claude Sonnet 5.5 writes when this device's models can't; with the
+// AlertFlip API set, they judge a UK price's damage too (15 Nov review). No listing_model: Gemma 3 4B writes eBay listings
 const HEALTH = { local_model: "gemma3:4b", local_running: true, api_model: "claude-sonnet-5-5", api_key_set: true,
   check_model: "claude-haiku-5-5", fix_model: "claude-sonnet-5-5", prices_api_set: true, flip_api_key_set: true,
   models: [{ job: "reads listings", name: "flip-reader-5", installed: true },
@@ -387,6 +388,24 @@ describe("AI message", () => {
     }
   });
 
+  it("names the check's model /health gives, and finds who kept a reason by its step's order (15 Nov review)", async () => {
+    // FLIP_WORDING_CHECK=claude-sonnet-5-5: Claude Sonnet 5.5 flagged it, and its fix couldn't answer, so nobody kept it
+    const sonnetCheck = { ...sonnetStep, cost_pence: 0.01 };
+    for (const { attempts, kept } of [
+      { attempts: [sonnetCheck, { ...sonnetStep, problems: ["the fix couldn't run (APITimeoutError)"] }], kept: "as written" },
+      { attempts: [sonnetCheck, sonnetStep], kept: "by Claude Sonnet 5.5" },
+    ]) {
+      serve({ "POST /api/messages/draft": [200, toCheck],
+        "POST /api/messages/check-reason": [200, { reason: flaggedReason, message: toCheck.message, changed: false,
+          problems: [], attempts, cost_pence: 0.16 }] });
+      const user = userEvent.setup();
+      render(<MessageScreen checker="claude-sonnet-5-5" />);
+      await draft(user);
+      expect(await screen.findByText(`Reason by flip-wording-4b · flagged by Claude Sonnet 5.5, kept ${kept}`)).toBeTruthy();
+      cleanup();
+    }
+  });
+
   it("says so plainly when no draft passed the checks", async () => {
     serve({ "POST /api/messages/draft": [200, { ...DRAFT, status: "needs you", message: null, written_by: null,
       reasons: ["no answer passed the checks"] }] });
@@ -505,6 +524,22 @@ describe("AI message", () => {
     expect(screen.getByText(/The title says iPhone 15 Pro Max but the description says iPhone 14/)).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Rewrite" }));
     expect((await screen.findByRole("alert")).textContent).toBe("No new wording passed the checks, so your message is unchanged");
+    expect(screen.getByDisplayValue(DRAFT.message!)).toBeTruthy();
+  });
+
+  it("says why Rewrite couldn't run when Gemma 3 4B isn't there to try it (15 Nov review)", async () => {
+    // the API's own words (flip.attempts): Ollama refused the model, and nothing was sent to the paid model instead
+    const refused = "Ollama refused Gemma 3 4B (404): model \"gemma3:4b\" not found, try pulling it first, and nothing "
+      + "was sent to Claude Sonnet 5.5 (paid) instead";
+    serve({ "POST /api/messages/draft": [[200, DRAFT], [200, { ...DRAFT, draft_id: 8, status: "needs you", message: null,
+      written_by: null, attempts: [{ model: "gemma3:4b", problems: [refused.split(", and")[0]], seconds: 0, cost_pence: 0,
+        job: "rewrite" }], reasons: [refused] }]] });
+    const user = userEvent.setup();
+    render(<MessageScreen />);
+    await draft(user);
+    await user.click(screen.getByRole("button", { name: "Rewrite" }));
+    expect((await screen.findByRole("alert")).textContent).toBe(`Rewrite couldn't run: ${refused}. Your message is `
+      + "unchanged");
     expect(screen.getByDisplayValue(DRAFT.message!)).toBeTruthy();
   });
 
@@ -905,8 +940,10 @@ describe("AI UK price estimate", () => {
     expect(steps).toHaveLength(5);
     expect(steps[0].querySelector(".how-sub")?.textContent).toBe("Claude Haiku 5.5 sorts each sale: its model, storage, a "
       + "MacBook's RAM, its condition and its flaws.");
+    // who reads when it isn't installed, and Claude Sonnet 5.5 only with a Claude key (15 Nov review)
     expect(steps[2].textContent).toBe("flip-reader-5, FlipAssist's own model on this device, reads the title and description "
-      + "for flaws. If its reading fails code's checks, Claude Sonnet 5.5 reads it instead (a paid call).");
+      + "for flaws (Gemma 3 4B when it isn't installed, code when neither is). With your Claude key, Claude Sonnet 5.5 "
+      + "reads it again when a model's reading fails code's checks (a paid call).");
     expect(steps[3].textContent).toBe("flip-kinds-1, FlipAssist's own model on this device, sorts each flaw into a kind: "
       + "damage, a fault, a worn battery, wear and so on. Code's rules sort them when it isn't installed.");
     expect([...steps[4].querySelectorAll("li")].map((li) => li.textContent)).toEqual([
@@ -1230,6 +1267,21 @@ describe("the app", () => {
     const book = await screen.findByRole("region", { name: "Phrasebook" });
     expect(within(book).getByText("Sentences you've used in at least two messages. Some go in every message, others in "
       + "only one kind of offer.")).toBeTruthy();
+  });
+
+  it("names the reason's checker on AI message as /health does (15 Nov review)", async () => {
+    localStorage.setItem(SETUP_DONE, "1");
+    window.location.hash = "#message";
+    const checked = { ...DRAFT, reason: { clause: "there's a black dot on the screen", by: "flip-wording-4b", checked: "ok" } };
+    serve({ ...usual, "GET /api/health": [200, { ...HEALTH, check_model: "claude-sonnet-5-5" }],
+      "POST /api/messages/draft": [200, checked] });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.type(screen.getAllByRole("textbox", { name: "Listing title" })[0], "iPhone 13 128GB Blue");
+    await user.type(screen.getByLabelText("Asking price"), "£220");
+    await user.click(screen.getByRole("button", { name: "No" }));
+    await user.click(screen.getByRole("button", { name: "Write my message" }));
+    expect(await screen.findByText("Reason by flip-wording-4b · checked by Claude Sonnet 5.5")).toBeTruthy();
   });
 
   it("sends a drafted listing to AI UK price estimate, which opens and checks it straight away (4 Nov)", async () => {
@@ -1626,9 +1678,11 @@ describe("Home (fix 2, 14 Oct)", () => {
       ["flip-kinds-1", "sorts the flaws for the UK price", true, true],
       ["flip-style-1b", "reads My style", true, true],
       ["Gemma 3 4B", "rewords a message when you click Rewrite, and writes eBay listings", true, true],
-      ["Claude Haiku 5.5 (paid)", "Only checks each message's reason is sendable", true, false],
-      ["Claude Sonnet 5.5 (paid)", "Fixes a reason Claude Haiku 5.5 flags; when this device's models can't, writes a "
-        + "message or eBay listing, reads a listing, or looks at the photos for the colour", true, false],
+      ["Claude Haiku 5.5 (paid)", "Checks each message's reason is sendable, and judges how bad the damage is for the UK "
+        + "price", true, false],
+      ["Claude Sonnet 5.5 (paid)", "Fixes a reason Claude Haiku 5.5 flags, and decides how bad the damage is for the UK "
+        + "price when code and Claude Haiku 5.5 disagree; when this device's models can't, writes a message or eBay "
+        + "listing, reads a listing, or looks at the photos for the colour", true, false],
       ["AlertFlip API", "Fresh local sales data for the UK price estimate", true, false],
       ["FlipAssist API key", "Set", true, false],
     ]);
@@ -1640,7 +1694,8 @@ describe("Home (fix 2, 14 Oct)", () => {
     expect(card.getByText("Ollama")).toBeTruthy();
     expect(card.getByText("flip-reader-5").closest(".running")?.className).toContain("model-line");
     expect(card.getByText("Claude Haiku 5.5 (paid)").closest(".running")?.className).not.toContain("model-line");
-    expect(card.getByText("Only checks each message's reason is sendable")).toBeTruthy();
+    expect(card.getByText("Checks each message's reason is sendable, and judges how bad the damage is for the UK price"))
+      .toBeTruthy();
     expect(card.getByText("AlertFlip API")).toBeTruthy();
   });
 
@@ -1655,20 +1710,39 @@ describe("Home (fix 2, 14 Oct)", () => {
       .toEqual([{ name: "Ollama", ok: false, state: "Not running: start it with ollama serve" }]);
   });
 
+  it("says code reads the listing when Gemma 3 4B isn't installed to read in the reader's place (15 Nov review)", () => {
+    const none = { ...HEALTH, models: HEALTH.models.map((m) => ({ ...m, installed: false })) };
+    expect(ollamaRows(none).map((r) => [r.name, r.state])).toEqual([
+      ["Ollama", "Running on this device, 5 of its models not installed"],
+      ["flip-reader-5", "Not installed: code reads the listing instead"],
+      ["flip-wording-4b", "Not installed: code words the reason instead"],
+      ["flip-kinds-1", "Not installed: code's rules sort the flaws instead"],
+      ["flip-style-1b", "Not installed: code reads My style alone"],
+      ["Gemma 3 4B", "Not installed: Rewrite and List on eBay can't run on this device"]]);
+    // with Gemma 3 4B there, it reads in the reader's place, as before
+    const gemma = { ...HEALTH, models: HEALTH.models.map((m) => ({ ...m, installed: m.job === "writes messages" })) };
+    expect(ollamaRows(gemma)[1].state).toBe("Not installed: Gemma 3 4B reads the listing instead");
+  });
+
   it("greys the paid models out with no Anthropic key, and names each job when another model does it", () => {
     expect(paidRows({ ...HEALTH, api_key_set: false, check_model: "", fix_model: "" })).toEqual([
       { name: "Claude Haiku 5.5 (paid)", ok: "off", state: "Off: no Anthropic key, so reasons aren't checked" },
       { name: "Claude Sonnet 5.5 (paid)", ok: "off", state: "Off: no Anthropic key, so everything runs on this device" }]);
-    expect(paidRows({ ...HEALTH, api_model: "claude-haiku-5-5" }).map((r) => [r.name, r.state])).toEqual([
-      ["Claude Haiku 5.5 (paid)", "Only checks each message's reason is sendable"],
-      ["Claude Haiku 5.5 (paid)", "When this device's models can't: writes a message or eBay listing, reads a listing, or "
-        + "looks at the photos for the colour"],
-      ["Claude Sonnet 5.5 (paid)", "Fixes a reason Claude Haiku 5.5 flags"]]);
+    // ...on one line each (15 Nov review: Claude Haiku 5.5 checking and backing up was two lines)
+    expect(paidRows({ ...HEALTH, api_model: "claude-haiku-5-5", prices_api_set: false }).map((r) => [r.name, r.state]))
+      .toEqual([
+        ["Claude Haiku 5.5 (paid)", "Checks each message's reason is sendable; when this device's models can't, writes a "
+          + "message or eBay listing, reads a listing, or looks at the photos for the colour"],
+        ["Claude Sonnet 5.5 (paid)", "Fixes a reason Claude Haiku 5.5 flags"]]);
+    // with no AlertFlip API and Gemma 3 4B writing eBay listings, as before
+    expect(paidRows({ ...HEALTH, prices_api_set: false }).map((r) => r.state)).toEqual([
+      "Only checks each message's reason is sendable", "Fixes a reason Claude Haiku 5.5 flags; when this device's models "
+        + "can't, writes a message or eBay listing, reads a listing, or looks at the photos for the colour"]);
   });
 
   it("names Claude Haiku 5.5 as the eBay listing writer once it writes them, and Gemma for Rewrite only (14 Oct)", () => {
     const lists = { ...HEALTH, listing_model: "claude-haiku-5-5" };
-    expect(paidRows(lists).map((r) => [r.name, r.state])).toEqual([
+    expect(paidRows({ ...lists, prices_api_set: false }).map((r) => [r.name, r.state])).toEqual([
       ["Claude Haiku 5.5 (paid)", "Checks each message's reason is sendable, and writes eBay listings"],
       ["Claude Sonnet 5.5 (paid)", "Fixes a reason Claude Haiku 5.5 flags; when this device's models can't, writes a "
         + "message, reads a listing, or looks at the photos for the colour; and writes an eBay listing when Claude "
@@ -1677,6 +1751,43 @@ describe("Home (fix 2, 14 Oct)", () => {
       { name: "Gemma 3 4B", model: true, ok: true, state: "rewords a message when you click Rewrite" });
     expect(ollamaRows({ ...HEALTH, listing_model: "gemma3:4b" }).at(-1)?.state)
       .toBe("rewords a message when you click Rewrite, and writes eBay listings");
+  });
+
+  it("says who judges a UK price's damage: Claude Haiku 5.5, and Claude Sonnet 5.5 when code and it disagree (15 Nov review)",
+    () => {
+      const lists = { ...HEALTH, listing_model: "claude-haiku-5-5" };
+      expect(paidRows(lists).map((r) => [r.name, r.state])).toEqual([
+        ["Claude Haiku 5.5 (paid)", "Checks each message's reason is sendable, writes eBay listings, and judges how bad the "
+          + "damage is for the UK price"],
+        ["Claude Sonnet 5.5 (paid)", "Fixes a reason Claude Haiku 5.5 flags, and decides how bad the damage is for the UK "
+          + "price when code and Claude Haiku 5.5 disagree; when this device's models can't, writes a message, reads a "
+          + "listing, or looks at the photos for the colour; and writes an eBay listing when Claude Haiku 5.5's fails the "
+          + "checks"]]);
+      // without the AlertFlip API there's no UK price to judge
+      expect(paidRows({ ...lists, prices_api_set: false }).map((r) => r.state).join(" ")).not.toMatch(/damage/);
+    });
+
+  it("lists each paid model once, with the reason's check off in .env or named another (15 Nov review)", () => {
+    // the check off: Claude Haiku 5.5 still writes eBay listings and judges the damage, and nothing is flagged to fix
+    const off = { ...HEALTH, listing_model: "claude-haiku-5-5", check_model: "" };
+    expect(paidRows(off).map((r) => [r.name, r.ok, r.state])).toEqual([
+      ["Claude Haiku 5.5 (paid)", true, "Writes eBay listings, and judges how bad the damage is for the UK price; reasons "
+        + "aren't checked (off in .env)"],
+      ["Claude Sonnet 5.5 (paid)", true, "Decides how bad the damage is for the UK price when code and Claude Haiku 5.5 "
+        + "disagree; when this device's models can't, writes a message, reads a listing, or looks at the photos for the "
+        + "colour; and writes an eBay listing when Claude Haiku 5.5's fails the checks"]]);
+    // ...and greyed out when that leaves it nothing to do
+    expect(paidRows({ ...off, listing_model: "gemma3:4b", prices_api_set: false })).toEqual([
+      { name: "Claude Haiku 5.5 (paid)", ok: "off", state: "Off in .env: reasons aren't checked" },
+      { name: "Claude Sonnet 5.5 (paid)", ok: true, state: "When this device's models can't: writes a message or eBay "
+        + "listing, reads a listing, or looks at the photos for the colour" }]);
+    // Claude Sonnet 5.5 checking the reason as well as fixing it: one line
+    const sonnet = { ...HEALTH, listing_model: "claude-haiku-5-5", check_model: "claude-sonnet-5-5", prices_api_set: false };
+    expect(paidRows(sonnet).map((r) => [r.name, r.state])).toEqual([
+      ["Claude Sonnet 5.5 (paid)", "Checks each message's reason is sendable, and fixes a reason it flags; when this "
+        + "device's models can't, writes a message, reads a listing, or looks at the photos for the colour; and writes an "
+        + "eBay listing when Claude Haiku 5.5's fails the checks"],
+      ["Claude Haiku 5.5 (paid)", "Writes eBay listings"]]);
   });
 
   it("says when the AlertFlip API or the key isn't set, and the API's own state before it answers", () => {
@@ -1746,6 +1857,14 @@ describe("the steps behind a draft, by job and who did it (14 Oct)", () => {
       step("claude-sonnet-5-5", { job: "reason" })]} />);
     expect(said()).toEqual(["Wording the reason · flip-wording-4b (on this device) passed",
       "Checking the reason · Claude Haiku 5.5 (paid) flagged it", "Fixing the reason · Claude Sonnet 5.5 (paid) passed"]);
+  });
+
+  it("tells the reason's check from its fix by their order, whichever models .env names (15 Nov review)", () => {
+    // FLIP_WORDING_CHECK=claude-sonnet-5-5: Claude Sonnet 5.5 checks and fixes; the first paid step is the check
+    render(<Steps flagged attempts={[step("flip-wording-4b", { job: "reason" }), step("claude-sonnet-5-5", { job: "reason" }),
+      step("claude-sonnet-5-5", { job: "reason" })]} />);
+    expect(said()).toEqual(["Wording the reason · flip-wording-4b (on this device) passed",
+      "Checking the reason · Claude Sonnet 5.5 (paid) flagged it", "Fixing the reason · Claude Sonnet 5.5 (paid) passed"]);
   });
 
   it("calls an eBay listing's writing what it is, and a look at the colour a look", () => {

@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, type FlawsSaid, type Kind, type Listing, type MessageDraft, type ReasonCheck } from "../api";
 import { cost, readBy, reasonLine, seconds, writerName } from "../format";
 import { gapOf, lowerPrice, money, morePrice, sliderRange, toPence } from "../prices";
-import { CheckIcon, ChevronIcon, Chip, Head, PriceSlider, SparkleIcon, Steps, Warn, WarningIcon } from "../ui";
+import { CheckIcon, ChevronIcon, Chip, Head, paidReason, PriceSlider, SparkleIcon, Steps, Warn, WarningIcon } from "../ui";
 
 type Mention = "yes" | "no";
 const KINDS: Kind[] = ["lower", "asking", "more"];
@@ -31,24 +31,27 @@ type Approval = { copied: boolean; edited: boolean; saved: boolean };
 type OnScreen = MessageDraft & { keptBy?: string };
 
 /** Who kept a flagged reason, from the check's answer (4 Nov). Its reason says "flagged, kept" with the model that
- * worded it as by, whoever kept it, so Claude Sonnet 5.5's own step tells: Sonnet kept it when its step answered and
- * no fix of Sonnet's was left out of the message (problems say why one wasn't put in). With no Sonnet step (none set
- * up) or a failed one (it couldn't answer), nobody did, and the line stays "kept as written" */
+ * worded it as by, whoever kept it, so the fix's own step tells: the fixer (Claude Sonnet 5.5) kept it when its step
+ * answered and no fix of its was left out of the message (problems say why one wasn't put in). With no fix step (none
+ * set up) or a failed one (it couldn't answer), nobody did, and the line stays "kept as written". The fix is the paid
+ * step after the check's, whichever models .env names (15 Nov review: not by its name) */
 function keeper(done: ReasonCheck): string | undefined {
   if (done.reason.checked !== "flagged, kept" || done.problems.length) return undefined;
-  return done.attempts.find((a) => a.job === "reason" && a.model.startsWith("claude-sonnet")
-    && !a.problems.length)?.model;
+  const fix = done.attempts.filter(paidReason)[1];
+  return fix && !fix.problems.length ? fix.model : undefined;
 }
 
 /** onCheckPrice(title, description, read): the listing goes to AI UK price estimate, which opens and checks it (14
  * Nov), with the flaws its draft's reader found and who that was, when the draft is of this listing (9 Nov) */
 /** hasStyle: My style has learned something (4 Nov: until then its On/Off is greyed out, with Set up my style beside it,
  * onSetUp opening the setup) */
-export function MessageScreen({ onApproved, onCheckPrice, hasStyle = true, onSetUp }: {
+/** checker: the model /health names for the reason's check (FLIP_WORDING_CHECK), named on the reason's line */
+export function MessageScreen({ onApproved, onCheckPrice, hasStyle = true, onSetUp, checker }: {
   onApproved?: () => void;
   onCheckPrice?: (title: string, description: string, read?: { flaws: string[]; readBy: string }) => void;
   hasStyle?: boolean;
   onSetUp?: () => void;
+  checker?: string;
 }) {
   const [title, setTitle] = useState("");
   const [asking, setAsking] = useState("");
@@ -160,8 +163,12 @@ export function MessageScreen({ onApproved, onCheckPrice, hasStyle = true, onSet
           ? { ...draft.reason, quotes: worded(draft) } : null,
       });
       if (!found.message && overrides.rewrite_of) {
-        // no new version passed the checks: the one on screen stays, as it was
-        setError("No new wording passed the checks, so your message is unchanged");
+        // no new version passed the checks, or none could be tried (15 Nov review): Gemma 3 4B not installed, Ollama
+        // off or too slow, and a model on this device that can't answer is never sent to Claude in its place
+        // (flip.attempts: "…, and nothing was sent to Claude Sonnet 5.5 (paid) instead"). The one on screen stays
+        const couldnt = found.reasons.find((r) => r.includes("nothing was sent to"));
+        setError(couldnt ? `Rewrite couldn't run: ${couldnt}. Your message is unchanged`
+          : "No new wording passed the checks, so your message is unchanged");
         return;
       }
       // Rewrite gives back the reason on screen word for word, so who kept it is still said (4 Nov); a reason worded
@@ -320,7 +327,7 @@ export function MessageScreen({ onApproved, onCheckPrice, hasStyle = true, onSet
 
           {shown ? (
             <>
-              <Drafted draft={shown} text={text} setText={setText} busy={busy} approval={approval}
+              <Drafted draft={shown} text={text} setText={setText} busy={busy} approval={approval} checker={checker}
                 onRewrite={() => void write({ rewrite_of: text })} onApprove={() => void approve()} />
               {/* 4 Nov, the owner: "add a button after it drafts a msg send the listing to ai uk price estimate": the
                   title and description go to that tab, which opens and checks them */}
@@ -357,11 +364,12 @@ type DraftedProps = {
   setText: (text: string) => void;
   busy: boolean;
   approval: Approval | null;
+  checker?: string;
   onRewrite: () => void;
   onApprove: () => void;
 };
 
-function Drafted({ draft, text, setText, busy, approval, onRewrite, onApprove }: DraftedProps) {
+function Drafted({ draft, text, setText, busy, approval, checker, onRewrite, onApprove }: DraftedProps) {
   const [why, setWhy] = useState(false);
   const reading = draft.reading;
   const steps = [...reading.attempts, ...draft.attempts];
@@ -386,7 +394,7 @@ function Drafted({ draft, text, setText, busy, approval, onRewrite, onApprove }:
         <p className="sub">
           {draft.written_by ? writerName(draft.written_by) : "No draft passed"} · {seconds(steps)} · {cost(draft.cost_pence)} · {readBy(reading.read_by)}
         </p>
-        {draft.reason && <p className="sub">{reasonLine(draft.reason, draft.keptBy)}</p>}
+        {draft.reason && <p className="sub">{reasonLine(draft.reason, draft.keptBy, checker)}</p>}
         {steps.length > 0 && (
           <button type="button" className="link" aria-expanded={why} onClick={() => setWhy(!why)}>
             Why · {steps.length} {steps.length === 1 ? "step" : "steps"}

@@ -130,8 +130,12 @@ const claudeLists = (running: Health) => (running.listing_model ?? "").startsWit
 // with Claude writing eBay listings, this device's writer only rewords messages
 const job = (name: string, running: Health) =>
   name === "writes messages" && claudeLists(running) ? "rewords a message when you click Rewrite" : JOBS[name] ?? name;
+/** Whether /health says Gemma 3 4B, this device's writer, isn't installed. */
+const noGemma = (running: Health) => (running.models ?? []).some((m) => m.job === "writes messages" && !m.installed);
 const instead = (name: string, running: Health) =>
   name === "writes messages" && claudeLists(running) ? "Rewrite can't run on this device"
+    // Gemma 3 4B reads in the reader's place only when it's there itself, else code reads (15 Nov review)
+    : name === "reads listings" && noGemma(running) ? "code reads the listing instead"
     : INSTEAD[name] ?? "code does its job instead";
 
 export function ollamaRows(running: Health): Row[] {
@@ -148,8 +152,13 @@ export function ollamaRows(running: Health): Row[] {
   ];
 }
 
-/** The paid models, each on its own line with what it does: Claude Haiku 5.5 only checks each reason; Claude Sonnet
- * 5.5 writes when this device's models can't (and fixes a reason the check flags). */
+const CHECKS = "checks each message's reason is sendable";
+
+/** The paid models, one line each with all it does (15 Nov review: with the reason's check off in .env, or named
+ * another, a model was listed twice, and no line said who judges a UK price's damage): Claude Haiku 5.5 checks each
+ * reason and writes eBay listings; Claude Sonnet 5.5 fixes a reason the check flags, and writes when this device's
+ * models can't; with the AlertFlip API, Claude Haiku 5.5 judges how bad a UK price's damage is and Claude Sonnet 5.5
+ * decides when code and Claude Haiku 5.5 disagree. .env can name others for the reason and for the backup. */
 export function paidRows(running: Health): Row[] {
   const paid = (model: string) => `${modelName(model)} (paid)`;
   if (!running.api_key_set) {
@@ -158,26 +167,42 @@ export function paidRows(running: Health): Row[] {
       { name: paid("claude-sonnet-5-5"), ok: "off", state: "Off: no Anthropic key, so everything runs on this device" },
     ];
   }
+  const check = running.check_model ?? "";
+  const backup = running.api_model;
   const lister = claudeLists(running) ? running.listing_model! : "";
-  const rows: Row[] = [running.check_model
-    ? { name: paid(running.check_model), ok: true, state: lister === running.check_model
-      ? "Checks each message's reason is sendable, and writes eBay listings"
-      : "Only checks each message's reason is sendable" }
-    : { name: paid("claude-haiku-5-5"), ok: "off", state: "Off in .env: reasons aren't checked" }];
-  if (lister && lister !== running.check_model) rows.push({ name: paid(lister), ok: true, state: "Writes eBay listings" });
-  // the checker by name: it flags the reasons the fixer rewrites (Claude Haiku 5.5 unless .env names another)
-  const checker = modelName(running.check_model || "claude-haiku-5-5");
+  // what each paid model does, in the order they're first named
+  const jobs = new Map<string, string[]>();
+  const does = (model: string, what: string) => jobs.set(model, [...(jobs.get(model) ?? []), what]);
+  if (check) does(check, CHECKS);
+  else jobs.set("claude-haiku-5-5", []); // the check's own model, said to be off on its line
+  if (lister) does(lister, "writes eBay listings");
+  // a reason is fixed only when the check flags it: with no check, nothing is
+  if (check && running.fix_model) {
+    does(running.fix_model, running.fix_model === check ? "fixes a reason it flags"
+      : `fixes a reason ${modelName(check)} flags`);
+  }
+  // the UK price's damage (flip.api.damage_judge): these two by name, whatever .env names for the reason
+  if (running.prices_api_set) {
+    does("claude-haiku-5-5", "judges how bad the damage is for the UK price");
+    does("claude-sonnet-5-5", "decides how bad the damage is for the UK price when code and Claude Haiku 5.5 disagree");
+  }
+  if (!jobs.has(backup)) jobs.set(backup, []);
   const writes = lister
     ? `writes a message, reads a listing, or looks at the photos for the colour; and writes an eBay listing when ${modelName(lister)}'s fails the checks`
     : "writes a message or eBay listing, reads a listing, or looks at the photos for the colour";
-  if (running.fix_model && running.fix_model === running.api_model) {
-    rows.push({ name: paid(running.api_model), ok: true,
-      state: `Fixes a reason ${checker} flags; when this device's models can't, ${writes}` });
-  } else {
-    rows.push({ name: paid(running.api_model), ok: true, state: `When this device's models can't: ${writes}` });
-    if (running.fix_model) rows.push({ name: paid(running.fix_model), ok: true, state: `Fixes a reason ${checker} flags` });
-  }
-  return rows;
+  return [...jobs].map(([model, what]): Row => {
+    const backs = model === backup;
+    // the check's own model with the check off in .env: greyed out when that leaves it nothing to do
+    const off = !check && model === "claude-haiku-5-5";
+    if (off && !what.length && !backs) return { name: paid(model), ok: "off", state: "Off in .env: reasons aren't checked" };
+    // "A", "A, and B", "A, B, and C"; "Only checks..." when that's all it does
+    const own = what.length === 1 && what[0] === CHECKS && !backs ? `only ${CHECKS}`
+      : what.length > 1 ? `${what.slice(0, -1).join(", ")}, and ${what[what.length - 1]}` : what[0] ?? "";
+    const said = [own, !backs ? "" : own ? `when this device's models can't, ${writes}`
+      : `when this device's models can't: ${writes}`, off ? "reasons aren't checked (off in .env)" : ""]
+      .filter(Boolean).join("; ");
+    return { name: paid(model), ok: true, state: said.charAt(0).toUpperCase() + said.slice(1) };
+  });
 }
 
 export function runningRows(running: Running): Row[] {

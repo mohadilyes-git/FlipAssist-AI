@@ -7,7 +7,8 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { apiCommand, GEMMA, logsFolder, modelsToWarm, ollamaPlaces, readyWords } from "./parts";
+import { apiCommand, GEMMA, logsFolder, modelsToWarm, notReadyWords, ollamaPlaces, pythonSetup, readyWords }
+  from "./parts";
 
 export const OLLAMA = "http://127.0.0.1:11434";
 export const API = "http://127.0.0.1:8000";
@@ -17,7 +18,7 @@ export const LOGS = logsFolder(process.platform, os.homedir(), process.env);
 // is still kept, so drafting the same listing again stays quick, and answers don't change.
 export const OLLAMA_ENV = { OLLAMA_HOST: "127.0.0.1:11434", LLAMA_ARG_CACHE_RAM: "0" };
 
-/** How Gemma came up: ready, or why drafts will use code only. */
+/** How Gemma came up: ready, or why it isn't (parts.notReadyWords says what still runs). */
 export type Gemma = "ready" | "no ollama" | "no model" | "failed";
 
 type Started = { name: string; child: ChildProcess; gone: boolean };
@@ -74,7 +75,7 @@ export class Services {
           body: JSON.stringify({ model, keep_alive: "30m", options: { num_ctx: numCtx } }) }, 120);
       }
     })();
-    // what the launch screen says is Gemma's: it writes listings and, with the AI writer, messages
+    // what the launch screen says is Gemma's: it rewords messages (Rewrite) and, with no Claude key, writes eBay listings
     return installed.some((name) => name === GEMMA.model) ? "ready" : "no model";
   }
 
@@ -82,6 +83,11 @@ export class Services {
    * job instead (parts.readyWords). */
   readyWords(): string {
     return readyWords(this.installed, this.env(), process.env);
+  }
+
+  /** What the launch screen says when Gemma isn't ready: why, and what still runs (parts.notReadyWords). */
+  notReadyWords(state: Exclude<Gemma, "ready">): string {
+    return notReadyWords(state, this.installed, this.env(), process.env, path.join(LOGS, "ollama.log"));
   }
 
   /** The text of the repo's .env, or "" when there's none. */
@@ -93,14 +99,20 @@ export class Services {
     }
   }
 
-  /** FlipAssist's API, started from the repo's own Python (.venv) if it isn't running. */
-  async api(): Promise<boolean> {
+  /** FlipAssist's API, started from the repo's own Python (.venv) if it isn't running: "" once it's up, else what the
+   * launch screen says went wrong (15 Nov review: with no .venv nothing was started, and the screen sent you to an
+   * api.log with nothing of this launch in it, or none at all). */
+  async api(): Promise<string> {
     const up = async () => isFlipAssist(await ask(`${API}/health`));
-    if (await up()) return true;
+    if (await up()) return "";
     const { command, args, env } = apiCommand(this.repo, process.platform); // uvicorn, as this computer runs it
-    if (!existsSync(command)) return false;
+    if (!existsSync(command)) {
+      return `FlipAssist's API didn't start: its Python environment (.venv) isn't set up. In ${this.repo}, run `
+        + pythonSetup(process.platform);
+    }
     const started = this.start("api", command, args, env, this.repo);
-    return until(up, 90, started);
+    return (await until(up, 90, started)) ? ""
+      : `FlipAssist's API didn't start: what it said is in ${path.join(LOGS, "api.log")}`;
   }
 
   /** Stop what was started here: asked to stop first, made to after 5 seconds. */

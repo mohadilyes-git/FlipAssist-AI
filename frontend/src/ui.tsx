@@ -101,40 +101,50 @@ export function PriceSlider({ value, min, max, step, label, onChange }: {
   );
 }
 
+/** A step of the reason by a paid model: its check, or the fix of a reason the check flagged (flip.wording), not
+ * flip-wording's wording on this device. */
+export const paidReason = (a: Attempt) => a.job === "reason" && a.model.startsWith("claude");
+
 /** Each step behind a draft: who tried it, whether the checks passed it, and what it took. */
 /** One step behind a draft by its job and who did it (14 Oct): "Reading the listing · flip-reader-5 (on this
  * device)", "Wording the reason · flip-wording-4b (on this device)", "Checking the reason · Claude Haiku 5.5 (paid)",
  * "Fixing the reason · Claude Sonnet 5.5 (paid)", "Looking at the colour · …", "Writing the message · …" (or the
- * listing, on List on eBay). reading: the step read the listing. */
-export function stepName(a: Attempt, reading: boolean, writing: "message" | "listing" = "message"): string {
+ * listing, on List on eBay). reading: the step read the listing; fixing: it's a paid step of the reason after the
+ * check's, so the fix. */
+export function stepName(a: Attempt, reading: boolean, writing: "message" | "listing" = "message",
+  fixing = false): string {
   const who = writerName(a.model);
   if (reading) return `Reading the listing · ${who}`;
   if (a.colour_only) return `Looking at the colour · ${who}`;
   if (a.job === "reason") {
-    const what = a.model.startsWith("claude-haiku") ? "Checking the reason" : a.model.startsWith("claude-sonnet")
-      ? "Fixing the reason" : "Wording the reason";
+    // the paid steps by their order, not their model (15 Nov review: .env can name either for the check or the fix)
+    const what = !paidReason(a) ? "Wording the reason" : fixing ? "Fixing the reason" : "Checking the reason";
     return `${what} · ${who}`;
   }
   if (a.job === "rewrite") return `Rewording the message · ${who}`;
   return `Writing the ${writing} · ${who}`;
 }
 
-/** The steps behind a draft. readings: how many of the first attempts read the listing; flagged: Claude Haiku 5.5
- * flagged the reason (it was fixed, or kept as written), so its check says that, not "passed". */
+/** The steps behind a draft. readings: how many of the first attempts read the listing; flagged: the check flagged
+ * the reason (it was fixed, or kept as written), so its step says that, not "passed". The check is the first paid step
+ * of the reason, and only a reason it flags goes on to the fix: a paid step after it is the fix. */
 export function Steps({ attempts, readings = 0, flagged = false, writing = "message" }: { attempts: Attempt[];
   readings?: number; flagged?: boolean; writing?: "message" | "listing" }) {
   return (
     <ol className="steps">
-      {attempts.map((a, i) => (
-        <li key={i}>
-          <span className={a.problems.length ? "failed" : "passed"}>
-            {stepName(a, i < readings, writing)}{" "}
-            {a.problems.length ? `failed: ${a.problems.join("; ")}`
-              : flagged && a.job === "reason" && a.model.startsWith("claude-haiku") ? "flagged it" : "passed"}
-          </span>
-          <span className="meta">{a.seconds.toFixed(1)}s · {cost(a.cost_pence)}</span>
-        </li>
-      ))}
+      {attempts.map((a, i) => {
+        const fixing = paidReason(a) && attempts.slice(0, i).some(paidReason);
+        return (
+          <li key={i}>
+            <span className={a.problems.length ? "failed" : "passed"}>
+              {stepName(a, i < readings, writing, fixing)}{" "}
+              {a.problems.length ? `failed: ${a.problems.join("; ")}`
+                : flagged && paidReason(a) && !fixing ? "flagged it" : "passed"}
+            </span>
+            <span className="meta">{a.seconds.toFixed(1)}s · {cost(a.cost_pence)}</span>
+          </li>
+        );
+      })}
     </ol>
   );
 }

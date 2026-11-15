@@ -13,7 +13,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { app, BrowserWindow, clipboard, nativeTheme, net, protocol, shell } from "electron";
 import { APP_ID, fileFor, keyFrom, typeOf, windowLook, withOwnKey } from "./parts";
-import { API, type Gemma, LOGS, Services } from "./services";
+import { API, Services } from "./services";
 
 const HOME = "app://flipassist";
 const ICON = path.join(__dirname, "icon.png"); // build.sh and build.ps1 draw it (icon.js)
@@ -84,15 +84,6 @@ function open(): BrowserWindow {
   return window;
 }
 
-// each model by its real name (4 Oct): Ollama runs flip-reader-5, flip-wording-4b, flip-kinds-1, flip-style-1b (6 Oct)
-// and Gemma 3 4B on this device; once it's up, the launch screen names the ones it really has (parts.readyWords)
-const GEMMA_WORDS: Record<Gemma, string> = {
-  "ready": "flip-reader-5, flip-wording-4b, flip-kinds-1, flip-style-1b and Gemma 3 4B are ready",
-  "no ollama": "Ollama isn't installed: drafts use code only",
-  "no model": "Gemma 3 4B isn't downloaded: the AI writer can't write messages or eBay listings",
-  "failed": `Ollama didn't start: drafts use code only (${LOGS}/ollama.log)`,
-};
-
 async function launch() {
   const window = (win = open());
   await window.loadFile(path.join(__dirname, "..", "splash.html"));
@@ -114,13 +105,15 @@ async function launch() {
     key = "";
   }
   const gemma = services.gemma().then((state) => {
-    // named from what Ollama really has (6 Oct review), not a fixed list
-    void say({ gemma: state === "ready" ? "ok" : "warn", gemmaWords: state === "ready" ? services.readyWords() : GEMMA_WORDS[state] });
+    // named from what Ollama really has (6 Oct review), not a fixed list; without Gemma 3 4B or Ollama, what still
+    // runs, by the .env the API reads (15 Nov review: a fixed line said the AI writer, and code only with a Claude key)
+    void say({ gemma: state === "ready" ? "ok" : "warn",
+      gemmaWords: state === "ready" ? services.readyWords() : services.notReadyWords(state) });
     return state;
   });
-  const api = await services.api();
-  void say({ api: api ? "ok" : "bad", apiWords: api ? "Ready" : "Didn't start" });
-  if (!api) return void say({ error: `FlipAssist's API didn't start: what it said is in ${LOGS}/api.log` });
+  const failed = await services.api(); // "" once it's up, else why it isn't
+  void say({ api: failed ? "bad" : "ok", apiWords: failed ? "Didn't start" : "Ready" });
+  if (failed) return void say({ error: failed });
   const health = (await (await net.fetch(`${API}/health`)).json()) as { flip_api_key_set?: boolean };
   if (!health.flip_api_key_set || key.length < 32) {
     return void say({ error: "FLIP_API_KEY in the repo's .env is missing or too short: it needs 32 characters or more" });

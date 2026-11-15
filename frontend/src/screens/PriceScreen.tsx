@@ -122,8 +122,11 @@ export function PriceScreen({ sent = null, onTaken }: { sent?: SentListing | nul
                   condition and its flaws.</span></li>
               <li>The middle price of clean ones of the same model and size is <strong>sent here</strong>. The cheapest
                 quarter is left out, as those often hide flaws.</li>
+              {/* 15 Nov review: who reads when it isn't installed, and Sonnet only with a key (flip.reader.reader_for,
+                  flip.attempts) */}
               <li><strong>flip-reader-5</strong>, FlipAssist's own model on this device, reads the title and description
-                for flaws. If its reading fails code's checks, Claude Sonnet 5.5 reads it instead (a paid call).</li>
+                for flaws (Gemma 3 4B when it isn't installed, code when neither is). With your Claude key, Claude Sonnet
+                5.5 reads it again when a model's reading fails code's checks (a paid call).</li>
               <li><strong>flip-kinds-1</strong>, FlipAssist's own model on this device, sorts each flaw into a kind:
                 damage, a fault, a worn battery, wear and so on. Code's rules sort them when it isn't installed.</li>
               <li><strong>The price is cut</strong> for each kind, by amounts measured on UK listings of the same item:
