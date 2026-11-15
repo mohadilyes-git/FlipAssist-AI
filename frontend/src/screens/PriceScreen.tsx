@@ -207,6 +207,11 @@ export function cautions(e: PriceEstimate, title?: string): string[] {
 }
 
 const TIERS: Record<string, string> = { bottom: "cheaper", middle: "mid-priced", top: "pricier" };
+/** "a mid-priced MacBook", or near a tier's edge, where the cut blends the two tiers' (9 Nov): "a MacBook priced
+ * between cheaper and mid-priced ones" */
+const tiered = (d: { tier: string; between?: [string, string] | null }, noun: string) => d.between
+  ? `a ${noun} priced between ${TIERS[d.between[0]]} and ${TIERS[d.between[1]]} ones`
+  : TIERS[d.tier] ? `a ${TIERS[d.tier]} ${noun}` : `a ${noun}`;
 const NOUNS: Record<string, string> = { iphone: "iPhone", samsung: "Samsung", macbook: "MacBook" };
 
 /** The damage cut FlipAssist measured, in words: "Damage counted as moderate: −30% for a mid-priced iPhone, from 191
@@ -219,8 +224,10 @@ export function damageLine(e: PriceEstimate): string {
     : d.from?.includes("the iPhone") ? " (rough: from iPhones)" : " (rough: few listings, pooled with a group next to it)";
   const judged = !d.by ? "" : d.by.startsWith("Claude Sonnet") ? ` · ${d.by} decided how bad`
     : ` · how bad: ${d.by}`;  // the hybrid (14 Oct): code and Claude Haiku 5.5, Claude Sonnet 5.5 when they disagree
-  return `Damage counted as ${d.level}: −${Math.round(-d.cut * 100)}% for ${TIERS[d.tier] ? `a ${TIERS[d.tier]}` : "this"} `
-    + `${NOUNS[e.kind ?? ""] ?? "item"}, from ${d.n} listings like it${where}${judged}`;
+  const noun = NOUNS[e.kind ?? ""] ?? "item";
+  const which = d.between || TIERS[d.tier] ? tiered(d, noun) : `this ${noun}`;
+  return `Damage counted as ${d.level}: −${Math.round(-d.cut * 100)}% for ${which}, from ${d.n} listings like it`
+    + `${where}${judged}`;
 }
 
 /** After "counted as": a locked or for-parts one is priced as that, so its other flaws aren't cut on top of it */
@@ -267,7 +274,7 @@ export function cutWords(row: CutRow, e: PriceEstimate): string {
     const rough = !d.rough ? "" : d.from?.includes("the US") ? ", rough"
       : d.from?.includes("the iPhone") ? ", rough: from iPhones" : ", rough: few listings, pooled with a group next to it";
     const judged = !d.by ? "" : d.by.startsWith("Claude Sonnet") ? ` · ${d.by} decided how bad` : ` · how bad: ${d.by}`;
-    const what = TIERS[d.tier] ? `a ${TIERS[d.tier]} ${NOUNS[e.kind ?? ""] ?? "one"}` : `a ${NOUNS[e.kind ?? ""] ?? "one"}`;
+    const what = tiered(d, NOUNS[e.kind ?? ""] ?? "one");
     // a cut borrowed from US listings (every Samsung's, most MacBooks') is what sellers ask, never "UK sellers" (14 Oct
     // review), and never "US" either (9 Nov, the owner: "do not mention us sales")
     const who = d.from?.includes("the US") ? "Sellers" : "UK sellers";

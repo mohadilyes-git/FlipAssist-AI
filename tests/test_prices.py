@@ -15,6 +15,7 @@ import urllib.error
 import pytest
 
 from flip import prices
+from flip.severity import damage_cut
 
 ANSWER = {"mode": "catalogue", "model": "iphone 13", "storage_gb": 128, "ram_gb": None, "currency": "GBP",
           "sales": 38, "middle": 210, "low": 180, "high": 240, "price": 170, "factor": 0.81, "used": ["damage"],
@@ -36,6 +37,11 @@ def backend(monkeypatch):
     monkeypatch.setenv("PRICES_KEY", "k" * 64)
     prices._seen.clear()
 
+
+
+# a moderate crack on the tests' £240 iPhone (cutting()): £240 is near the iPhone's £255 tier edge, so its cut blends the
+# middle and top tiers' (9 Nov, flip.severity.BLEND), -0.283 where the middle tier's own is -0.304
+MODERATE_240 = damage_cut("iphone", "uk", 240, "moderate")["cut"]
 
 def asking(answer=None):
     """A pretend API that answers with answer (ANSWER) and keeps what it was sent."""
@@ -1573,7 +1579,7 @@ def test_each_flaw_of_a_sentence_has_its_own_row_with_its_cut():
     found = prices.estimate("iphone 14", [sentence], opener=cutting(), description=sentence, sorter=sorter)
     # an iPhone's fault is its own measured cut (4 Nov: -25.9%); beside damage, only its part on top of the any-flaw
     # cut (-7.1%), which the damage cut, measured against flawless ones, already has in it
-    assert rows(found) == [(["Cracked back"], ["damage"], "damage", -0.304),
+    assert rows(found) == [(["Cracked back"], ["damage"], "damage", round(MODERATE_240, 3)),
                            (["The balck dot in the front screen"], ["fault"], "own", -0.202)]
     assert abs(made_by_rows(found) - found["price"]) < 1  # the rows make the price
     # flip-kinds is asked about the sentence, then only the part code can't read ("balck"), never "cracked back"
@@ -1583,7 +1589,7 @@ def test_each_flaw_of_a_sentence_has_its_own_row_with_its_cut():
 def test_a_battery_said_with_the_damage_has_its_own_row():
     sentence = "cracked back and the battery is 75%"  # the owner's screenshot: −30% said, −33% cut
     found = prices.estimate("iphone 14", [sentence], opener=cutting(), description=sentence)
-    assert rows(found) == [(["Cracked back"], ["damage"], "damage", -0.304),
+    assert rows(found) == [(["Cracked back"], ["damage"], "damage", round(MODERATE_240, 3)),
                            (["Battery is 75%"], ["battery"], "battery", -0.1)]  # the owner's battery cut
     assert abs(made_by_rows(found) - found["price"]) < 1
 
@@ -1623,7 +1629,7 @@ def test_the_battery_figure_comes_from_the_description_when_the_flaw_has_none():
 def test_battery_and_damage_cuts_are_taken_in_turn():
     sentence = "cracked back and the battery is 75%"
     found = prices.estimate("iphone 14", [sentence], opener=cutting(), description=sentence)
-    assert found["price"] == round(240 * 0.9 * (1 - 0.304))  # £150, the owner's example (was £160)
+    assert found["price"] == round(240 * 0.9 * (1 + MODERATE_240))  # £150, the owner's example (was £160)
 
 
 def test_a_locked_ones_battery_isnt_cut_on_top():
@@ -1831,7 +1837,7 @@ def test_the_title_quoted_by_the_reader_isnt_a_flaw_not_cut_for():
     title = "iPhone 15 128 GB unlocked 82% BH"
     quote = "The price reflects the cracked back which can be repaired for 40£"
     found = prices.estimate(title, [title, quote], opener=cutting(), description=f"82% battery health. {quote}")
-    assert (rows(found), found["not_cut"]) == ([(["The cracked back"], ["damage"], "damage", -0.304)], [])
+    assert (rows(found), found["not_cut"]) == ([(["The cracked back"], ["damage"], "damage", round(MODERATE_240, 3))], [])
 
 
 @pytest.mark.parametrize("words, shown", [

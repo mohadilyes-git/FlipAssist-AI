@@ -38,6 +38,8 @@ export type PriceEstimate = {
   /** the damage cut FlipAssist measured (14 Oct): how bad, the model's price tier, the cut (-0.24), whether it's rough
    * (borrowed: from says where) and how many listings it's from */
   damage?: { level: string; tier: string; cut: number; rough: boolean; from?: string | null; n: number;
+    /** near a tier's edge (9 Nov): the two tiers blended, and how far towards the upper one (0-1) */
+    between?: [string, string] | null; share?: number | null;
     /** who said how bad (14 Oct): "code and Claude Haiku 5.5" when they agreed, "Claude Sonnet 5.5" when it decided,
      * "code" without a key */
     by?: string } | null;

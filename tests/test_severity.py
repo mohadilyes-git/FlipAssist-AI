@@ -170,3 +170,31 @@ def test_a_judge_saying_it_isnt_physical_damage_gives_the_lightest_cut():
     sev._judged.clear()
     assert sev.judged(words, "MacBook 2019 13 inch", check=Judge("claude-haiku-5-5", {"severity": "none"})) == \
         ("minor", "Claude Haiku 5.5")  # no Sonnet to ask
+
+
+# 9 Nov (the owner: "yh do it for every product we support"): near a tier's edge the cut blends the two tiers'
+def test_a_damage_cut_deep_in_its_tier_is_its_own_and_blends_near_an_edge():
+    from flip.severity import damage_cut, table
+    cells = table()["tables"]["macbook/uk"]["cuts"]
+    assert damage_cut("macbook", "uk", 150, "severe") == {"cut": cells["bottom"]["severe"]["cut"], "tier": "bottom",
+        "rough": cells["bottom"]["severe"]["rough"], "from": cells["bottom"]["severe"].get("from"),
+        "n": cells["bottom"]["severe"]["n"]}  # far from an edge: as before, no "between"
+    at_edge = damage_cut("macbook", "uk", 197.5, "severe")
+    half = (cells["bottom"]["severe"]["cut"] + cells["middle"]["severe"]["cut"]) / 2
+    assert at_edge["between"] == ["bottom", "middle"] and at_edge["share"] == 0.5 and abs(at_edge["cut"] - half) < 1e-4
+    assert at_edge["n"] == cells["bottom"]["severe"]["n"] + cells["middle"]["severe"]["n"]
+    # the owner's MacBook (9 Nov): £180 and £205 either side of the £197.50 edge are now close, not -54% and -60.5%
+    assert abs(damage_cut("macbook", "uk", 205, "severe")["cut"] - damage_cut("macbook", "uk", 180, "severe")["cut"]) < 0.04
+
+
+def test_no_damage_cut_jumps_as_the_price_moves_for_any_product_or_market():
+    from flip.severity import ORDER, damage_cut, table
+    for name, found in table()["tables"].items():
+        category, market = name.split("/")
+        top = max(high for _, high in found["ranges"].values())
+        for level in ORDER:
+            price, last = 1.0, None
+            while price <= top:
+                cut = damage_cut(category, market, price, level)["cut"]
+                assert last is None or abs(cut - last) < 0.02, (name, level, price, last, cut)  # a pound changes little
+                price, last = price + 1.0, cut

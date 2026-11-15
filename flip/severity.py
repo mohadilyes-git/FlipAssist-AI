@@ -181,14 +181,34 @@ def tier(category, market, clean_price):
     return "bottom" if clean_price < low else "middle" if clean_price < high else "top"
 
 
+# 9 Nov (the owner: "yh do it for every product we support"): near a tier's edge the cut blends the two tiers', so a
+# clean price either side of the line doesn't jump it (a MacBook's severe damage went from -54% at £180 to -60.5% at
+# £205 across the £197.50 edge). Within BLEND of an edge, 15% either side, the share goes in a straight line from all
+# the lower tier's cut to all the upper tier's; everywhere else it's the tier's own cut, as before.
+BLEND = 0.15
+TIERS = ("bottom", "middle", "top")
+
+
 def damage_cut(category, market, clean_price, level):
     """What damage this bad takes off a clean one's price, as a share (-0.24), with its tier and whether it's rough
-    (borrowed from elsewhere, or a thin cell): {"cut", "tier", "rough", "from", "n"}; None for a category or market it
-    has no table for, or no level."""
+    (borrowed from elsewhere, or a thin cell): {"cut", "tier", "rough", "from", "n"}, and near an edge "between" (the
+    two tiers blended) and "share" (how far towards the upper one, 0-1); None for a category or market it has no table
+    for, or no level."""
     place = tier(category, market, clean_price)
     if place is None or level not in ORDER:
         return None
-    cell = table()["tables"][f"{category}/{market}"]["cuts"][place][level]
+    found = table()["tables"][f"{category}/{market}"]
+    cells = found["cuts"]
+    cell = cells[place][level]
+    for edge, lower, upper in zip(found["edges"], TIERS, TIERS[1:]):
+        start, end = edge * (1 - BLEND), edge * (1 + BLEND)
+        if start < clean_price < end:
+            share = (clean_price - start) / (end - start)  # 0: all the lower tier's cut, 1: all the upper's
+            low, high = cells[lower][level], cells[upper][level]
+            near = high if share >= 0.5 else low
+            return {"cut": round(low["cut"] * (1 - share) + high["cut"] * share, 4), "tier": place,
+                    "between": [lower, upper], "share": round(share, 3), "rough": bool(low["rough"] or high["rough"]),
+                    "from": near.get("from") or low.get("from") or high.get("from"), "n": low["n"] + high["n"]}
     return {"cut": cell["cut"], "tier": place, "rough": cell["rough"], "from": cell.get("from"), "n": cell["n"]}
 
 

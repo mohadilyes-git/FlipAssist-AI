@@ -1708,6 +1708,11 @@ describe("the damage cut by how bad (fix 1, 14 Oct)", () => {
       from: "the US", n: 11 } };
     expect(damageLine(samsung)).toBe("Damage counted as minor: −6% for a pricier Samsung, from 11 listings like it "
       + "(rough)");
+    // near a tier's edge the cut blends the two tiers' (9 Nov), and says so
+    const near = { ...base, kind: "macbook", damage: { level: "severe", tier: "middle", cut: -0.58, rough: true,
+      from: "the US", n: 23, between: ["bottom", "middle"] as [string, string], share: 0.627 } };
+    expect(damageLine(near)).toBe("Damage counted as severe: −58% for a MacBook priced between cheaper and mid-priced "
+      + "ones, from 23 listings like it (rough)");
   });
   it("doesn't call a MacBook's damage cut one measured on phones", () => {
     const mac = { ...base, kind: "macbook", model: "macbook air 13 m1", sales: 40, exact: true,
