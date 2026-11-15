@@ -32,6 +32,7 @@ charger, a box or a Samsung TV (kind_of): anything else would spend calls on a k
 and its rate limit) and price the wrong thing.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 import re
@@ -1530,6 +1531,13 @@ def estimate(title, flaws=(), country="uk", opener=None, description=None, sorte
     if kind == "macbook" and in_title[1] is None and in_description[1] is not None:
         body["ram_gb"] = in_description[1]
     remembered = json.dumps([url, body], sort_keys=True)
+    # 9 Nov (the owner: "why is it taking a bit long time"): the damage judge (Claude Haiku 5.5, Claude Sonnet 5.5 when
+    # they disagree) needs nothing from the prices API, so it judges while the API answers, not after it
+    if own_damage and judge is not None:
+        pool = ThreadPoolExecutor(max_workers=1)
+        judging = pool.submit(judge, flaws, title, description or "", kind)
+        pool.shutdown(wait=False)
+        judge = lambda *_: judging.result()  # noqa: E731 - with_damage asks it as it asked the judge
 
     def priced(found):
         """The API's answer with a Samsung's or a MacBook's own cuts, FlipAssist's battery and damage cuts, and each
@@ -1780,10 +1788,16 @@ FRAMING = re.compile(r"^(?:(?:the\s+|my\s+|this\s+)?price\s+(?:reflects|includes
                      r"(?:to\s+reflect|because\s+of|due\s+to|for)|due\s+to|because\s+of)\s+", I)
 
 
+# a clause the split at "with" cut off from what it was about (9 Nov, the owner's MacBook: "...in need of a replacement
+# or you can use" | "with another monitor"): left out of the row's words
+DANGLING = re.compile(r"\s+(?:or|but)\s+(?:(?:you|it|i|we|they|one)\s+)?(?:can|could|will|would|may|might)\s+"
+                      r"(?:also\s+|still\s+|be\s+)?\w+$", I)
+
+
 def flaw_words(words):
     """A flaw's words as the screen gives them: tidied, without the seller's framing ("The price reflects the cracked
-    back" -> "The cracked back")."""
-    said = tidy(words)
+    back" -> "The cracked back") or a clause cut off from what it was about (DANGLING)."""
+    said = tidy(DANGLING.sub("", tidy(words)))
     plain = FRAMING.sub("", said)
     return tidy(plain) if len(plain.split()) >= 2 else said  # "price reflects it" stays as said
 

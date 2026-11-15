@@ -1924,6 +1924,12 @@ def test_a_size_in_another_sentence_of_the_description_is_its_size_when_it_gives
     assert prices.model_details("MacBook Pro", "MacBook Pro 2017. Fits a 13 inch or a 15 inch sleeve", "macbook") == "2017"
 
 
+def test_a_clause_cut_off_from_what_it_was_about_is_left_out_of_the_rows_words():  # 9 Nov
+    assert prices.flaw_words("15” has a damaged screen and is in need of a replacement or you can use") == \
+        "15” has a damaged screen and is in need of a replacement"
+    assert prices.flaw_words("Keyboard sticky but still usable") == "Keyboard sticky but still usable"
+
+
 # ── the 9 Nov review of the model the description adds (two reviewers, 20 findings): each finding's inputs ──────────
 
 @pytest.mark.parametrize("title, description, kind, details", [
