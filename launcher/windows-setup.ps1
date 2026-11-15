@@ -7,7 +7,8 @@
 # Clone the repo somewhere OneDrive doesn't sync (C:\FlipAssist, say). If you have a .env (it holds your keys), put it
 # in the repo folder; without one, FlipAssist makes it on first launch, and your own Claude API key goes in it.
 # FlipAssist's own four models are downloaded from the repo's GitHub release (models-v1, models/README.md), each
-# checked against the version that was tested. In PowerShell, from the repo folder:
+# checked against the version that was tested. One Ollama already has as that version is skipped, so after a
+# failure, running this again carries on. In PowerShell, from the repo folder:
 #   powershell -ExecutionPolicy Bypass -File launcher\windows-setup.ps1
 # -Repo owner/name: the GitHub repo with the release, when this folder isn't a clone of it; -Tag: another release;
 # -Models E:\FlipAssist-models: a folder made on a Mac with launcher/export-models.sh (on an ExFAT USB drive) instead
@@ -18,7 +19,7 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $root = Split-Path -Parent $here # the repo folder (not $repo: PowerShell's names ignore case, so that would be -Repo)
 $env:PYTHONUTF8 = "1" # Python reads and writes text as UTF-8 here, as on a Mac (pound signs, emoji)
 # GitHub only talks TLS 1.2 or later, which Windows PowerShell 5.1 doesn't always offer by itself; and without its
-# progress bar it downloads big files many times faster
+# progress bar it downloads many times faster (the model files themselves come with curl.exe: Fetch, below)
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 $ProgressPreference = "SilentlyContinue"
 
@@ -91,11 +92,42 @@ $tested = [ordered]@{
 }
 function Sha256([string]$file) { (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLowerInvariant() }
 
+# the models Ollama doesn't have yet as the tested version (in Ollama, a model's FROM line names its file's SHA-256:
+# MODELS.md, How to check a model file), so a run after a failure adds only what's missing. Asked with Continue:
+# "ollama show" says "not found" on stderr for a model it hasn't got
+$missing = @()
+if (-not $NoModels) {
+  $ErrorActionPreference = "Continue"
+  foreach ($model in $tested.Keys) {
+    $have = "$(& ollama show --modelfile $model 2>$null)" -match "sha256-$($tested[$model])"
+    if ($have) { Write-Host "- $model is already in Ollama" } else { $missing += $model }
+  }
+  $ErrorActionPreference = "Stop"
+}
+
+# a file from the release, with curl.exe (part of Windows 10 and 11): it shows how far it's got, and when it stops (a
+# dropped connection) it's run again, up to 5 tries, and carries on from the bytes already there (-C -) instead of
+# starting a 2 GB part again. Asked with Continue, as curl writes its progress to stderr. No certificate revocation
+# check, as PowerShell's own downloads never made one: antivirus that looks inside HTTPS makes it fail, and every
+# file's SHA-256 is checked anyway
+function Fetch([string]$url, [string]$file) {
+  $ErrorActionPreference = "Continue"
+  foreach ($attempt in 1..5) {
+    & curl.exe -fL -C - --progress-bar --ssl-no-revoke -o $file $url
+    if ($LASTEXITCODE -eq 0) { return }
+    if ($LASTEXITCODE -eq 33) { Remove-Item -LiteralPath $file -ErrorAction SilentlyContinue } # it can't send just the rest
+    if ($attempt -lt 5) { Write-Host "  the download stopped (curl exit code $LASTEXITCODE): carrying on in 10 seconds"; Start-Sleep -Seconds 10 }
+  }
+  throw "Couldn't download $url (curl exit code $LASTEXITCODE, 5 tries): check the internet connection, then run this again"
+}
+
 if ($NoModels) {
   Write-Host "-NoModels: FlipAssist's own models aren't added, so Gemma 3 4B and code do their jobs."
+} elseif ($missing.Count -eq 0) {
+  # each one is in Ollama already
 } elseif ($Models) {
   # from a folder made on a Mac with launcher/export-models.sh
-  foreach ($model in $tested.Keys) {
+  foreach ($model in $missing) {
     $folder = Join-Path $Models $model
     $modelfile = Join-Path $folder "Modelfile"
     $gguf = Join-Path $folder "$model.gguf"
@@ -105,6 +137,7 @@ if ($NoModels) {
   }
 } else {
   # from the repo's GitHub release (models/README.md): every part checked as it comes, then each whole file
+  Need curl.exe "Windows Update (Windows 10 and 11 come with it)"
   if (-not $Repo) {
     $origin = ""
     if (Get-Command git -ErrorAction SilentlyContinue) {
@@ -116,14 +149,38 @@ if ($NoModels) {
     else { throw "Say which GitHub repo has the models: -Repo owner/name (or -NoModels to go without them)" }
   }
   $base = "https://github.com/$Repo/releases/download/$Tag"
-  $work = Join-Path $env:TEMP ("flipassist-models-" + [guid]::NewGuid().ToString("N"))
+  # the same folder every run, so what a run that was stopped (the window closed, a restart) left there is cleared
+  $work = Join-Path $env:TEMP "flipassist-models"
+  if (Test-Path -LiteralPath $work) { Remove-Item -Recurse -Force -LiteralPath $work }
+  # then room, so a full disk can't stop it after a long download: %TEMP% holds a part and the file it's joined into
+  # (about 4 GB at most), and Ollama keeps each model it adds (about 2.5 GB) while the joined file is still there.
+  # Both are on C: unless moved
+  $store = if ($env:OLLAMA_MODELS) { $env:OLLAMA_MODELS } else { Join-Path $env:USERPROFILE ".ollama\models" }
+  $tempDrive = [IO.Path]::GetPathRoot([IO.Path]::GetFullPath($env:TEMP))
+  $storeDrive = [IO.Path]::GetPathRoot([IO.Path]::GetFullPath($store))
+  if ($tempDrive -eq $storeDrive) { $needed = @{ $tempDrive = 2.5GB * ($missing.Count + 1) } }
+  else { $needed = @{ $tempDrive = 4GB; $storeDrive = 2.5GB * $missing.Count } }
+  foreach ($drive in $needed.Keys) {
+    try { $free = (New-Object IO.DriveInfo $drive).AvailableFreeSpace } catch { continue } # a network folder can't say
+    if ($free -lt $needed[$drive]) {
+      throw ("FlipAssist's models need about {0} GB free on {1}, which has {2:N1} GB: make room there, then run this again (or use -NoModels to go without them)" -f [math]::Ceiling([double]$needed[$drive] / 1GB), $drive.TrimEnd('\'), ($free / 1GB))
+    }
+  }
   New-Item -ItemType Directory -Path $work | Out-Null
   try {
     $sumsFile = Join-Path $work "SHA256SUMS"
-    Invoke-WebRequest -UseBasicParsing -Uri "$base/SHA256SUMS" -OutFile $sumsFile
+    try { Invoke-WebRequest -UseBasicParsing -Uri "$base/SHA256SUMS" -OutFile $sumsFile }
+    catch {
+      # no such release: a fork's clone (GitHub doesn't copy releases), a mistyped -Repo or -Tag, or none made yet.
+      # Any other failure (no internet, say) stops it with .NET's own message
+      if ($_.Exception.Response -and [int]$_.Exception.Response.StatusCode -eq 404) {
+        throw "github.com/$Repo has no public release '$Tag' with FlipAssist's models: give -Repo owner/name or -Tag, use -Models <folder> (made on a Mac with launcher/export-models.sh), or -NoModels"
+      }
+      throw
+    }
     $sums = @{}
     foreach ($line in Get-Content $sumsFile) { if ($line -match '^([0-9a-f]{64}) [ *](.+)$') { $sums[$Matches[2]] = $Matches[1] } }
-    foreach ($model in $tested.Keys) {
+    foreach ($model in $missing) {
       $parts = @($sums.Keys | Where-Object { $_ -like "$model.gguf.part-*" } | Sort-Object)
       if ($parts.Count -eq 0) { throw "$model isn't on the release at $base" }
       $gguf = Join-Path $work "$model.gguf"
@@ -132,7 +189,7 @@ if ($NoModels) {
         foreach ($name in $parts + @("$model.Modelfile")) {
           $file = Join-Path $work $name
           Write-Host "- downloading $name"
-          Invoke-WebRequest -UseBasicParsing -Uri "$base/$name" -OutFile $file
+          Fetch "$base/$name" $file
           if ((Sha256 $file) -ne $sums[$name]) { throw "$name didn't download right: run this again" }
           if ($name -like "*.gguf.part-*") {
             $in = [IO.File]::OpenRead($file)

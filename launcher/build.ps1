@@ -51,7 +51,7 @@ $dest = Join-Path $programs "FlipAssist"
 New-Item -ItemType Directory -Force -Path $programs | Out-Null
 if (Test-Path $dest) {
   try { Remove-Item -Recurse -Force $dest }
-  catch { throw "Something still has $dest open (an Ollama that FlipAssist started?): quit Ollama in the tray, or run taskkill /im ollama.exe /f, then run this again" }
+  catch { throw "Something still has $dest or a file in it open (a PowerShell or Command Prompt window in that folder, File Explorer showing it, or antivirus checking its files): close it or wait a minute, then run this again" }
 }
 Copy-Item -Recurse (Join-Path $here "out\FlipAssist-win32-x64") $dest
 
