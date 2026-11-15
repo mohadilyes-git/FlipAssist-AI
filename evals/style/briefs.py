@@ -1,6 +1,7 @@
 """40 writer briefs for the hard style test (6 Oct 2026): code picks who each made-up writer is and which habits
 they repeat, so every kind of writer and habit is covered; Claude agents then write the messages to the brief."""
 import json, random
+from pathlib import Path
 
 random.seed(20261112)
 VOICES = [
@@ -29,6 +30,7 @@ ITEMS = [("iPhone 13 128GB Blue", 220), ("iPhone 12 64GB", 150), ("Samsung Galax
          ("Mountain bike 27.5in", 180), ("Garmin Forerunner 255", 160), ("Bose SoundLink speaker", 70), ("Ninja air fryer", 60),
          ("Lego Millennium Falcon", 400), ("GoPro Hero 10", 200), ("Kindle Paperwhite", 70), ("Steam Deck 512GB", 340)]
 HARD = [
+    # a habit only for a buyer with 5 messages (2 of 6 or more is under 40%): of the 9 it was planned for, only w36
     "one habit appears in exactly 2 of the messages (still a habit)",
     "two closings that look alike but use different words (neither is a habit)",
     "the greeting changes capital letters and punctuation between messages but is the same word(s)",
@@ -56,7 +58,15 @@ def brief(n):
 
 
 BRIEFS = [brief(n) for n in range(40)]
-json.dump(BRIEFS, open("briefs.json", "w"), indent=1, ensure_ascii=False)
+# a hard case brings the habit it needs: a sign-off case a sign-off, an "I like the item" case a likes habit (6 Oct,
+# once the plan was drawn: 6 sign-offs and 2 likes habits, all of them written into the buyers' messages)
+for b in BRIEFS:
+    for case in b["hard"]:
+        if "sign-off" in case:
+            b["habits"].setdefault("sign_off", True)
+        if "'I like the item'" in case:
+            b["habits"].setdefault("likes", True)
+json.dump(BRIEFS, open(Path(__file__).with_name("briefs.json"), "w", encoding="utf-8"), indent=1, ensure_ascii=False)
 from collections import Counter
 print(len(BRIEFS), "briefs;", Counter(len(b["habits"]) for b in BRIEFS), "habits each;",
       sum("likes" in b["habits"] for b in BRIEFS), "with likes,", sum("short" in b["habits"] for b in BRIEFS), "with shortcuts,",

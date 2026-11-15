@@ -3,6 +3,7 @@
 From the repo's root:
   .venv/bin/python evals/style/score.py                         code alone, and the app (code + the AI's checked sign-off)
   .venv/bin/python evals/style/score.py --ask gemma3:4b          also asks that model in your Ollama, saves its answers
+                                                                 in a new file, dated (stops if no buyer gets one)
   .venv/bin/python evals/style/score.py --answers FILE.json      scores answers saved before
   .venv/bin/python evals/style/score.py --check-key              checks every habit in the answer key really repeats
   .venv/bin/python evals/style/score.py --writers OTHER.json      the same on another set of buyers, in this format
@@ -113,8 +114,9 @@ def found_in_card(card, key):
 
 
 def ai_raw(proposals, key, messages):
-    """The AI's own answer against the key, field by field: found, missed, wrong (a phrase that does repeat but isn't
-    the key's habit there) or invented (its words don't repeat in the messages at all)."""
+    """The AI's own answer against the key, field by field: found, missed, wrong (a phrase that passes the habit rule,
+    repeats(), but isn't the key's habit there) or invented (one that doesn't pass it: in too few of the messages, a
+    sign-off too few of them end with, or a shortcut of a word also written in full)."""
     p = tidy(proposals) if proposals else {}
     out = []
 
@@ -126,8 +128,11 @@ def ai_raw(proposals, key, messages):
             out.append((field, "found" if said and hit(field, said, want) else "missed"))
         if said and not (want and hit(field, said, want)):
             out.append((field, "invented" if not repeats(field, said, messages) else "wrong"))
-    wanted = list(key.get("after", []))
+    wanted, listed = list(key.get("after", [])), set()
     for said in p.get("after_offer") or []:
+        if tuple(norm(said)) in listed:
+            continue  # the same part listed again counts once: plain Gemma lists "can collect today" 4 times for w12
+        listed.add(tuple(norm(said)))
         got = next((w for w in wanted if contains(norm(said), norm(w)) or contains(norm(w), norm(said))), None)
         if got:
             wanted.remove(got)
@@ -187,10 +192,20 @@ def main():
     if a.ask:
         from flip.ai import LocalModel
         model = LocalModel(a.ask, timeout=180, max_tokens=700)  # the app's settings
+        asked = {}
         for w in writers:
             started = time.time()
-            answers[w["id"]] = {"proposals": propose(w["messages"], model), "secs": round(time.time() - started, 2)}
-        out = Path(a.writers).with_name(f"answers-{a.ask.replace(':', '-')}.json")  # beside the buyers asked
+            asked[w["id"]] = {"proposals": propose(w["messages"], model), "secs": round(time.time() - started, 2)}
+        # propose() gives None when Ollama is off, doesn't have the model or sends an answer it can't read
+        failed = sum(answer["proposals"] is None for answer in asked.values())
+        if failed:
+            print(f"{failed} of {len(asked)} buyers got no answer from {a.ask}: is Ollama running, and does "
+                  f"`ollama list` show {a.ask}?", file=sys.stderr)
+        if failed and failed == len(asked):
+            sys.exit(1)  # nothing saved or scored: a table with 0 found would read as the model finding nothing
+        answers.update(asked)
+        # beside the buyers asked, dated: never over the answers saved with this test (answers-gemma3-4b.json)
+        out = Path(a.writers).with_name(f"answers-{a.ask.replace(':', '-')}-{time.strftime('%Y-%m-%d-%H%M%S')}.json")
         json.dump(answers, open(out, "w"), indent=1, ensure_ascii=False)
         print(f"saved {out.name}")
     score(writers, answers)
