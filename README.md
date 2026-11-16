@@ -18,7 +18,7 @@ It's a Mac app: a Python (FastAPI) backend under a React and TypeScript window i
 - **Learns your style without making it up.** flip-style-1b found 182 of 189 habits on the hard style test and invented 3, where plain Gemma 3 4B found 146 and invented 230.
 - **Code where code is better.** On made-up listings, code's offer messages for a new user were fine to send 95% of the time and a small AI's 35%, so in the app code writes every message, around the reason the model words.
 - **Fast and cheap.** A draft is on screen in 3.1-3.8 s on a 16 GB Mac (9-11 s before). The paid reason check costs about 43p per 1,000 listings with a flaw, with Claude's prompt cache warm.
-- **Tested.** 5,500+ tests: 5,396 Python, 119 screen and 15 launcher. Claude test agents wrote over 4,000 cases to break the rules, and the 418 real failures they found are fixed and kept as tests.
+- **Tested.** 5,500+ tests: 5,455 Python, 126 screen and 16 launcher. Claude test agents wrote over 4,000 cases to break the rules, and the 418 real failures they found are fixed and kept as tests.
 
 The judges, labellers and checkers in these tests are Claude, working blind. [Results](#results) gives each test's size; [MODELS.md](MODELS.md) has the full record, including what didn't ship.
 
@@ -107,7 +107,9 @@ A title and description in, a UK price out, for iPhones, Samsung phones and MacB
 4. Code cuts the price for each kind, by amounts measured on UK listings of the same kind of item: iPhones on iPhones, Samsungs on Samsungs, MacBooks on MacBooks. Damage is cut by how bad it is (minor, moderate or severe) and how pricey the model is, a worn battery by how low its health is, and a locked or for-parts one is priced at what for-parts ones sell for.
 5. How bad the damage is: code reads it, and with your key Claude Haiku 5.5 reads it too, sent the title, the first 1,500 characters of the description and the flaw sentences, never a price. When they disagree, Claude Sonnet 5.5 decides. Judging 764 damaged listings this way cost about £0.29. Without a key, code judges alone.
 
-The screen shows each kind of flaw with its own cut, and who read and sorted the flaws. The AlertFlip prices API (`PRICES_URL`, `PRICES_KEY`) isn't public: without it, the screen says so.
+The screen shows each kind of flaw with its own cut, and who read and sorted the flaws.
+
+**Free UK prices.** UK prices for iPhones, Samsung phones and MacBooks work with no key. With no `PRICES_KEY` in `.env`, FlipAssist asks the AlertFlip prices API for its free UK prices. They're refreshed about monthly: once a model's sales are a month old, the next ask checks them again. The screen says when a price is a free one and when its sales were last checked, and warns you when they're older because this month's checks have run out. Each ask sends the title, the kinds of flaw and the size, and no key. The description stays on your computer, apart from the model details it adds to a title that has none. When the free prices are busy, the screen says when to try again. `FLIP_PUBLIC_PRICES=off` in `.env` turns them off. Your own `PRICES_URL` and `PRICES_KEY` still work as before.
 
 ### List on eBay
 
@@ -129,7 +131,7 @@ For iPhones only. Enter which iPhone, your notes from looking at it and up to 8 
 ### Home
 
 - **Done by the models:** every successful output across the models, paid ones too, the cost per 100 drafts, the number of drafts, and how many you edited before sending.
-- **Running:** Ollama and each model with its job (or, for one that isn't installed, what does its job instead), Claude Haiku 5.5 and Claude Sonnet 5.5 and what each does, the AlertFlip prices API, and the API key.
+- **Running:** Ollama and each model with its job (or, for one that isn't installed, what does its job instead), Claude Haiku 5.5 and Claude Sonnet 5.5 and what each does, the AlertFlip prices API (the free UK prices, your own, or off), and the API key.
 - **Who did the work:** each model by job, with its tries, how many passed and what they cost.
 
 ## Results
@@ -229,13 +231,14 @@ Behind a proxy, set `HTTPS_PROXY`: the model files come with curl.exe, which doe
 
 Nobody's keys are in the repo: `.env` is never uploaded (`.gitignore`). The app makes `.env` on first launch with this computer's own `FLIP_API_KEY`. To make it by hand: `cp .env.example .env`, then paste a random key of 32 characters or more from `.venv/bin/python -c "import secrets; print(secrets.token_urlsafe(32))"`.
 
-Claude runs on your own key, and Anthropic bills you for what you use. Without it, everything runs on your computer, and nothing catches a fact flip-wording-4b makes up.
+Claude runs on your own key, and Anthropic bills you for what you use. Without it, everything runs on your computer, and nothing catches a fact flip-wording-4b makes up. UK prices need no key: they're the AlertFlip prices API's free ones unless you set your own.
 
 | Setting in `.env` | What it does | When it's not set |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Your Claude key (console.anthropic.com), for every Claude step above | Everything runs on your computer |
 | `FLIP_API_KEY` | The key every caller of the API sends in an `X-API-Key` header, 32 characters or more | The API refuses every call (the app makes one) |
-| `PRICES_URL`, `PRICES_KEY` | The AlertFlip prices API, for the UK price estimate (not public) | The price screen says it isn't set |
+| `PRICES_URL`, `PRICES_KEY` | Your own AlertFlip prices API and its key, for the UK price estimate. `PRICES_URL` with no key is asked the free way | The free UK prices: iPhones, Samsung phones and MacBooks, refreshed about monthly |
+| `FLIP_PUBLIC_PRICES` | `off` turns the free UK prices off; your own `PRICES_URL` and `PRICES_KEY` still work | On whenever there's no `PRICES_KEY` |
 | `USD_TO_GBP` | The dollar-to-pound rate the cost meter uses | 0.80 |
 | `FLIP_READER_MODEL` | The listing reader | flip-reader-5; empty: Gemma 3 4B reads |
 | `FLIP_WORDING_MODEL` | The model that words the offer's reason | flip-wording-4b; empty: code words it |
@@ -253,11 +256,11 @@ Claude runs on your own key, and Anthropic bills you for what you use. Without i
 
 | Endpoint | What it does |
 |---|---|
-| `GET /health` | No key needed, none shown. Whether Ollama and the keys are set, which models Ollama has, and who does each job: the paid backup, the reason's check and fix, and List on eBay's writer and reader |
+| `GET /health` | No key needed, none shown. Whether Ollama and the keys are set, how UK prices are asked (`prices_mode`: free, your own key or off), which models Ollama has, and who does each job: the paid backup, the reason's check and fix, and List on eBay's writer and reader |
 | `POST /messages/draft` | Reads the listing, then drafts the offer at code's price or `offer`. `kind` is `lower`, `asking` or `more`; `mention` says the flaw or good condition; `flaws_said` (1, 2, 3 or `"all"`) picks how many flaws, worst first; `check_later` leaves the reason's check for the next endpoint. Returns the message, who wrote it, the "no offers" note, what was read, `reason_from`, every attempt with its seconds and cost, and a draft id |
 | `POST /messages/check-reason` | The second step of a draft made with `check_later`: Claude Haiku 5.5 checks the reason, Claude Sonnet 5.5 fixes one it flags, and the fix goes in only if the message with it passes every message check |
 | `POST /listings/draft` | Form fields (`title`, `notes`) and up to 8 photos in, the eBay draft out. iPhones only |
-| `POST /prices/estimate` | A listing's UK price with its flaws cut, from the AlertFlip prices API. The description is read for flaws unless `flaws` (with `read_by`) are sent |
+| `POST /prices/estimate` | A listing's UK price with its flaws cut, from the AlertFlip prices API. The description is read for flaws unless `flaws` (with `read_by`) are sent. A free price says so (`public`), with when its sales were last checked (`checked_at`) and whether they're older (`stale`) |
 | `POST /drafts/{id}/approve` | What you actually sent or listed, so the results can count how often a draft was right as it was. An approved message joins the messages your style learns from |
 | `GET /stats` | The cost meter: drafts, outputs made on this device against all outputs, cost per 100 drafts, how often a draft was edited, and each model's tries, passes and cost by job |
 | `GET /style` | The style card, the phrasebook, and everything it puts in a message, each with whether you still use it |
@@ -294,9 +297,9 @@ curl -s http://127.0.0.1:8000/messages/draft -H "X-API-Key: $FLIP_API_KEY" -H "C
 ## Tests
 
 ```bash
-.venv/bin/pytest                                  # 5,396 Python tests (12 more, for photos on Windows, need Pillow)
-cd frontend && npm install && npm test            # 119 tests of the screens
-cd launcher && npm test && npm run selftest       # 15 launcher tests, then the real window, end to end
+.venv/bin/pytest                                  # 5,455 Python tests (12 more, for photos on Windows, need Pillow)
+cd frontend && npm install && npm test            # 126 tests of the screens
+cd launcher && npm test && npm run selftest       # 16 launcher tests, then the real window, end to end
 ```
 
 The self-test opens the window, checks every kind of call (files, JSON, photo uploads, refused paths, copying, saved settings) without drafting or saving anything, and quits. Run it after `launcher/build.sh`.

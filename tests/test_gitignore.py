@@ -32,3 +32,16 @@ def test_the_example_env_leaves_the_claude_key_empty():
     of it with a placeholder would ask Claude with a key that can only fail."""
     lines = (ROOT / ".env.example").read_text(encoding="utf-8").splitlines()
     assert "ANTHROPIC_API_KEY=" in lines
+
+
+def test_a_copy_of_the_example_env_asks_the_free_uk_prices(monkeypatch):
+    """.env.example leaves PRICES_URL, PRICES_KEY and FLIP_PUBLIC_PRICES empty, so a copy of it gets the free UK prices:
+    a placeholder key would have nowhere to go, and turn them off."""
+    from flip import prices
+    lines = (ROOT / ".env.example").read_text(encoding="utf-8").splitlines()
+    assert {"FLIP_PUBLIC_PRICES=", "PRICES_URL=", "PRICES_KEY="} <= set(lines)
+    for line in lines:  # as flip.draft.load_env reads it
+        if "=" in line and not line.lstrip().startswith("#"):
+            name, value = line.split("=", 1)
+            monkeypatch.setenv(name.strip(), value.strip().strip("\"'"))
+    assert prices.mode() == "public"
