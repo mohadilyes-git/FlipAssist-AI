@@ -205,9 +205,13 @@ def test_the_damage_judge_is_still_asked_on_the_free_prices():
      None,
      "The free UK prices are only for the iPhone, Samsung phone and MacBook models the AlertFlip prices API knows, and "
      "it couldn't match this title to one: put the model in the title (like iPhone 13 128GB)"),
-    (404, {"code": "PUBLIC_NO_DATA", "message": "No saved sales"}, None, None,
-     "No recent UK sales of this model are saved yet, and this month's free price checks are used up: try again next "
-     "month"),
+    # too few saved sales, whether this month's free checks are used up or a check found too few
+    (404, {"code": "PUBLIC_NO_DATA", "message": "No saved sales, and this month's checks are used up"}, None, None,
+     "Not enough recent UK sales of this model are saved to price it: the free prices check each model about once a "
+     "month, so try again next month"),
+    (404, {"code": "PUBLIC_NO_DATA", "message": "Not enough recent UK sales of this model (iphone 13) to price it."},
+     None, None, "Not enough recent UK sales of this model are saved to price it: the free prices check each model "
+     "about once a month, so try again next month"),
     # a prices API that wants a key (one without the free prices yet), or Supabase asking for a sign-in itself
     (401, {"code": "UNAUTHORIZED", "message": "Sign in to AlertFlip first."}, None, None,
      "The AlertFlip prices API asked for a key, so it has no free UK prices to give: add your own PRICES_URL and "

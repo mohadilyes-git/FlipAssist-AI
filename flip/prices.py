@@ -1454,8 +1454,10 @@ PUBLIC_REFUSED = {
     "PUBLIC_NOT_ALLOWED": "The free UK prices are only for the iPhone, Samsung phone and MacBook models the AlertFlip "
                           "prices API knows, and it couldn't match this title to one: put the model in the title "
                           "(like iPhone 13 128GB)",
-    "PUBLIC_NO_DATA": "No recent UK sales of this model are saved yet, and this month's free price checks are used up: "
-                      "try again next month",
+    # too few saved sales: none checked yet with this month's free checks used up, or a check that found too few. Either
+    # way the free prices look again in about a month
+    "PUBLIC_NO_DATA": "Not enough recent UK sales of this model are saved to price it: the free prices check each model "
+                      "about once a month, so try again next month",
     # a prices API that wants a key: one without the free prices yet, or another one in PRICES_URL
     "UNAUTHORIZED": "The AlertFlip prices API asked for a key, so it has no free UK prices to give: add your own "
                     "PRICES_URL and PRICES_KEY to .env",
