@@ -95,9 +95,9 @@ $tested = [ordered]@{
 # FROM line naming another model, or another template or system prompt), so any other one is refused too
 $testedModelfile = [ordered]@{
   "flip-reader-5"   = "8c0a25f122166b29ef661b053c475a87cbcfcb7d5acd9fc4c99165538e224245"
-  "flip-wording-4b" = "49bbde2bcc475d2084f7424fae3b0eeec11a0b22f86b8cdf513e29bdc09aed4d"
-  "flip-kinds-1"    = "0eff6f2dc41da8ea134a65569b692ee8c57123b0ea9ce6f20ef473e996eeb8a1"
-  "flip-style-1b"   = "9f3426680520a0baefba7e3ac11d69fe2d525e694aac4357ce7e49d77e6fbff2"
+  "flip-wording-4b" = "0fcfff7a38dc6ceae08936f6804a975a12e5caeb9cc40028d1b8afe19925fd23"
+  "flip-kinds-1"    = "f0e5e65efaad1055d255c0a7b4f68563fb4e5f77afaebd125a7e55181835fc99"
+  "flip-style-1b"   = "16cf1cd4418305430888b9b5f4a6085e265cd78ccf9c9661f79c80291c3630dc"
 }
 function Sha256([string]$file) { (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLowerInvariant() }
 

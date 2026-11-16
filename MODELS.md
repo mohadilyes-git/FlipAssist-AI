@@ -33,7 +33,7 @@ sentence (flip-kinds-1), 1.2-1.8 s a reason (flip-wording-4b) and about 4 s a bu
 for the style test's buyers after the first, on 9 Nov); the first answer, while the model loads, takes 3-9 s.
 
 **A fresh test on the Mac**, on data none of them had seen, scored the same ways as the cloud tests: 245 real listings
-(55 first seen by AlertFlip on 11-6 Oct, 190 from the reader's own test sets; none shares text with flip-reader-5's
+(55 first seen by AlertFlip on 4-6 Oct, 190 from the reader's own test sets; none shares text with flip-reader-5's
 training data or with any of flip-kinds-1's or flip-wording-4b's data), read by flip-reader-5, and 40 new made-up buyers
 written free-form, with no code-written plan:
 
@@ -267,9 +267,9 @@ settings in an order of its own, so the same settings can print in another order
 | Model | SHA-256 of its Modelfile |
 |---|---|
 | flip-reader-5 | `8c0a25f122166b29ef661b053c475a87cbcfcb7d5acd9fc4c99165538e224245` |
-| flip-wording-4b | `49bbde2bcc475d2084f7424fae3b0eeec11a0b22f86b8cdf513e29bdc09aed4d` |
-| flip-kinds-1 | `0eff6f2dc41da8ea134a65569b692ee8c57123b0ea9ce6f20ef473e996eeb8a1` |
-| flip-style-1b | `9f3426680520a0baefba7e3ac11d69fe2d525e694aac4357ce7e49d77e6fbff2` |
+| flip-wording-4b | `0fcfff7a38dc6ceae08936f6804a975a12e5caeb9cc40028d1b8afe19925fd23` |
+| flip-kinds-1 | `f0e5e65efaad1055d255c0a7b4f68563fb4e5f77afaebd125a7e55181835fc99` |
+| flip-style-1b | `16cf1cd4418305430888b9b5f4a6085e265cd78ccf9c9661f79c80291c3630dc` |
 
 An Ollama that prints a Modelfile differently gives other values for the same model: `launcher/upload-models.sh`,
 `package-models.sh` and `export-models.sh` then refuse it until these values are changed together, here and in those
