@@ -1447,6 +1447,10 @@ NOT_ASKED = {
               "the free UK prices",
 }
 PUBLIC_UK_ONLY = "The free prices are for the UK only"
+# no answer in TIMEOUT: the first ask for a model whose sales are a month old waits while they're checked again, and the
+# check goes on, so the next ask has them
+PUBLIC_SLOW = ("The free UK prices took too long to answer, as they can while a model's sales are checked again: try "
+               "again in a minute")
 # the free prices' own refusals in FlipAssist's words; a busy one says when to try again (try_again)
 PUBLIC_REFUSED = {
     "PUBLIC_OFF": "The free UK prices are switched off for now: try again later, or add your own PRICES_URL and "
@@ -1675,6 +1679,8 @@ def estimate(title, flaws=(), country="uk", opener=None, description=None, sorte
             return public_refused(said.get("code"), e.code, said.get("message"), wait)
         return refused(said.get("code"), e.code, said.get("message"))
     except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
+        if public and (isinstance(e, TimeoutError) or isinstance(getattr(e, "reason", None), TimeoutError)):
+            return {"error": PUBLIC_SLOW}
         return {"error": f"Couldn't reach the AlertFlip API ({type(e).__name__})"}
     if not isinstance(answer, dict) or "price" not in answer:
         said = answer.get("error") if isinstance(answer, dict) else None

@@ -235,6 +235,23 @@ def test_each_refusal_of_the_free_prices_is_said_plainly(status, error, top, hea
     assert "ebay" not in said.lower()
 
 
+def test_a_slow_answer_says_to_try_again_and_no_network_says_so(monkeypatch):
+    """A model whose sales are a month old is checked again while its first ask waits: past TIMEOUT that ask says to
+    try again, not that the API couldn't be reached. Your own key's words for it are as before."""
+    def raising(error):
+        def opener(request, timeout):
+            raise error
+        return opener
+    for slow in (TimeoutError("timed out"), urllib.error.URLError(TimeoutError("timed out"))):
+        assert prices.estimate("iPhone 13 128GB", [], opener=raising(slow)) == {"error": prices.PUBLIC_SLOW}
+    assert prices.estimate("iPhone 13 128GB", [], opener=raising(urllib.error.URLError("no network"))) == \
+        {"error": "Couldn't reach the AlertFlip API (URLError)"}
+    monkeypatch.setenv("PRICES_URL", OWN_URL)
+    monkeypatch.setenv("PRICES_KEY", "k" * 64)
+    assert prices.estimate("iPhone 13 128GB", [], opener=raising(TimeoutError("timed out"))) == \
+        {"error": "Couldn't reach the AlertFlip API (TimeoutError)"}
+
+
 def test_a_refusal_with_a_price_missing_is_said_the_same_way():
     opener, _ = asking({"error": {"code": "PUBLIC_NO_DATA", "message": "No saved sales"}})
     assert prices.estimate("iPhone 13 128GB", [], opener=opener)["error"] == prices.PUBLIC_REFUSED["PUBLIC_NO_DATA"]
