@@ -55,7 +55,8 @@ export type PriceEstimate = {
    * that nothing was cut for */
   breakdown?: CutRow[]; not_cut?: string[];
   /** the free public UK prices (no prices key of your own): public, when the model's UK sales were last checked (an ISO
-   * time; null when it doesn't say), and stale when this month's free checks ran out before they were checked again */
+   * time; null when it doesn't say), and stale when they're over a month old and couldn't be checked again (this
+   * month's free checks may be used up, or a check failed just now: the API doesn't say which) */
   public?: boolean; checked_at?: string | null; stale?: boolean;
 };
 

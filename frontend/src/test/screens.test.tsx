@@ -1065,17 +1065,21 @@ describe("AI UK price estimate", () => {
     expect(document.body.textContent).not.toMatch(/ebay/i);
   });
 
-  it("says when the free prices' sales are old because this month's free checks are used up", async () => {
+  // stale is the API's "over a month old and not checked again", whatever stopped the check: this month's free checks
+  // used up, or a check that failed just now (a rate limit, an error), with most of the month's checks still left
+  it("says when old free sales couldn't be checked again, never for sure that the checks ran out", async () => {
     serve({ "POST /api/prices/estimate": [200, { ...PRICED, public: true, checked_at: "2026-09-12T08:00:00Z",
       stale: true }] });
     const user = userEvent.setup();
     render(<PriceScreen free />);
     await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
     await user.click(screen.getByRole("button", { name: "Check the UK price" }));
-    expect(await screen.findByText("These UK sales were last checked on 12 September 2026: this month's free checks "
-      + "are used up, so they weren't checked again")).toBeTruthy();
-    expect(cautions({ ...PRICED, public: true, stale: true })).toEqual(["These UK sales are over a month old: this "
-      + "month's free checks are used up, so they weren't checked again"]);  // no time given: no day said
+    expect(await screen.findByText("These UK sales were last checked on 12 September 2026, and they couldn't be "
+      + "checked again this time (this month's free checks may be used up): try again later")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/checks are used up|have run out|ran out/);
+    // no time given: no day said
+    expect(cautions({ ...PRICED, public: true, stale: true })).toEqual(["These UK sales are over a month old, and "
+      + "they couldn't be checked again this time (this month's free checks may be used up): try again later"]);
   });
 
   it("says a refusal of the free prices as the API words it, and nothing of free prices with your own key", async () => {

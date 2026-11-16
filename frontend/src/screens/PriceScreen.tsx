@@ -225,11 +225,13 @@ export function cautions(e: PriceEstimate, title?: string): string[] {
     said.push(`Rough for a ${noun}: the ${borrowed.join(" and ")} cut${borrowed.length > 1 ? "s are" : " is"} the `
       + `iPhone's, as too few ${noun}s had ${borrowed.length > 1 ? "them" : "it"}`);
   }
-  // the free prices' sales, when this month's free checks ran out before they were checked again
+  // the free prices' sales when they're over a month old and couldn't be checked again. The API says stale whatever
+  // stopped the check (this month's free checks used up, a check that failed just now, or one it couldn't count), so
+  // the screen never says for sure that the checks ran out
   if (e.stale) {
     const day = checkedDay(e.checked_at);
-    said.push(`${day ? `These UK sales were last checked on ${day}` : "These UK sales are over a month old"}: this `
-      + "month's free checks are used up, so they weren't checked again");
+    said.push(`${day ? `These UK sales were last checked on ${day}` : "These UK sales are over a month old"}, and they `
+      + "couldn't be checked again this time (this month's free checks may be used up): try again later");
   }
   return said;
 }

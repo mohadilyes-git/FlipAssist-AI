@@ -797,7 +797,8 @@ class PriceEstimate(BaseModel):
     breakdown: list[CutRow] = []
     not_cut: list[str] = []
     # the free public UK prices (no PRICES_KEY): public, and when the model's sales were last checked (ISO time; None
-    # when it doesn't say); stale when this month's free checks ran out before they were checked again
+    # when it doesn't say); stale when they're over a month old and couldn't be checked again (this month's free
+    # checks may be used up, or a check failed just now: the API doesn't say which)
     public: bool = False
     checked_at: str | None = None
     stale: bool = False

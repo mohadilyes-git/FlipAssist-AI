@@ -1436,8 +1436,9 @@ MONTHLY_CAP = "New price checks are paused until next month: models checked befo
 # The free public UK prices: the same prices API, asked with no key at all (no x-prices-key, no sign-in). It answers
 # only an iPhone, a Samsung phone or a MacBook in the UK whose title it matches to one of its models, from that model's
 # saved sales, checked again when they're a month old (one check a model, shared by everyone asking). Its answer has
-# "public": true and "checked_at", when the sales were last checked, and "stale": true when this month's free checks
-# ran out before they were checked again. PRICES_URL with no key is asked the same way.
+# "public": true and "checked_at", when the sales were last checked, and "stale": true when they're over a month old
+# and couldn't be checked again (this month's free checks may be used up, or a check failed just now: it doesn't say
+# which). PRICES_URL with no key is asked the same way.
 PUBLIC_PRICES_URL = "https://kgwykdmpcmvtyjnmlnqk.supabase.co/functions/v1/prices-"
 # why nothing is asked, by mode(): the free prices turned off with no key of your own, or a key with no address
 NOT_ASKED = {
@@ -1570,7 +1571,7 @@ def estimate(title, flaws=(), country="uk", opener=None, description=None, sorte
     {"price", "middle", "low", "high", "currency", "sales", "model", "item", "storage_gb", "ram_gb",
     "asked_storage_gb", "asked_ram_gb", "kind", "kinds", "cuts", "parts_price", "rough", "exact", "mode"}, and from
     the free public prices (no PRICES_KEY) "public": True, "checked_at" (when its sales were last checked, or None) and
-    "stale" (this month's free checks ran out before they were checked again) — or {"skipped": why} for a listing that
+    "stale" (they're over a month old and couldn't be checked again) — or {"skipped": why} for a listing that
     isn't an iPhone, a Samsung or a MacBook, or with no prices to ask (mode), or {"error": what}.
     flaws: the reader's sentences (quotes); description: the seller's, for the flaws' context and the size when the
     title has none. storage_gb/ram_gb are the size it priced, asked_* the size the listing gives (None: it gives
