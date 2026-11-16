@@ -76,17 +76,24 @@ def test_health_says_which_paid_model_does_what_and_whether_the_prices_api_is_se
     """14 Oct: Claude Haiku 5.5 only checks each reason; Claude Sonnet 5.5 reads or writes when this device's models
     can't, and fixes a reason the check flags."""
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
-    for name in ("FLIP_BACKUP_MODEL", "FLIP_WORDING_CHECK", "FLIP_WORDING_FIX", "PRICES_URL", "PRICES_KEY"):
+    for name in ("FLIP_BACKUP_MODEL", "FLIP_WORDING_CHECK", "FLIP_WORDING_FIX", "PRICES_URL", "PRICES_KEY",
+                 "FLIP_PUBLIC_PRICES"):
         monkeypatch.delenv(name, raising=False)
     health = TestClient(api.app).get("/health").json()
     assert (health["api_model"], health["check_model"], health["fix_model"]) == \
         ("claude-sonnet-5-5", "claude-haiku-5-5", "claude-sonnet-5-5")
-    assert health["prices_api_set"] is False
+    # no key of your own: the free public UK prices, so the price tab (and the damage judge) can run
+    assert (health["prices_api_set"], health["prices_mode"]) == (True, "public")
+    monkeypatch.setenv("FLIP_PUBLIC_PRICES", "off")
+    health = TestClient(api.app).get("/health").json()
+    assert (health["prices_api_set"], health["prices_mode"]) == (False, "off")
+    monkeypatch.setenv("PRICES_KEY", "k")  # a key with no address to send it to
+    assert TestClient(api.app).get("/health").json()["prices_mode"] == "no url"
     monkeypatch.setenv("PRICES_URL", "https://example.test/prices")
-    monkeypatch.setenv("PRICES_KEY", "k")
     monkeypatch.delenv("ANTHROPIC_API_KEY")
     health = TestClient(api.app).get("/health").json()
-    assert health["prices_api_set"] is True and (health["check_model"], health["fix_model"]) == ("", "")
+    assert (health["prices_api_set"], health["prices_mode"]) == (True, "key")
+    assert (health["check_model"], health["fix_model"]) == ("", "")
 
 
 def test_health_names_each_model_by_its_job_and_says_which_isnt_installed(client, monkeypatch):
@@ -902,12 +909,74 @@ def test_the_price_tab_reads_nothing_but_iphones_samsungs_and_macbooks(client, p
     assert local.asked == []
 
 
-def test_with_no_prices_api_set_the_listing_isnt_read(client, monkeypatch):
+def test_with_no_prices_to_ask_the_listing_isnt_read(client, monkeypatch):
+    """No key and the free prices off, or a key with no address: nothing to price it with, so it isn't read."""
     monkeypatch.setenv("PRICES_URL", "")
+    monkeypatch.setenv("PRICES_KEY", "")
+    monkeypatch.setenv("FLIP_PUBLIC_PRICES", "off")
     local = FakeModel("gemma3:4b", READ)
     client.use(local=local)
     found = client.post("/prices/estimate", json={"title": "iPhone 13 128GB", "description": "Cracked back"}).json()
+    assert found["skipped"].startswith("The free UK prices are off") and local.asked == []
+    monkeypatch.setenv("PRICES_KEY", "k" * 64)
+    found = client.post("/prices/estimate", json={"title": "iPhone 13 128GB", "description": "Cracked back"}).json()
     assert found["skipped"].startswith("The AlertFlip API isn't set") and local.asked == []
+
+
+def test_with_no_key_the_price_tab_reads_the_listing_and_asks_the_free_prices(client, monkeypatch):
+    """No PRICES_KEY: the listing is read as before and priced by the free public UK prices, asked with no key at the
+    prices API's own address; the screen gets how fresh its sales are."""
+    import io
+    import urllib.error
+
+    from flip import prices
+    for name in ("PRICES_URL", "PRICES_KEY", "FLIP_PUBLIC_PRICES"):
+        monkeypatch.delenv(name, raising=False)
+    asked = []
+
+    class Answer(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    def urlopen(request, timeout):
+        asked.append((request.full_url, dict(request.header_items()), json.loads(request.data)))
+        if json.loads(request.data)["title"].startswith("iPhone 12"):
+            raise urllib.error.HTTPError(request.full_url, 429, "x", {}, io.BytesIO(json.dumps(
+                {"error": {"code": "PUBLIC_BUSY", "message": "Too many", "retry_after_s": 900}}).encode()))
+        return Answer(json.dumps({"price": 170, "middle": 210, "low": 190, "high": 230, "sales": 40, "used": [],
+                                  "model": "iphone 13", "storage_gb": 128, "mode": "catalogue", "public": True,
+                                  "checked_at": "2026-10-20T07:00:00Z", "stale": True}).encode())
+    monkeypatch.setattr(prices.urllib.request, "urlopen", urlopen)
+    prices._seen.clear()
+    local = FakeModel("gemma3:4b", READ)
+    client.use(local=local)
+    found = client.post("/prices/estimate", json={"title": LISTING["title"], "description": LISTING["description"]})
+    url, headers, body = asked[-1]
+    assert url == prices.PUBLIC_PRICES_URL and headers == {"Content-type": "application/json"}
+    assert (body["action"], body["country"], body["title"]) == ("price", "uk", LISTING["title"])
+    assert len(local.asked) == 1 and found.json()["flaws"] == ["Black dot on the screen"]  # read as before
+    assert {k: found.json()[k] for k in ("public", "checked_at", "stale")} == \
+        {"public": True, "checked_at": "2026-10-20T07:00:00Z", "stale": True}
+    busy = client.post("/prices/estimate", json={"title": "iPhone 12 64GB", "flaws": []}).json()
+    assert busy["error"] == "The free UK prices are busy: try again in about 15 minutes" and busy["public"] is False
+
+
+def test_the_damage_judge_needs_your_claude_key_on_the_free_prices_too(client, monkeypatch):
+    for name in ("PRICES_URL", "PRICES_KEY", "FLIP_PUBLIC_PRICES"):
+        monkeypatch.delenv(name, raising=False)
+    judges = []
+    monkeypatch.setattr(api, "estimate", lambda title, flaws=(), judge=None, **_: judges.append(judge) or
+                        {"price": 150, "cuts": [], "public": True})
+    log = api.app.dependency_overrides[api.audit]()
+    api.app.dependency_overrides[api.setup] = lambda: api.Setup(FakeModel("gemma3:4b"), None, log, judge="settings")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    client.post("/prices/estimate", json={"title": "iPhone 13 128GB", "flaws": ["Cracked back"]})
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    client.post("/prices/estimate", json={"title": "iPhone 13 128GB", "flaws": ["Cracked back"]})
+    assert judges[0] is None and callable(judges[1])  # no Claude key: code judges alone, as with your own prices
 
 
 def test_the_price_tab_asks_for_the_kinds_and_the_size_the_listing_gives(client, monkeypatch, prices_api):

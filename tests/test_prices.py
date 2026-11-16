@@ -197,9 +197,12 @@ def test_every_failure_is_an_answer_in_its_own_words_never_ebays():
     assert "Couldn't reach" in prices.estimate("Galaxy S23", opener=down)["error"]
 
 
-def test_with_no_api_set_nothing_is_asked(monkeypatch):
+def test_with_no_key_and_the_free_prices_off_nothing_is_asked(monkeypatch):
+    """With no PRICES_KEY the free public UK prices are asked (tests/test_public_prices.py), unless they're off."""
     monkeypatch.setenv("PRICES_KEY", "")
-    assert "skipped" in prices.estimate("iPhone 14")
+    monkeypatch.setenv("FLIP_PUBLIC_PRICES", "off")
+    opener, sent = asking()
+    assert "skipped" in prices.estimate("iPhone 14", opener=opener) and sent == []
 
 
 # ── 6 Oct recheck ──────────────────────────────────────────────────────────────────────────────────────────────────

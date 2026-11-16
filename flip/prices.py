@@ -7,6 +7,9 @@ each kind of flaw ("damage", "fault"...), never under the for-parts price. FlipA
 in .env:
   PRICES_URL  the function's address (https://<project>.supabase.co/functions/v1/prices)
   PRICES_KEY  the PRICES_CLIENT_KEY secret it checks (sent as x-prices-key)
+With no PRICES_KEY, FlipAssist asks the same API's free public UK prices instead (mode): with no key at all, for the
+UK only and only the models it prices, each from sales checked again about monthly. FLIP_PUBLIC_PRICES=off in .env
+turns that off.
 
 What FlipAssist sends, after the 4 Oct review (each one fixes a wrong price the API's own handling gave):
 - kinds, sorted here (kinds_of): the API's own sorter takes the first rule that matches a whole sentence and reads no
@@ -1430,9 +1433,77 @@ REFUSED = {
 # not a moment's wait, and what it saved still prices the models checked before
 MONTHLY_CAP = "New price checks are paused until next month: models checked before can still be priced"
 
+# The free public UK prices: the same prices API, asked with no key at all (no x-prices-key, no sign-in). It answers
+# only an iPhone, a Samsung phone or a MacBook in the UK whose title it matches to one of its models, from that model's
+# saved sales, checked again when they're a month old (one check a model, shared by everyone asking). Its answer has
+# "public": true and "checked_at", when the sales were last checked, and "stale": true when this month's free checks
+# ran out before they were checked again. PRICES_URL with no key is asked the same way.
+PUBLIC_PRICES_URL = "https://kgwykdmpcmvtyjnmlnqk.supabase.co/functions/v1/prices-"
+# why nothing is asked, by mode(): the free prices turned off with no key of your own, or a key with no address
+NOT_ASKED = {
+    "off": "The free UK prices are off (FLIP_PUBLIC_PRICES=off in .env): take that line out, or add your own "
+           "PRICES_URL and PRICES_KEY",
+    "no url": "The AlertFlip API isn't set: add PRICES_URL to .env with your PRICES_KEY, or take PRICES_KEY out for "
+              "the free UK prices",
+}
+PUBLIC_UK_ONLY = "The free prices are for the UK only"
+# the free prices' own refusals in FlipAssist's words; a busy one says when to try again (try_again)
+PUBLIC_REFUSED = {
+    "PUBLIC_OFF": "The free UK prices are switched off for now: try again later, or add your own PRICES_URL and "
+                  "PRICES_KEY to .env",
+    "PUBLIC_NOT_ALLOWED": "The free UK prices are only for the iPhone, Samsung phone and MacBook models the AlertFlip "
+                          "prices API knows, and it couldn't match this title to one: put the model in the title "
+                          "(like iPhone 13 128GB)",
+    "PUBLIC_NO_DATA": "No recent UK sales of this model are saved yet, and this month's free price checks are used up: "
+                      "try again next month",
+    # a prices API that wants a key: one without the free prices yet, or another one in PRICES_URL
+    "UNAUTHORIZED": "The AlertFlip prices API asked for a key, so it has no free UK prices to give: add your own "
+                    "PRICES_URL and PRICES_KEY to .env",
+}
+
 
 def settings():
     return (os.environ.get("PRICES_URL", "").strip(), os.environ.get("PRICES_KEY", "").strip())
+
+
+def public_on():
+    """Whether the free public UK prices may be asked: yes unless FLIP_PUBLIC_PRICES=off."""
+    return os.environ.get("FLIP_PUBLIC_PRICES", "").strip().lower() != "off"
+
+
+def mode():
+    """How a UK price is asked: "key" with PRICES_URL and PRICES_KEY (your own, as before), "public" with no PRICES_KEY
+    (the free public UK prices, at PRICES_URL if it's set, else PUBLIC_PRICES_URL, with no key sent), "off" with no
+    PRICES_KEY and FLIP_PUBLIC_PRICES=off, "no url" with a PRICES_KEY and no PRICES_URL to send it to."""
+    url, key = settings()
+    if key:
+        return "key" if url else "no url"
+    return "public" if public_on() else "off"
+
+
+def available():
+    """Whether a UK price can be asked: your own key, or the free public prices."""
+    return mode() in ("key", "public")
+
+
+def try_again(seconds):
+    """When to try again, from a refusal's retry_after_s: "try again in a minute", "try again in about 20 minutes",
+    "try again in about an hour", "try again in about 5 hours", "try again in about 2 days"; "try again later" when it
+    gives no number."""
+    try:
+        wait = float(seconds) if not isinstance(seconds, bool) else None
+    except (TypeError, ValueError):
+        wait = None
+    if wait is None or not 0 <= wait < float("inf"):
+        return "try again later"
+    minutes, hours = -int(-wait // 60), round(wait / 3600)
+    if minutes <= 1:
+        return "try again in a minute"
+    if minutes < 60:
+        return f"try again in about {minutes} minutes"
+    if hours <= 1:
+        return "try again in about an hour"
+    return f"try again in about {hours} hours" if hours < 48 else f"try again in about {round(wait / 86400)} days"
 
 
 def refused(code, status=None, message=None):
@@ -1441,6 +1512,18 @@ def refused(code, status=None, message=None):
         return {"error": MONTHLY_CAP}
     return {"error": REFUSED.get(code) or (f"The AlertFlip API couldn't price it ({code})" if code
                                            else f"The AlertFlip API answered {status}")}
+
+
+def public_refused(code, status=None, message=None, wait=None):
+    """A refusal of the free public UK prices in FlipAssist's words: its own (PUBLIC_REFUSED; busy with when to try
+    again, from wait, its retry_after_s), a key it asked for, then any other as refused() says it."""
+    if code == "PUBLIC_BUSY":
+        return {"error": f"The free UK prices are busy: {try_again(wait)}"}
+    if code in PUBLIC_REFUSED:
+        return {"error": PUBLIC_REFUSED[code]}
+    if code is None and status == 401:  # Supabase itself asking for a sign-in
+        return {"error": PUBLIC_REFUSED["UNAUTHORIZED"]}
+    return refused(code, status, message)
 
 
 def sorted_each(flaws, text, title, description, sorter=None):
@@ -1478,8 +1561,10 @@ def sorted_kinds(flaws, text, title, description, sorter=None):
 def estimate(title, flaws=(), country="uk", opener=None, description=None, sorter=None, judge=None):
     """The UK price of this listing with its flaws, as the prices API answers it, trimmed to what the screen shows:
     {"price", "middle", "low", "high", "currency", "sales", "model", "item", "storage_gb", "ram_gb",
-    "asked_storage_gb", "asked_ram_gb", "kind", "kinds", "cuts", "parts_price", "rough", "exact", "mode"} — or
-    {"skipped": why} for a listing that isn't an iPhone, a Samsung or a MacBook, or with no API set, or {"error": what}.
+    "asked_storage_gb", "asked_ram_gb", "kind", "kinds", "cuts", "parts_price", "rough", "exact", "mode"}, and from
+    the free public prices (no PRICES_KEY) "public": True, "checked_at" (when its sales were last checked, or None) and
+    "stale" (this month's free checks ran out before they were checked again) — or {"skipped": why} for a listing that
+    isn't an iPhone, a Samsung or a MacBook, or with no prices to ask (mode), or {"error": what}.
     flaws: the reader's sentences (quotes); description: the seller's, for the flaws' context and the size when the
     title has none. storage_gb/ram_gb are the size it priced, asked_* the size the listing gives (None: it gives
     none). sorter: flip-kinds (flip.kinds.Sorter), asked each flaw's kinds; a flaw it can't answer, and the title,
@@ -1490,8 +1575,14 @@ def estimate(title, flaws=(), country="uk", opener=None, description=None, sorte
     if kind is None:
         return {"skipped": SKIPPED}
     url, key = settings()
-    if not url or not key:
-        return {"skipped": "The AlertFlip API isn't set: add PRICES_URL and PRICES_KEY to .env"}
+    how = mode()
+    if how in NOT_ASKED:
+        return {"skipped": NOT_ASKED[how]}
+    public = how == "public"  # the free prices: no key is sent, and only the UK's are asked
+    if public:
+        url = url or PUBLIC_PRICES_URL
+        if country != "uk":
+            return {"skipped": PUBLIC_UK_ONLY}
     title = title.strip()
     flaws = [f.strip() for f in flaws or [] if isinstance(f, str) and f.strip()]
     # the listing the flaws are judged in: the title and the description, as the reader read them
@@ -1533,7 +1624,8 @@ def estimate(title, flaws=(), country="uk", opener=None, description=None, sorte
         body["storage_gb"] = in_description[0]
     if kind == "macbook" and in_title[1] is None and in_description[1] is not None:
         body["ram_gb"] = in_description[1]
-    remembered = json.dumps([url, body], sort_keys=True)
+    # a free answer is kept apart from one asked with a key, at the same address too
+    remembered = json.dumps([url, body, "public"] if public else [url, body], sort_keys=True)
     # 9 Nov (the owner: "why is it taking a bit long time"): the damage judge (Claude Haiku 5.5, Claude Sonnet 5.5 when
     # they disagree) needs nothing from the prices API, so it judges while the API answers, not after it
     if own_damage and judge is not None:
@@ -1560,24 +1652,31 @@ def estimate(title, flaws=(), country="uk", opener=None, description=None, sorte
     shown = {"asked_title": asked_title} if details else {}
     if remembered in _seen:
         return {**priced(_seen[remembered]), **shown}
-    request = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
-                                     headers={"Content-Type": "application/json", "x-prices-key": key})
+    # the free prices are asked with Content-Type alone: never a key FlipAssist doesn't have, nor a sign-in
+    headers = {"Content-Type": "application/json"} if public else \
+        {"Content-Type": "application/json", "x-prices-key": key}
+    request = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST", headers=headers)
     try:
         with (opener or urllib.request.urlopen)(request, timeout=TIMEOUT) as response:
             answer = json.loads(response.read().decode() or "{}")
     except urllib.error.HTTPError as e:
         try:
-            said = json.loads(e.read().decode() or "{}").get("error") or {}
+            whole = json.loads(e.read().decode() or "{}")
+            said = whole.get("error") or {}
         except (ValueError, AttributeError):
-            said = {}
+            whole, said = {}, {}
         said = said if isinstance(said, dict) else {}
+        if public:  # when to try again: retry_after_s with its refusal, or the HTTP Retry-After
+            wait = said.get("retry_after_s", whole.get("retry_after_s"))
+            wait = wait if wait is not None or e.headers is None else e.headers.get("Retry-After")
+            return public_refused(said.get("code"), e.code, said.get("message"), wait)
         return refused(said.get("code"), e.code, said.get("message"))
     except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
         return {"error": f"Couldn't reach the AlertFlip API ({type(e).__name__})"}
     if not isinstance(answer, dict) or "price" not in answer:
         said = answer.get("error") if isinstance(answer, dict) else None
         said = said if isinstance(said, dict) else {}
-        return refused(said.get("code"), "with no price", said.get("message"))
+        return (public_refused if public else refused)(said.get("code"), "with no price", said.get("message"))
     plan = answer.get("plan")
     plan = plan if isinstance(plan, dict) else {}  # what the API read from the title (none when it didn't)
     used = answer.get("used") or []
@@ -1591,6 +1690,10 @@ def estimate(title, flaws=(), country="uk", opener=None, description=None, sorte
              "parts_price": "for-parts price" in used, "rough": bool(answer.get("rough")),
              "exact": bool(answer.get("exact_match")), "mode": answer.get("mode"),
              "api_factor": answer.get("factor") if isinstance(answer.get("factor"), (int, float)) else None}
+    if public:  # the free prices say how fresh their sales are: when they were last checked, and if that's old
+        checked = answer.get("checked_at")
+        found.update({"public": True, "checked_at": checked.strip()[:40] if isinstance(checked, str) and checked.strip()
+                      else None, "stale": answer.get("stale") is True})
     _seen[remembered] = found
     return {**priced(found), **shown}  # asked_title only when the description's model was added
 

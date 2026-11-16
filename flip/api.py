@@ -44,7 +44,7 @@ from flip.checks import (MAX_MESSAGE, check_length, check_message_claims, check_
                          check_no_invented_numbers, check_no_off_platform, check_no_story, prices_in)
 from flip.draft import load_env
 from flip.kinds import model_name as kinds_model, sorter as kinds_sorter
-from flip.prices import NOT_SUPPORTED, estimate, kind_of, settings as prices_settings, supported
+from flip.prices import NOT_SUPPORTED, available as prices_available, estimate, kind_of, mode as prices_mode, supported
 from flip.drafter import draft_listing
 from flip.listing_code import PhrasingWriter
 from flip.message_drafter import MESSAGE_TOKENS, Refused, draft_message, offer_to_draft
@@ -358,7 +358,14 @@ class Health(BaseModel):
     check_model: str = Field("", description="the paid model that checks each offer's reason is sendable (Claude Haiku "
                                              "5.5); empty when it's off")
     fix_model: str = Field("", description="the paid model that rewrites a reason the check flags; empty when it's off")
-    prices_api_set: bool = Field(False, description="the AlertFlip prices API (fresh UK sales) has its URL and key in .env")
+    prices_api_set: bool = Field(False, description="UK prices can be asked from the AlertFlip prices API (fresh "
+                                                    "UK sales): its free public ones with no PRICES_KEY, unless "
+                                                    "FLIP_PUBLIC_PRICES=off, or your own PRICES_URL and PRICES_KEY")
+    prices_mode: Literal["key", "public", "off", "no url"] = Field(
+        "off", description='how UK prices are asked (flip.prices.mode): "public", the free public UK prices (no '
+                           'PRICES_KEY: iPhones, Samsung phones and MacBooks, refreshed about monthly); "key", your '
+                           'own PRICES_URL and PRICES_KEY; "off", FLIP_PUBLIC_PRICES=off with no PRICES_KEY; "no '
+                           'url", a PRICES_KEY with no PRICES_URL')
     listing_model: str = Field("", description="who writes List on eBay's draft first: claude-haiku-5-5 (Claude Sonnet "
                                                "5.5 when it fails the checks), or the local model (FLIP_LISTING_WRITER)")
     listing_reader: str = Field("", description="who reads your notes for List on eBay's writer, which phrases what "
@@ -609,7 +616,8 @@ def health():
     steps = settings()  # the reason's models: empty when there's no Anthropic key or a step is off in .env
     return Health(local_model=local.name, local_running=running, api_model=backup_model(),
                   api_key_set=bool(os.environ.get("ANTHROPIC_API_KEY")), check_model=steps["check"],
-                  fix_model=steps["fix"], prices_api_set=all(prices_settings()), listing_model=listing_writer_name(),
+                  fix_model=steps["fix"], prices_api_set=prices_available(), prices_mode=prices_mode(),
+                  listing_model=listing_writer_name(),
                   listing_reader=reads if listing_from_facts() else "", flip_api_key_set=bool(usable_key()),
                   models=models)
 
@@ -788,6 +796,11 @@ class PriceEstimate(BaseModel):
     # Nov: "Cracked back" damage -30%, "The balck dot in the front screen" a fault -17%); the flaws cut for nothing
     breakdown: list[CutRow] = []
     not_cut: list[str] = []
+    # the free public UK prices (no PRICES_KEY): public, and when the model's sales were last checked (ISO time; None
+    # when it doesn't say); stale when this month's free checks ran out before they were checked again
+    public: bool = False
+    checked_at: str | None = None
+    stale: bool = False
 
 
 class PriceChecks:
@@ -804,10 +817,10 @@ class PriceChecks:
 @app.post("/prices/estimate", response_model=PriceEstimate, dependencies=[Depends(key)])
 def estimate_price(request: PriceRequest, s: Setup = Depends(setup)):
     """What this listing sells for in the UK with its flaws: iPhones, Samsung phones and MacBooks (4 Oct), from the same
-    prices API as the AlertFlip app. Send the description and the listing is read for its flaws first, as for a draft
-    (the AI UK price estimate tab); send flaws and they're used as they are. With an Anthropic key, damage among them
-    is judged by paid models too (damage_judge)."""
-    if kind_of(request.title) is None or not all(prices_settings()):  # before any reading: nothing to price it
+    prices API as the AlertFlip app (its free public UK prices with no PRICES_KEY). Send the description and the
+    listing is read for its flaws first, as for a draft (the AI UK price estimate tab); send flaws and they're used as
+    they are. With an Anthropic key, damage among them is judged by paid models too (damage_judge)."""
+    if kind_of(request.title) is None or not prices_available():  # before any reading: nothing to price it
         return PriceEstimate(**estimate(request.title))
     # flaws sent along (9 Nov: a draft's, from AI message's Check the UK price) are used as they are, by whoever read them
     flaws, read_by = request.flaws or [], (request.read_by if request.flaws is not None else None)
