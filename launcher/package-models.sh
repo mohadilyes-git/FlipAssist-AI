@@ -21,7 +21,7 @@ mkdir -p "$out"
 # an empty folder, so SHA256SUMS lists only what this run makes (Finder's .DS_Store aside)
 [ -z "$(ls -A "$out" | grep -vx '\.DS_Store')" ] || { echo "$out isn't empty: give it an empty folder" >&2; exit 1; }
 # the tested versions (MODELS.md, How to check a model file), as get-models.sh checks them: each model file, then its
-# Modelfile (ollama show --modelfile, with FROM ./<model>.gguf)
+# Modelfile (ollama show --modelfile, with FROM ./<model>.gguf and its settings in A-Z order: modelfile_of, below)
 tested() {
   case $1 in
     flip-reader-5) echo b946131ba11fc159fdc1cf683dab0d3b9c4a64cb80dd9726b1b4208b8632bae1 ;;
@@ -46,6 +46,17 @@ blob_of() {
   blob=$(printf '%s\n' "$mf" | sed -n 's/^FROM //p' | head -1)
   [ -f "$blob" ] || { echo "$1: Ollama's file for it isn't on this Mac ($blob)" >&2; exit 1; }
 }
+# a model's Modelfile as the release has it and as it was tested: Ollama's own (ollama show --modelfile) with
+# FROM ./<model>.gguf, and its PARAMETER lines, which sit together, in A-Z order. Ollama keeps each model's settings in
+# an order of its own (16 Nov: three of the four printed theirs in another order, the same settings), so it's set here
+modelfile_of() {
+  mf_tmp=$(mktemp "${TMPDIR:-/tmp}/flipassist-modelfile.XXXXXX")
+  ollama show --modelfile "$1" | sed "s#^FROM .*#FROM ./$1.gguf#" > "$mf_tmp"
+  sed '/^PARAMETER /,$d' "$mf_tmp"
+  grep '^PARAMETER ' "$mf_tmp" | LC_ALL=C sort
+  sed '1,/^PARAMETER /d' "$mf_tmp" | sed '/^PARAMETER /d'
+  rm -f "$mf_tmp"
+}
 # each model checked against the tested version, and room for them all, before anything is written
 need_kb=0
 for model in $models; do
@@ -54,7 +65,7 @@ for model in $models; do
   got=$(shasum -a 256 "$blob" | cut -d' ' -f1)
   [ "$got" = "$(tested "$model")" ] ||
     { echo "$model in Ollama isn't the version that was tested (SHA-256 $got): see MODELS.md" >&2; exit 1; }
-  got=$(ollama show --modelfile "$model" | sed "s#^FROM .*#FROM ./$model.gguf#" | shasum -a 256 | cut -d' ' -f1)
+  got=$(modelfile_of "$model" | shasum -a 256 | cut -d' ' -f1)
   [ "$got" = "$(tested_modelfile "$model")" ] ||
     { echo "$model's Modelfile from Ollama isn't the one that was tested (SHA-256 $got): get-models.sh would refuse it" >&2; exit 1; }
   need_kb=$((need_kb + $(du -k "$blob" | cut -f1)))
@@ -69,7 +80,7 @@ for model in $models; do
   blob_of "$model"
   echo "- $model ($(du -h "$blob" | cut -f1 | tr -d ' '))"
   split -b 1900m -a 1 "$blob" "$model.gguf.part-" # 1,900 MiB: under the 2 GiB a release file may be
-  ollama show --modelfile "$model" | sed "s#^FROM .*#FROM ./$model.gguf#" > "$model.Modelfile"
+  modelfile_of "$model" > "$model.Modelfile"
 done
 cp "$here/../models/NOTICE" "$here/../models/README.md" "$terms" "$policy" .
 shasum -a 256 -- *.gguf.part-* *.Modelfile > SHA256SUMS

@@ -21,7 +21,7 @@ gh auth status >/dev/null 2>&1 || { echo "gh isn't logged in: run gh auth login"
 gh api "repos/$repo/commits?per_page=1" >/dev/null 2>&1 || { echo "$repo has no commits yet (or isn't reachable): push the code first" >&2; exit 1; }
 for f in $extras; do [ -s "$here/../models/$f" ] || { echo "models/$f is missing" >&2; exit 1; }; done
 # the tested versions (MODELS.md, How to check a model file), as get-models.sh checks them: each model file, then its
-# Modelfile (ollama show --modelfile, with FROM ./<model>.gguf)
+# Modelfile (ollama show --modelfile, with FROM ./<model>.gguf and its settings in A-Z order: modelfile_of, below)
 tested() {
   case $1 in
     flip-reader-5) echo b946131ba11fc159fdc1cf683dab0d3b9c4a64cb80dd9726b1b4208b8632bae1 ;;
@@ -46,6 +46,17 @@ blob_of() {
   blob=$(printf '%s\n' "$mf" | sed -n 's/^FROM //p' | head -1)
   [ -f "$blob" ] || { echo "$1: Ollama's file for it isn't on this Mac ($blob)" >&2; exit 1; }
 }
+# a model's Modelfile as the release has it and as it was tested: Ollama's own (ollama show --modelfile) with
+# FROM ./<model>.gguf, and its PARAMETER lines, which sit together, in A-Z order. Ollama keeps each model's settings in
+# an order of its own (16 Nov: three of the four printed theirs in another order, the same settings), so it's set here
+modelfile_of() {
+  mf_tmp=$(mktemp "${TMPDIR:-/tmp}/flipassist-modelfile.XXXXXX")
+  ollama show --modelfile "$1" | sed "s#^FROM .*#FROM ./$1.gguf#" > "$mf_tmp"
+  sed '/^PARAMETER /,$d' "$mf_tmp"
+  grep '^PARAMETER ' "$mf_tmp" | LC_ALL=C sort
+  sed '1,/^PARAMETER /d' "$mf_tmp" | sed '/^PARAMETER /d'
+  rm -f "$mf_tmp"
+}
 work=$(mktemp -d "${TMPDIR:-/tmp}/flipassist-upload.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 trap 'exit 130' INT; trap 'exit 143' TERM; trap 'exit 129' HUP # dash and zsh run the EXIT trap only through exit
@@ -61,7 +72,7 @@ for model in $models; do
   got=$(shasum -a 256 "$blob" | cut -d' ' -f1)
   [ "$got" = "$(tested "$model")" ] ||
     { echo "$model in Ollama isn't the version that was tested (SHA-256 $got): see MODELS.md" >&2; exit 1; }
-  ollama show --modelfile "$model" | sed "s#^FROM .*#FROM ./$model.gguf#" > "$model.Modelfile"
+  modelfile_of "$model" > "$model.Modelfile"
   got=$(shasum -a 256 "$model.Modelfile" | cut -d' ' -f1)
   [ "$got" = "$(tested_modelfile "$model")" ] ||
     { echo "$model's Modelfile from Ollama isn't the one that was tested (SHA-256 $got): get-models.sh would refuse it" >&2; exit 1; }

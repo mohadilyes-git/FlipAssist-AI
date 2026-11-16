@@ -16,7 +16,7 @@ case "$fs" in
   *) echo "Note: $out is on a disk formatted as $fs, which Windows can't read: use a USB drive formatted ExFAT (Disk Utility > Erase > ExFAT)" >&2 ;;
 esac
 # the tested versions (MODELS.md, How to check a model file), as get-models.sh checks them: each model file, then its
-# Modelfile (ollama show --modelfile, with FROM ./<model>.gguf)
+# Modelfile (ollama show --modelfile, with FROM ./<model>.gguf and its settings in A-Z order: modelfile_of, below)
 tested() {
   case $1 in
     flip-reader-5) echo b946131ba11fc159fdc1cf683dab0d3b9c4a64cb80dd9726b1b4208b8632bae1 ;;
@@ -36,6 +36,17 @@ tested_modelfile() {
   esac
 }
 
+# a model's Modelfile as the release has it and as it was tested: Ollama's own (ollama show --modelfile) with
+# FROM ./<model>.gguf, and its PARAMETER lines, which sit together, in A-Z order. Ollama keeps each model's settings in
+# an order of its own (16 Nov: three of the four printed theirs in another order, the same settings), so it's set here
+modelfile_of() {
+  mf_tmp=$(mktemp "${TMPDIR:-/tmp}/flipassist-modelfile.XXXXXX")
+  ollama show --modelfile "$1" | sed "s#^FROM .*#FROM ./$1.gguf#" > "$mf_tmp"
+  sed '/^PARAMETER /,$d' "$mf_tmp"
+  grep '^PARAMETER ' "$mf_tmp" | LC_ALL=C sort
+  sed '1,/^PARAMETER /d' "$mf_tmp" | sed '/^PARAMETER /d'
+  rm -f "$mf_tmp"
+}
 # each model's file in Ollama, checked against the tested version, and room for them all (plus 1 GB to spare) before
 # anything is copied; a file an earlier export left there is written over, so it needs no room twice
 need_kb=0
@@ -47,7 +58,7 @@ for model in $models; do
   got=$(shasum -a 256 "$blob" | cut -d' ' -f1)
   [ "$got" = "$(tested "$model")" ] ||
     { echo "$model in Ollama isn't the version that was tested (SHA-256 $got): see MODELS.md" >&2; exit 1; }
-  got=$(ollama show --modelfile "$model" | sed "s#^FROM .*#FROM ./$model.gguf#" | shasum -a 256 | cut -d' ' -f1)
+  got=$(modelfile_of "$model" | shasum -a 256 | cut -d' ' -f1)
   [ "$got" = "$(tested_modelfile "$model")" ] ||
     { echo "$model's Modelfile from Ollama isn't the one that was tested (SHA-256 $got)" >&2; exit 1; }
   have_kb=$(du -k "$out/$model/$model.gguf" 2>/dev/null | cut -f1)
@@ -61,12 +72,10 @@ fi
 
 for model in $models; do
   mkdir -p "$out/$model"
-  ollama show --modelfile "$model" > "$out/$model/Modelfile.mac"
-  blob=$(sed -n 's/^FROM //p' "$out/$model/Modelfile.mac" | head -1)
+  blob=$(ollama show --modelfile "$model" | sed -n 's/^FROM //p' | head -1)
   echo "- $model ($(du -h "$blob" | cut -f1 | tr -d ' '))"
   cp "$blob" "$out/$model/$model.gguf"
-  # the same Modelfile, from the copied file beside it (Ollama reads a FROM path from the Modelfile's own folder)
-  sed "s#^FROM .*#FROM ./$model.gguf#" "$out/$model/Modelfile.mac" > "$out/$model/Modelfile"
-  rm "$out/$model/Modelfile.mac"
+  # the tested Modelfile, naming the copied file beside it (Ollama reads a FROM path from the Modelfile's own folder)
+  modelfile_of "$model" > "$out/$model/Modelfile"
 done
 echo "Exported to $out: copy that folder to the Windows PC"

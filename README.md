@@ -198,7 +198,7 @@ The launcher needs the repo's Python environment (the first command above). With
 
 ### Getting the models
 
-FlipAssist's four models are on the repo's GitHub release `models-v1` (being published), not in git. `launcher/get-models.sh` downloads them, checks every part and each whole model file against the version that was tested, and adds each to Ollama. It needs about 13 GB free while it runs. A model Ollama already has as that version is skipped, and a download that stops part-way is kept in `~/Library/Caches/FlipAssist-models`, so running it again carries on. If the release or a file on it can't be downloaded, it stops and says which, and the models it added before that stay.
+FlipAssist's four models are on the repo's GitHub release `models-v1`, not in git. `launcher/get-models.sh` downloads them, checks every part and each whole model file against the version that was tested, and adds each to Ollama. It needs about 13 GB free while it runs. A model Ollama already has as that version is skipped, and a download that stops part-way is kept in `~/Library/Caches/FlipAssist-models`, so running it again carries on. If the release or a file on it can't be downloaded, it stops and says which, and the models it added before that stay.
 
 In a folder downloaded as a ZIP, or a fork's clone (GitHub doesn't copy releases), name the repo: `launcher/get-models.sh mohadilyes-git/FlipAssist-AI`. Without the models, FlipAssist still runs: Gemma 3 4B and code do their jobs ([models/README.md](models/README.md)). They're modified versions of Gemma 3 4B, under the Gemma Terms of Use ([models/NOTICE](models/NOTICE)).
 

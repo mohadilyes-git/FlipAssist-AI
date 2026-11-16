@@ -261,7 +261,8 @@ Each file's SHA-256 is its fingerprint, and the scripts above check it themselve
 
 Each model's Modelfile (`flip-wording-4b.Modelfile` on the release, say, or `flip-wording-4b/Modelfile` in an export)
 is what Ollama 0.40.11's `ollama show --modelfile` prints for the tested model, with its `FROM` line made
-`FROM ./<model>.gguf`, and `shasum -a 256` must print:
+`FROM ./<model>.gguf` and its `PARAMETER` lines put in A-Z order, as the scripts put them: Ollama keeps each model's
+settings in an order of its own, so the same settings can print in another order. `shasum -a 256` must print:
 
 | Model | SHA-256 of its Modelfile |
 |---|---|
