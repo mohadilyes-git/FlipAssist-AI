@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { apiCommand, fileFor, icoFrom, keyFrom, logsFolder, modelsToWarm, notReadyWords, ollamaPlaces, pythonSetup,
-  readyWords, settingFrom, typeOf, windowLook, withOwnKey } from "./parts";
+import { apiCommand, fileFor, icoFrom, keyFrom, logsFolder, modelsToWarm, notReadyWords, ollamaPlaces, pricesOn,
+  pythonSetup, readyWords, settingFrom, typeOf, windowLook, withOwnKey } from "./parts";
 
 test("the key is read the way the API reads .env", () => {
   assert.equal(keyFrom("ANTHROPIC_API_KEY=a\nFLIP_API_KEY=abc123\n"), "abc123");
@@ -83,12 +83,15 @@ test("without Gemma 3 4B or Ollama, the launch screen says what still runs, with
     + "description");
   assert.equal(notReadyWords("no model", [], `${key}FLIP_WORDING_MODEL=\nFLIP_KINDS_MODEL=\nFLIP_STYLE_AI=`),
     "flip-reader-5 isn't installed, so code reads; Gemma 3 4B isn't installed, so Rewrite can't run");
-  // no Ollama: code does the models' work, and Claude Haiku 5.5 still writes List on eBay (and, with the AlertFlip
-  // API, judges the damage), so it isn't "code only"
+  // no Ollama: code does the models' work, and Claude Haiku 5.5 still writes List on eBay (and, with UK prices on,
+  // judges the damage), so it isn't "code only"
   assert.equal(notReadyWords("no ollama", [], key + prices), "Ollama isn't installed: code does the models' work and "
     + "Rewrite can't run; Claude Haiku 5.5 still writes List on eBay and judges how bad a UK price's damage is");
+  // ...the free UK prices too, with no prices key of your own, unless they're off
   assert.equal(notReadyWords("no ollama", [], key), "Ollama isn't installed: code does the models' work and Rewrite "
-    + "can't run; Claude Haiku 5.5 still writes List on eBay");
+    + "can't run; Claude Haiku 5.5 still writes List on eBay and judges how bad a UK price's damage is");
+  assert.equal(notReadyWords("no ollama", [], `${key}FLIP_PUBLIC_PRICES=off\n`), "Ollama isn't installed: code does "
+    + "the models' work and Rewrite can't run; Claude Haiku 5.5 still writes List on eBay");
   assert.equal(notReadyWords("no ollama", [], prices), "Ollama isn't installed: code does the models' work, Rewrite "
     + "can't run and List on eBay can't write the condition note or description");
   // FLIP_LISTING_WRITER=gemma, and what's set already wins over .env, as the API reads them
@@ -98,6 +101,22 @@ test("without Gemma 3 4B or Ollama, the launch screen says what still runs, with
   assert.equal(notReadyWords("failed", [], key + prices, { ANTHROPIC_API_KEY: "" }, "/logs/ollama.log"),
     "Ollama didn't start (what it said is in /logs/ollama.log): code does the models' work, Rewrite can't run and List "
     + "on eBay can't write the condition note or description");
+});
+
+test("UK prices are on with your own key and address, or with no key the free ones, unless they're off", () => {
+  const own = "PRICES_URL=https://prices.example\nPRICES_KEY=yours\n";
+  assert.equal(pricesOn(""), true); // a fresh download: the free UK prices
+  assert.equal(pricesOn("PRICES_URL=https://prices.example\n"), true); // an address with no key: asked the free way
+  assert.equal(pricesOn(own), true);
+  assert.equal(pricesOn("PRICES_KEY=yours\n"), false); // a key with no address to send it to
+  assert.equal(pricesOn("FLIP_PUBLIC_PRICES=off\n"), false);
+  assert.equal(pricesOn("FLIP_PUBLIC_PRICES = 'OFF'\n"), false); // read as the API reads .env
+  assert.equal(pricesOn(`FLIP_PUBLIC_PRICES=off\n${own}`), true); // your own still work with the free ones off
+  assert.equal(pricesOn("FLIP_PUBLIC_PRICES=\nPRICES_KEY=\n"), true); // empty, as .env.example leaves them
+  // what's set already wins over .env, as the API reads them
+  assert.equal(pricesOn("", { FLIP_PUBLIC_PRICES: "off" }), false);
+  assert.equal(pricesOn("FLIP_PUBLIC_PRICES=off\n", { FLIP_PUBLIC_PRICES: "" }), true);
+  assert.equal(pricesOn(own, { PRICES_URL: "" }), false);
 });
 
 // Windows as well as the Mac (9 Nov): every answer is checked for both, on this Mac

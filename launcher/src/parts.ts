@@ -88,12 +88,22 @@ export function readyWords(installed: string[], env: string, set: Record<string,
   return [list ? `${list} ${ready.length > 1 ? "are" : "is"} ready` : "", ...missing].filter(Boolean).join("; ");
 }
 
+/** Whether UK prices can be asked, as the API decides it (flip.prices.mode): with PRICES_KEY, your own prices API at
+ * PRICES_URL (none without the address); with no PRICES_KEY, the free public UK prices, unless FLIP_PUBLIC_PRICES=off.
+ * What's set already wins over .env, as with the models. */
+export function pricesOn(env: string, set: Record<string, string | undefined> = {}): boolean {
+  const setting = (name: string) => (set[name] ?? settingFrom(env, name) ?? "").trim();
+  if (setting("PRICES_KEY")) return !!setting("PRICES_URL");
+  return setting("FLIP_PUBLIC_PRICES").toLowerCase() !== "off";
+}
+
 /** What the launch screen says when Gemma 3 4B isn't ready, and what still runs as the API decides it (15 Nov review:
  * it said "the AI writer can't write messages or eBay listings", and "drafts use code only" without Ollama). A model on
  * this device that can't answer is never sent to Claude in its place, so without Gemma 3 4B Rewrite can't run. With
- * your Claude key, Claude Haiku 5.5 writes List on eBay (unless FLIP_LISTING_WRITER=gemma) and, with the AlertFlip API
- * set, judges how bad a UK price's damage is, with Ollama or without. "no model": the models Ollama has, as readyWords
- * says them, then what Gemma 3 4B's absence stops. log: where Ollama's own words are, for "failed". */
+ * your Claude key, Claude Haiku 5.5 writes List on eBay (unless FLIP_LISTING_WRITER=gemma) and, with UK prices on
+ * (pricesOn: the free ones, or your own), judges how bad a UK price's damage is, with Ollama or without. "no model":
+ * the models Ollama has, as readyWords says them, then what Gemma 3 4B's absence stops. log: where Ollama's own words
+ * are, for "failed". */
 export function notReadyWords(state: "no ollama" | "no model" | "failed", installed: string[], env: string,
   set: Record<string, string | undefined> = {}, log = ""): string {
   const setting = (name: string) => (set[name] ?? settingFrom(env, name) ?? "").trim(); // as named() reads them
@@ -106,8 +116,8 @@ export function notReadyWords(state: "no ollama" | "no model" | "failed", instal
     return [readyWords(installed, env, set), `Gemma 3 4B isn't installed, so ${listed(cant)}`]
       .filter(Boolean).join("; ");
   }
-  // the damage judge (flip.api.damage_judge) asks no model on this device
-  const judges = claude && !!setting("PRICES_URL") && !!setting("PRICES_KEY");
+  // the damage judge (flip.api.damage_judge) asks no model on this device, and runs whenever a UK price can be asked
+  const judges = claude && pricesOn(env, set);
   const still = [...(claudeLists ? ["writes List on eBay"] : []),
     ...(judges ? ["judges how bad a UK price's damage is"] : [])];
   const why = state === "no ollama" ? "Ollama isn't installed" : `Ollama didn't start (what it said is in ${log})`;
