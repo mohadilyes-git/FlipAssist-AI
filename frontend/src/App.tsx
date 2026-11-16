@@ -225,7 +225,8 @@ export function App() {
                     }} />
                   </div>
                   <div className="screen" hidden={tab !== "price"}>
-                    <PriceScreen sent={sentToPrice} onTaken={priceTaken} />
+                    <PriceScreen sent={sentToPrice} onTaken={priceTaken}
+                      free={!!running && running !== "down" && running.prices_mode === "public"} />
                   </div>
                   <div className="screen" hidden={tab !== "listing"}>
                     <ListingScreen writer={running && running !== "down" ? running.listing_model : undefined}

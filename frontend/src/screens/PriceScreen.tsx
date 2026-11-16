@@ -1,10 +1,11 @@
 // AI UK price estimate: what an iPhone, a Samsung phone or a MacBook sells for in the UK, cut for its flaws (4 Oct,
 // its own tab). The seller's description is read for its flaws as a draft's is (flip-reader-5 on this device), then the
 // AlertFlip app's prices API prices it: the middle price of clean ones of the same model and size (sales Claude Haiku
-// 5.5 sorted), cut for the kinds of flaw found, or what for-parts ones sell for when it's locked or for parts.
+// 5.5 sorted), cut for the kinds of flaw found, or what for-parts ones sell for when it's locked or for parts. With no
+// prices key of your own, those are its free public UK prices, and the screen says so and when their sales were checked.
 import { useEffect, useRef, useState } from "react";
 import { api, type CutRow, type OwnCut, type PriceEstimate } from "../api";
-import { modelName, readBy } from "../format";
+import { FREE_PRICES, modelName, readBy } from "../format";
 import { Head, PoundIcon, Warn } from "../ui";
 
 const pounds = (n: number | null | undefined) => (n == null ? "–" : `£${Math.round(n).toLocaleString("en-GB")}`);
@@ -42,8 +43,11 @@ export function itemName(model: string) {
 export type SentListing = { title: string; description: string; flaws?: string[]; readBy?: string };
 type Read = { flaws: string[]; readBy?: string };
 
-/** sent: a listing AI message sent here, checked once; onTaken: told when it's been taken, so it isn't sent again */
-export function PriceScreen({ sent = null, onTaken }: { sent?: SentListing | null; onTaken?: () => void }) {
+/** sent: a listing AI message sent here, checked once; onTaken: told when it's been taken, so it isn't sent again;
+ * free: /health says the free public UK prices are what's asked (no prices key of your own) */
+export function PriceScreen({ sent = null, onTaken, free = false }: {
+  sent?: SentListing | null; onTaken?: () => void; free?: boolean;
+}) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [found, setFound] = useState<{ listing: string; estimate: PriceEstimate } | null>(null);
@@ -87,7 +91,8 @@ export function PriceScreen({ sent = null, onTaken }: { sent?: SentListing | nul
 
   return (
     <>
-      <Head icon={<PoundIcon />} title="AI UK price estimate" sub="iPhones, Samsung phones and MacBooks · cut for their flaws" />
+      <Head icon={<PoundIcon />} title="AI UK price estimate"
+        sub={`iPhones, Samsung phones and MacBooks · cut for their flaws${free ? ` · ${FREE_PRICES}` : ""}`} />
       <div className="split">
         <div className="stack">
           {error && <p className="error" role="alert">{error}</p>}
@@ -150,6 +155,20 @@ export function PriceScreen({ sent = null, onTaken }: { sent?: SentListing | nul
 
 const HARD_TO_PRICE = ["lock", "parts", "not genuine", "network lock"];
 
+/** The day the free prices last checked a model's UK sales, as people say it: "2 November 2026"; "" when the time
+ * isn't one. UK time, as the sales are the UK's. */
+export function checkedDay(at?: string | null): string {
+  const when = at ? new Date(at) : null;
+  if (!when || Number.isNaN(when.getTime())) return "";
+  return when.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" });
+}
+
+/** The free prices' line under the price: "Free UK prices, refreshed monthly · UK sales last checked 2 November 2026" */
+export function freeLine(e: PriceEstimate): string {
+  const day = checkedDay(e.checked_at);
+  return `${FREE_PRICES}${day ? ` · UK sales last checked ${day}` : ""}`;
+}
+
 /** What to know before trusting the price: the size it priced, how few sales, a flaw that's hard to price. title: the
  * listing's, to tell a size the title names from one only the description gives (a search by words leaves that out) */
 export function cautions(e: PriceEstimate, title?: string): string[] {
@@ -205,6 +224,12 @@ export function cautions(e: PriceEstimate, title?: string): string[] {
   if (borrowed.length) {
     said.push(`Rough for a ${noun}: the ${borrowed.join(" and ")} cut${borrowed.length > 1 ? "s are" : " is"} the `
       + `iPhone's, as too few ${noun}s had ${borrowed.length > 1 ? "them" : "it"}`);
+  }
+  // the free prices' sales, when this month's free checks ran out before they were checked again
+  if (e.stale) {
+    const day = checkedDay(e.checked_at);
+    said.push(`${day ? `These UK sales were last checked on ${day}` : "These UK sales are over a month old"}: this `
+      + "month's free checks are used up, so they weren't checked again");
   }
   return said;
 }
@@ -416,6 +441,7 @@ function Estimated({ estimate, title }: { estimate: PriceEstimate; title: string
         {estimate.asked_title && (
           <p className="sub">Priced as “{estimate.asked_title}”, with the model details from the description</p>
         )}
+        {estimate.public && <p className="sub">{freeLine(estimate)}</p>}
         <div className="hero-rule" />
         <div className="hero-stats three">
           <div><strong>{pounds(estimate.middle)}</strong><span>with no flaws</span></div>

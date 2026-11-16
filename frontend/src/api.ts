@@ -54,6 +54,9 @@ export type PriceEstimate = {
   /** each kind of flaw with its own cut, in the listing's order, with the flaws' own words (14 Oct); the flaws' words
    * that nothing was cut for */
   breakdown?: CutRow[]; not_cut?: string[];
+  /** the free public UK prices (no prices key of your own): public, when the model's UK sales were last checked (an ISO
+   * time; null when it doesn't say), and stale when this month's free checks ran out before they were checked again */
+  public?: boolean; checked_at?: string | null; stale?: boolean;
 };
 
 /** A Samsung's or a MacBook's own measured cut for one kind of flaw (4 Nov) */
@@ -238,8 +241,11 @@ export type Health = {
    * empty when off */
   check_model?: string;
   fix_model?: string;
-  /** AlertFlip's prices API (fresh UK sales) has its URL and key */
+  /** UK prices can be asked from AlertFlip's prices API (fresh UK sales): the free public ones, or your own key */
   prices_api_set?: boolean;
+  /** how they're asked: "public" (the free public UK prices, no key), "key" (your own PRICES_URL and PRICES_KEY), "off"
+   * (FLIP_PUBLIC_PRICES=off and no key) or "no url" (a PRICES_KEY with no PRICES_URL) */
+  prices_mode?: "key" | "public" | "off" | "no url";
   /** who writes List on eBay's draft first: "claude-haiku-5-5" (Claude Sonnet 5.5 when it fails the checks, 14 Oct)
    * or this device's model (FLIP_LISTING_WRITER=gemma) */
   listing_model?: string;

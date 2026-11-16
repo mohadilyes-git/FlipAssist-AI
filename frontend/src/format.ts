@@ -86,6 +86,10 @@ export function seconds(attempts: { seconds: number }[]): string {
   return total < 0.1 ? "instant" : `${total.toFixed(1)}s`;
 }
 
+/** What Home and the UK price screen call the free public UK prices, asked with no prices key of your own: each
+ * model's UK sales are checked again about once a month. */
+export const FREE_PRICES = "Free UK prices, refreshed monthly";
+
 /** eBay's conditions by id, as eBay names them. */
 export const CONDITIONS: Record<string, string> = {
   "1000": "New",

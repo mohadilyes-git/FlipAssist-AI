@@ -2,12 +2,13 @@ import { act, cleanup, render, screen, waitFor, within } from "@testing-library/
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App, markShell, SETUP_DONE, THEME } from "../App";
-import type { Attempt, CutRow, ListingDraft, MessageDraft, PriceEstimate, Style } from "../api";
+import type { Attempt, CutRow, Health, ListingDraft, MessageDraft, PriceEstimate, Style } from "../api";
 import { Steps } from "../ui";
 import { ListingScreen } from "../screens/ListingScreen";
-import { HomeScreen, ollamaRows, paidRows, runningRows } from "../screens/HomeScreen";
+import { HomeScreen, ollamaRows, paidRows, pricesRow, runningRows } from "../screens/HomeScreen";
 import { MessageScreen } from "../screens/MessageScreen";
-import { cautions, cutWords, damageLine, itemName, poundsOff, PriceScreen, sortedBy } from "../screens/PriceScreen";
+import { cautions, checkedDay, cutWords, damageLine, freeLine, itemName, poundsOff, PriceScreen, sortedBy }
+  from "../screens/PriceScreen";
 
 const DRAFT: MessageDraft = {
   draft_id: 7, status: "ready", written_by: "template", kind: "lower", offer: "£185", offer_pence: 18500,
@@ -1045,6 +1046,59 @@ describe("AI UK price estimate", () => {
       + "for-parts sales of this model to go on");
     expect(cautions({ ...locked, kind: "macbook" }).some((c) => c.includes("measured on phones"))).toBe(false);
   });
+
+  // the free public UK prices, with no prices key of your own
+  const HEAD = "iPhones, Samsung phones and MacBooks · cut for their flaws";
+  it("says plainly when prices are the free ones and when their sales were last checked", async () => {
+    serve({ "POST /api/prices/estimate": [200, { ...PRICED, public: true, checked_at: "2026-11-02T09:30:00.000Z",
+      stale: false }] });
+    const user = userEvent.setup();
+    render(<PriceScreen free />);
+    expect(screen.getByText(`${HEAD} · Free UK prices, refreshed monthly`)).toBeTruthy();
+    await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
+    await user.click(screen.getByRole("button", { name: "Check the UK price" }));
+    const hero = await screen.findByLabelText("UK price");
+    expect(within(hero).getByText("Free UK prices, refreshed monthly · UK sales last checked 2 November 2026"))
+      .toBeTruthy();
+    expect(hero.textContent).toContain("£150");
+    expect(screen.queryAllByRole("paragraph").filter((p) => p.className === "warn-row")).toHaveLength(0);
+    expect(document.body.textContent).not.toMatch(/ebay/i);
+  });
+
+  it("says when the free prices' sales are old because this month's free checks are used up", async () => {
+    serve({ "POST /api/prices/estimate": [200, { ...PRICED, public: true, checked_at: "2026-09-12T08:00:00Z",
+      stale: true }] });
+    const user = userEvent.setup();
+    render(<PriceScreen free />);
+    await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
+    await user.click(screen.getByRole("button", { name: "Check the UK price" }));
+    expect(await screen.findByText("These UK sales were last checked on 12 September 2026: this month's free checks "
+      + "are used up, so they weren't checked again")).toBeTruthy();
+    expect(cautions({ ...PRICED, public: true, stale: true })).toEqual(["These UK sales are over a month old: this "
+      + "month's free checks are used up, so they weren't checked again"]);  // no time given: no day said
+  });
+
+  it("says a refusal of the free prices as the API words it, and nothing of free prices with your own key", async () => {
+    serve({ "POST /api/prices/estimate": [[200, { currency: "GBP", cuts: [], rough: false, exact: false,
+      error: "The free UK prices are busy: try again in about 15 minutes" }], [200, PRICED]] });
+    const user = userEvent.setup();
+    render(<PriceScreen />);
+    expect(screen.getByText(HEAD)).toBeTruthy();
+    await user.type(screen.getByLabelText("Listing title"), "iPhone 13 128GB Blue");
+    await user.click(screen.getByRole("button", { name: "Check the UK price" }));
+    expect(await screen.findByText("No UK price: The free UK prices are busy: try again in about 15 minutes"))
+      .toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Check the UK price" }));
+    expect((await screen.findByLabelText("UK price")).textContent).toContain("£150");
+    expect(document.body.textContent).not.toMatch(/Free UK prices/);
+  });
+
+  it("says the day the sales were last checked in UK time, and no day for a time that isn't one", () => {
+    expect(checkedDay("2026-11-02T09:30:00Z")).toBe("2 November 2026");
+    expect(checkedDay("2026-06-30T23:30:00Z")).toBe("1 July 2026");  // British Summer Time: already the 1st
+    expect([checkedDay("soon"), checkedDay(""), checkedDay(null), checkedDay(undefined)]).toEqual(["", "", "", ""]);
+    expect(freeLine({ ...PRICED, public: true, checked_at: null })).toBe("Free UK prices, refreshed monthly");
+  });
 });
 
 describe("List on eBay", () => {
@@ -1272,6 +1326,15 @@ describe("the app", () => {
     const book = await screen.findByRole("region", { name: "Phrasebook" });
     expect(within(book).getByText("Sentences you've used in at least two messages. Some go in every message, others in "
       + "only one kind of offer.")).toBeTruthy();
+  });
+
+  it("says on the price tab when UK prices are the free ones, as /health does", async () => {
+    localStorage.setItem(SETUP_DONE, "1");
+    window.location.hash = "#price";
+    serve({ ...usual, "GET /api/health": [200, { ...HEALTH, prices_mode: "public" }] });
+    render(<App />);
+    expect(await screen.findByText("iPhones, Samsung phones and MacBooks · cut for their flaws · Free UK prices, "
+      + "refreshed monthly")).toBeTruthy();
   });
 
   it("names the reason's checker on AI message as /health does (15 Nov review)", async () => {
@@ -1793,6 +1856,29 @@ describe("Home (fix 2, 14 Oct)", () => {
         + "device's models can't, writes a message, reads a listing, or looks at the photos for the colour; and writes an "
         + "eBay listing when Claude Haiku 5.5's fails the checks"],
       ["Claude Haiku 5.5 (paid)", "Writes eBay listings"]]);
+  });
+
+  it("says when UK prices are the free ones, your own, switched off, or missing their address", () => {
+    const row = (change: Partial<Health>) => pricesRow({ ...HEALTH, ...change });
+    expect(row({ prices_mode: "public" })).toEqual(
+      { name: "AlertFlip API", ok: true, state: "Free UK prices, refreshed monthly: no key needed" });
+    expect(row({ prices_mode: "key" })).toEqual(
+      { name: "AlertFlip API", ok: true, state: "Fresh local sales data for the UK price estimate" });
+    expect(row({ prices_api_set: false, prices_mode: "off" })).toEqual(
+      { name: "AlertFlip API", ok: "off", state: "Off in .env (FLIP_PUBLIC_PRICES=off): no UK prices" });
+    expect(row({ prices_api_set: false, prices_mode: "no url" })).toEqual(
+      { name: "AlertFlip API", ok: false, state: "Not set: add PRICES_URL to .env with your PRICES_KEY" });
+    // the damage judge runs on the free prices too, with the Anthropic key; with them off, it doesn't
+    const judges = (change: Partial<Health>) => paidRows({ ...HEALTH, ...change }).map((r) => r.state).join(" ");
+    expect(judges({ prices_mode: "public" })).toMatch(/judges how bad the damage is for the UK price/);
+    expect(judges({ prices_api_set: false, prices_mode: "off" })).not.toMatch(/damage/);
+  });
+
+  it("shows the free UK prices on the running card", async () => {
+    home({ ...HEALTH, prices_mode: "public" });
+    const card = within(screen.getByRole("region", { name: "Running" }));
+    expect(card.getByText("AlertFlip API")).toBeTruthy();
+    expect(card.getByText("Free UK prices, refreshed monthly: no key needed")).toBeTruthy();
   });
 
   it("says when the AlertFlip API or the key isn't set, and the API's own state before it answers", () => {

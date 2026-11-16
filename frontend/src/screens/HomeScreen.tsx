@@ -4,7 +4,7 @@
 import { type MouseEvent, useCallback, useEffect, useState } from "react";
 import { api, type Health, type Stats } from "../api";
 import type { Running, Tab } from "../App";
-import { cost, jobName, modelName } from "../format";
+import { cost, FREE_PRICES, jobName, modelName } from "../format";
 import { GaugeIcon, Head, PenIcon } from "../ui";
 
 type Props = { go: (tab: Tab) => void; count: number; running: Running; reload: () => Promise<void> };
@@ -157,8 +157,9 @@ const CHECKS = "checks each message's reason is sendable";
 /** The paid models, one line each with all it does (15 Nov review: with the reason's check off in .env, or named
  * another, a model was listed twice, and no line said who judges a UK price's damage): Claude Haiku 5.5 checks each
  * reason and writes eBay listings; Claude Sonnet 5.5 fixes a reason the check flags, and writes when this device's
- * models can't; with the AlertFlip API, Claude Haiku 5.5 judges how bad a UK price's damage is and Claude Sonnet 5.5
- * decides when code and Claude Haiku 5.5 disagree. .env can name others for the reason and for the backup. */
+ * models can't; with UK prices on (the free ones, or your own key), Claude Haiku 5.5 judges how bad a UK price's
+ * damage is and Claude Sonnet 5.5 decides when code and Claude Haiku 5.5 disagree. .env can name others for the reason
+ * and for the backup. */
 export function paidRows(running: Health): Row[] {
   const paid = (model: string) => `${modelName(model)} (paid)`;
   if (!running.api_key_set) {
@@ -205,6 +206,21 @@ export function paidRows(running: Health): Row[] {
   });
 }
 
+/** The AlertFlip prices API's line: the free public UK prices when there's no prices key of your own, your own prices
+ * API with one, or why there are none (switched off in .env, or a key with no address to send it to). */
+export function pricesRow(running: Health): Row {
+  const name = "AlertFlip API";
+  if (running.prices_mode === "public") return { name, ok: true, state: `${FREE_PRICES}: no key needed` };
+  if (running.prices_api_set) return { name, ok: true, state: "Fresh local sales data for the UK price estimate" };
+  if (running.prices_mode === "off") {
+    return { name, ok: "off", state: "Off in .env (FLIP_PUBLIC_PRICES=off): no UK prices" };
+  }
+  if (running.prices_mode === "no url") {
+    return { name, ok: false, state: "Not set: add PRICES_URL to .env with your PRICES_KEY" };
+  }
+  return { name, ok: false, state: "Not set: add PRICES_URL and PRICES_KEY to .env" };
+}
+
 export function runningRows(running: Running): Row[] {
   if (running === null) return [{ name: "FlipAssist's API", state: "Checking…", ok: true }];
   if (running === "down") {
@@ -213,9 +229,7 @@ export function runningRows(running: Running): Row[] {
   return [
     ...ollamaRows(running),
     ...paidRows(running),
-    { name: "AlertFlip API", ok: !!running.prices_api_set,
-      state: running.prices_api_set ? "Fresh local sales data for the UK price estimate"
-        : "Not set: add PRICES_URL and PRICES_KEY to .env" },
+    pricesRow(running),
     { name: "FlipAssist API key", ok: running.flip_api_key_set,
       state: running.flip_api_key_set ? "Set" : "Missing: every draft is refused" },
   ];
