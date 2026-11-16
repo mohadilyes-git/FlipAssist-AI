@@ -3,6 +3,7 @@ log: no AI runs, nothing is sent anywhere, and nothing costs anything."""
 
 import base64
 import json
+import typing
 from pathlib import Path
 
 import pytest
@@ -94,6 +95,16 @@ def test_health_says_which_paid_model_does_what_and_whether_the_prices_api_is_se
     health = TestClient(api.app).get("/health").json()
     assert (health["prices_api_set"], health["prices_mode"]) == (True, "key")
     assert (health["check_model"], health["fix_model"]) == ("", "")
+
+
+def test_the_readme_names_each_prices_mode_as_health_says_it():
+    """The README's /health row names every prices_mode /health can answer, as it says them: it said "free, your own key
+    or off", words /health never sends, and left out "no url"."""
+    modes = typing.get_args(api.Health.model_fields["prices_mode"].annotation)
+    assert {"key", "public", "off", "no url"} <= set(modes)  # read from /health's own model, so a new one counts too
+    row = next(line for line in (ROOT / "README.md").read_text(encoding="utf-8").splitlines()
+               if line.startswith("| `GET /health`"))
+    assert [mode for mode in modes if f"`{mode}`" not in row] == []
 
 
 def test_health_names_each_model_by_its_job_and_says_which_isnt_installed(client, monkeypatch):

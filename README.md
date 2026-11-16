@@ -237,7 +237,7 @@ Claude runs on your own key, and Anthropic bills you for what you use. Without i
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Your Claude key (console.anthropic.com), for every Claude step above | Everything runs on your computer |
 | `FLIP_API_KEY` | The key every caller of the API sends in an `X-API-Key` header, 32 characters or more | The API refuses every call (the app makes one) |
-| `PRICES_URL`, `PRICES_KEY` | Your own AlertFlip prices API and its key, for the UK price estimate. `PRICES_URL` with no key is asked the free way | The free UK prices: iPhones, Samsung phones and MacBooks, refreshed about monthly |
+| `PRICES_URL`, `PRICES_KEY` | Your own AlertFlip prices API and its key, for the UK price estimate. `PRICES_URL` with no key is asked the free way. A `PRICES_KEY` with no `PRICES_URL` asks nothing: the key is never sent to the free UK prices' address | The free UK prices: iPhones, Samsung phones and MacBooks, refreshed about monthly |
 | `FLIP_PUBLIC_PRICES` | `off` turns the free UK prices off; your own `PRICES_URL` and `PRICES_KEY` still work | On whenever there's no `PRICES_KEY` |
 | `USD_TO_GBP` | The dollar-to-pound rate the cost meter uses | 0.80 |
 | `FLIP_READER_MODEL` | The listing reader | flip-reader-5; empty: Gemma 3 4B reads |
@@ -256,7 +256,7 @@ Claude runs on your own key, and Anthropic bills you for what you use. Without i
 
 | Endpoint | What it does |
 |---|---|
-| `GET /health` | No key needed, none shown. Whether Ollama and the keys are set, how UK prices are asked (`prices_mode`: free, your own key or off), which models Ollama has, and who does each job: the paid backup, the reason's check and fix, and List on eBay's writer and reader |
+| `GET /health` | No key needed, none shown. Whether Ollama and the keys are set, how UK prices are asked (`prices_mode`: `public` for the free UK prices, `key` for your own, `off`, or `no url` for a `PRICES_KEY` with no `PRICES_URL`), which models Ollama has, and who does each job: the paid backup, the reason's check and fix, and List on eBay's writer and reader |
 | `POST /messages/draft` | Reads the listing, then drafts the offer at code's price or `offer`. `kind` is `lower`, `asking` or `more`; `mention` says the flaw or good condition; `flaws_said` (1, 2, 3 or `"all"`) picks how many flaws, worst first; `check_later` leaves the reason's check for the next endpoint. Returns the message, who wrote it, the "no offers" note, what was read, `reason_from`, every attempt with its seconds and cost, and a draft id |
 | `POST /messages/check-reason` | The second step of a draft made with `check_later`: Claude Haiku 5.5 checks the reason, Claude Sonnet 5.5 fixes one it flags, and the fix goes in only if the message with it passes every message check |
 | `POST /listings/draft` | Form fields (`title`, `notes`) and up to 8 photos in, the eBay draft out. iPhones only |
