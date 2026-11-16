@@ -226,6 +226,7 @@ def test_the_damage_judge_is_still_asked_on_the_free_prices():
      prices.MONTHLY_CAP),
     (500, {"code": "SOMETHING_NEW", "message": "ebay.co.uk said no"}, None, None,
      "The AlertFlip API couldn't price it (SOMETHING_NEW)"),
+    (502, {"code": ["PUBLIC_BUSY"], "message": {"no": "words"}}, None, None, "The AlertFlip API answered 502"),
 ])
 def test_each_refusal_of_the_free_prices_is_said_plainly(status, error, top, headers, said):
     opener, sent = refusing(status, error, top, headers)

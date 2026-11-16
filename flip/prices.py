@@ -1519,6 +1519,7 @@ def refused(code, status=None, message=None):
 def public_refused(code, status=None, message=None, wait=None):
     """A refusal of the free public UK prices in FlipAssist's words: its own (PUBLIC_REFUSED; busy with when to try
     again, from wait, its retry_after_s), a key it asked for, then any other as refused() says it."""
+    code = code if isinstance(code, str) else None  # a code that isn't one ({"code": ["x"]}) is no code
     if code == "PUBLIC_BUSY":
         return {"error": f"The free UK prices are busy: {try_again(wait)}"}
     if code in PUBLIC_REFUSED:

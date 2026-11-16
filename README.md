@@ -18,7 +18,7 @@ It's a Mac app: a Python (FastAPI) backend under a React and TypeScript window i
 - **Learns your style without making it up.** flip-style-1b found 182 of 189 habits on the hard style test and invented 3, where plain Gemma 3 4B found 146 and invented 230.
 - **Code where code is better.** On made-up listings, code's offer messages for a new user were fine to send 95% of the time and a small AI's 35%, so in the app code writes every message, around the reason the model words.
 - **Fast and cheap.** A draft is on screen in 3.1-3.8 s on a 16 GB Mac (9-11 s before). The paid reason check costs about 43p per 1,000 listings with a flaw, with Claude's prompt cache warm.
-- **Tested.** 5,500+ tests: 5,456 Python, 126 screen and 16 launcher. Claude test agents wrote over 4,000 cases to break the rules, and the 418 real failures they found are fixed and kept as tests.
+- **Tested.** 5,500+ tests: 5,457 Python, 126 screen and 16 launcher. Claude test agents wrote over 4,000 cases to break the rules, and the 418 real failures they found are fixed and kept as tests.
 
 The judges, labellers and checkers in these tests are Claude, working blind. [Results](#results) gives each test's size; [MODELS.md](MODELS.md) has the full record, including what didn't ship.
 
@@ -297,7 +297,7 @@ curl -s http://127.0.0.1:8000/messages/draft -H "X-API-Key: $FLIP_API_KEY" -H "C
 ## Tests
 
 ```bash
-.venv/bin/pytest                                  # 5,456 Python tests (12 more, for photos on Windows, need Pillow)
+.venv/bin/pytest                                  # 5,457 Python tests (12 more, for photos on Windows, need Pillow)
 cd frontend && npm install && npm test            # 126 tests of the screens
 cd launcher && npm test && npm run selftest       # 16 launcher tests, then the real window, end to end
 ```
