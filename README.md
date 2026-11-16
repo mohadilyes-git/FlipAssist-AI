@@ -12,7 +12,7 @@ It's a Mac app: a Python (FastAPI) backend under a React and TypeScript window i
 
 - **Reads listings well.** flip-reader-5 found the damage in 305 of 312 damaged UK listings it had never seen (iPhone 96.4%, Samsung 99.1%, MacBook 97.8%), and 95.3% of the 3,162 flaws in 5,032 unseen listings, at 99.4% precision.
 - **Prices flaws better than rules do.** flip-kinds-1 sorts each flaw into the kinds the UK price is cut for. On 400 sealed flaw sentences it got the cut wrong (by 3 points or more) on 3.8%; code's own rules did on 17.5%.
-- **Offer reasons ready to send.** flip-wording-4b words the reason on your computer, Claude Haiku 5.5 checks it and Claude Sonnet 5.5 fixes one it flags: 93.7% sendable on 239 fresh listings, with a made-up fact on 1.3%.
+- **Offer reasons ready to send.** flip-wording-4b words the reason on your computer, Claude Haiku 5.5 checks it and Claude Sonnet 5.5 fixes one it flags: 94-99% sendable on 239 fresh listings, depending on your taste. Strict blind judges passed 93.7%, counting a dropped detail or an odd wording as a miss, and 98.7% added or changed no fact.
 - **eBay listings ready to post.** 95% of drafts were postable as is on 40 real UK iPhones, judged blind: as good as Claude Sonnet 5.5 alone (90%), at about a seventh of the cost (0.040p a listing).
 - **Damage judged consistently.** Code and Claude Haiku 5.5, with Claude Sonnet 5.5 deciding when they disagree, matched three blind checkers on 93.3% of 299 fresh UK listings.
 - **Learns your style without making it up.** flip-style-1b found 182 of 189 habits on the hard style test and invented 3, where plain Gemma 3 4B found 146 and invented 230.
@@ -144,7 +144,7 @@ Each model was scored on data it never trained on. Keys were labelled by Claude 
 | flip-reader-5, finding every flaw | 5,032 listings, 3,162 flaws in a double-checked key | 95.3% found, 18 false alarms (99.4% precision) | – |
 | flip-kinds-1, sorting flaws for the price | 400 sealed flaw sentences | price cut wrong on 3.8% | code's rules: 17.5% |
 | flip-kinds-1, two fresh tests | 181 and 305 flaw sentences | 3.9% and 8.2% | code's rules: 18.8% and 20.0% |
-| The offer's reason: flip-wording-4b, Haiku's check, Sonnet's fix | 239 fresh listings | 93.7% sendable, a made-up fact on 1.3% | flip-wording-4b alone: 90.8% and 2.9% |
+| The offer's reason: flip-wording-4b, Haiku's check, Sonnet's fix | 239 fresh listings | 94-99% sendable by taste: 93.7% to strict judges, 98.7% with no fact added or changed | flip-wording-4b alone: 90.8% and 97.1% |
 | How bad the damage is: code and Haiku, Sonnet on a split | 299 fresh UK listings, three blind checkers | 93.3% right | – |
 | flip-style-1b, the hard style test | 40 made-up buyers, 189 habits | 182 found, 6 wrong, 3 invented | plain Gemma 3 4B: 146, 28, 230 |
 | flip-style-1b, a fresh test | 40 new made-up buyers, 136 habits | 131 found, 0 wrong, 5 invented | plain Gemma 3 4B: 108, 10, 276 |

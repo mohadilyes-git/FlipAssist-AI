@@ -128,6 +128,11 @@ their scores here flatter them, not flip-kinds-1.
   the least-trusted reasons costs less than half as much, but flip-wording-3 then has to word every reason too (2.5 GB
   more memory, about 1.5 s more each) to save about 24p per 1,000 listings with a flaw, so the app still checks every
   reason when the paid check is on.
+- **Sendable depends on your taste**: the judges were strict, and counted a dropped detail or an odd wording as a
+  miss. With the paid check, 15 of the 239 reasons didn't pass: 3 added or changed a fact, 9 left one of the seller's
+  details out (a grade, a network, a battery figure, a scratch) and 3 kept every fact but read oddly. So 93.7% passed
+  and 98.7% added or changed no fact: 94-99%, by whether a dropped detail or an odd wording would stop you sending it
+  (flip-wording-4b alone: 90.8% and 97.1%).
 - **With no Claude key** (or in local mode) the paid check doesn't run, so flip-wording-4b's reason is what goes out,
   its 2.9% made-up facts included. Code's checks still hold the message's numbers and places to the listing alone, but
   take the reason's words on the condition and the battery as the listing's own, as code can't judge a rewording:
